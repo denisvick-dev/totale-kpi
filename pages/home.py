@@ -150,9 +150,9 @@ st.divider()
 st.subheader("📢 Comunicados Internos")
 
 imgs_carrossel = [
-    "images/informe_vagas.jpeg",
-    "images/consultivo_copa.jpg",
-    "images/indicacao_totale.png"
+    "assets/images/informe_vagas.jpeg",
+    "assets/images/consultivo_copa.jpg",
+    "assets/images/indicacao_totale.png"
 ]
 
 if "slide_index" not in st.session_state:

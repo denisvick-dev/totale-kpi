@@ -153,12 +153,12 @@ def main():
 
     st.image("assets/images/novo-logo-totale.png", width=200)
 
-    home_page = st.Page("app/pages/home.py", title="Home", icon="🏠", default=True)
-    envio_excel = st.Page("app/pages/envio_excel.py", title="Atualização de Dados", icon="🔁")
-    ranking_pontos = st.Page("app/pages/pontos.py", title="Ranking de Pontos", icon="📈")
-    qtde_os = st.Page("app/pages/qtde_os.py", title="Quantidade de O.S.", icon="📊")
-    consultivo = st.Page("app/pages/consultivo.py", title="Consultivos", icon="📋")
-    gestao_ativos = st.Page(page="app/pages/gestao_ativos.py", title="Gestão de Ativos", icon="👷")
+    home_page = st.Page("pages/home.py", title="Home", icon="🏠", default=True)
+    envio_excel = st.Page("pages/envio_excel.py", title="Atualização de Dados", icon="🔁")
+    ranking_pontos = st.Page("pages/pontos.py", title="Ranking de Pontos", icon="📈")
+    qtde_os = st.Page("pages/qtde_os.py", title="Quantidade de O.S.", icon="📊")
+    consultivo = st.Page("pages/consultivo.py", title="Consultivos", icon="📋")
+    gestao_ativos = st.Page(page="pages/gestao_ativos.py", title="Gestão de Ativos", icon="👷")
 
 
     # 2. Configurar a navegação passando a lista de páginas
