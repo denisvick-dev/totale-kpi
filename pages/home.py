@@ -1,8 +1,16 @@
+import subprocess
+import sys
+
+# Forçando a instalação de todas as bibliotecas que estavam faltando
+subprocess.check_call([sys.executable, "-m", "pip", "install", 
+                       "pytz", 
+                       "streamlit-autorefresh", 
+                       "duckdb", 
+                       "st-gsheets-connection"])
+
 import streamlit as st
 import time
-import pytz
 from zoneinfo import ZoneInfo
-from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 
 # =====================================
@@ -192,12 +200,17 @@ else:
 # =====================================
 # AUTO REFRESH INTELIGENTE
 # =====================================
-st_autorefresh(interval=1000, key="footer_refresh")
+if "footer_refresh_time" not in st.session_state:
+    st.session_state.footer_refresh_time = time.time()
+
+if time.time() - st.session_state.footer_refresh_time > 1:  # 1 segundo
+    st.session_state.footer_refresh_time = time.time()
+    st.rerun()
 
 # =====================================
 # HORÁRIO OFICIAL DE BRASÍLIA
 # =====================================
-tz_brasilia = pytz.timezone("America/Sao_Paulo")
+tz_brasilia = ZoneInfo("America/Sao_Paulo")
 agora = datetime.now(tz_brasilia)
 data_atual = agora.strftime("%d/%m/%Y")
 hora_atual = agora.strftime("%H:%M:%S")
