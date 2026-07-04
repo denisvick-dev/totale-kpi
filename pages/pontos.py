@@ -331,6 +331,36 @@ class Graficos:
         )
         return fig
 
+    @staticmethod
+    def mapa_pontos(df: pd.DataFrame, titulo_hover: str) -> Optional[Figure]:
+        if "lat" not in df.columns or "lon" not in df.columns:
+            return None
+
+        fig = px.scatter_mapbox(
+            df,
+            lat="lat",
+            lon="lon",
+            size="Pontos",
+            color="Pontos",
+            color_continuous_scale="Oryel",
+            hover_name=titulo_hover,
+            hover_data={
+                "lat": False, 
+                "lon": False, 
+                "Pontos": ":.2f"
+            },
+            zoom=10, 
+            height=600
+        )
+
+        fig.update_layout(
+            mapbox_style="open-street-map",
+            margin={"r": 0, "t": 0, "l": 0, "b": 0},
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        return fig
+
 
 # ====================================================
 # BLOCO 6: INICIALIZAÇÃO DA PÁGINA E DADOS BRUTOS
@@ -357,6 +387,34 @@ prod["Pontos"] = pd.to_numeric(prod["Pontos"], errors="coerce").fillna(0)
 gpon["Pontos"] = pd.to_numeric(gpon["Pontos"], errors="coerce").fillna(0)
 
 df = pd.concat([prod, gpon], ignore_index=True)
+
+# --- DICIONÁRIO DE COORDENADAS DA REGIÃO SP / GRU / ABCDM ---
+COORDENADAS_CIDADES = {
+    "SAO PAULO": {"lat": -23.5505, "lon": -46.6333},
+    "GUARULHOS": {"lat": -23.4555, "lon": -46.5333},
+    "SANTO ANDRE": {"lat": -23.6611, "lon": -46.5333},
+    "SAO BERNARDO DO CAMPO": {"lat": -23.7000, "lon": -46.5600},
+    "SAO CAETANO DO SUL": {"lat": -23.6250, "lon": -46.5500},
+    "DIADEMA": {"lat": -23.6800, "lon": -46.6300},
+    "MAUA": {"lat": -23.6700, "lon": -46.4700},
+    "ABCDM": {"lat": -23.6600, "lon": -46.5500}, # Ponto central da região ABC
+}
+
+def atribuir_coords(cidade):
+    if pd.isna(cidade):
+        return None, None
+    
+    # Remove espaços extras e garante que a comparação funcione
+    cidade_limpa = str(cidade).strip()
+    
+    if cidade_limpa in COORDENADAS_CIDADES:
+        return COORDENADAS_CIDADES[cidade_limpa]["lat"], COORDENADAS_CIDADES[cidade_limpa]["lon"]
+    
+    return None, None
+
+# Aplicando ao DataFrame
+if "Cidade" in df.columns:
+    df[['lat', 'lon']] = df['Cidade'].apply(lambda x: pd.Series(atribuir_coords(x)))
 
 # Guardar os valores BRUTOS antes de qualquer filtro para o Ticker/Cards comparar
 TOTAL_GERAL_PONTOS = df["Pontos"].sum()
@@ -522,7 +580,7 @@ st.dataframe(
 )
 
 # ====================================================
-# BLOCO 11: EXPORTAÇÃO EXCEL E GRÁFICO
+# BLOCO 11: EXPORTAÇÃO EXCEL, MAPAS E GRÁFICO
 # ====================================================
 nome_arq = "ranking_meta_por_dia.xlsx" if por_dia else "ranking_meta_geral.xlsx"
 st.download_button(
@@ -533,12 +591,53 @@ st.download_button(
 )
 
 st.divider()
+
+# ====================================================
+# SEÇÃO DE MAPAS (CIDADE vs EQUIPE)
+# ====================================================
+st.subheader("🌍 Análise Geográfica")
+
+if "lat" in df.columns and "lon" in df.columns:
+    tab_cidade, tab_equipe = st.tabs(["📍 Visão por Cidade", "👥 Visão por Equipe"])
+
+    with tab_cidade:
+        if "Cidade" in df.columns:
+            df_cidades = df.groupby("Cidade").agg({
+                "lat": "mean",
+                "lon": "mean",
+                "Pontos": "sum"
+            }).reset_index()
+            
+            fig_cidade = Graficos.mapa_pontos(df_cidades, "Cidade")
+            if fig_cidade:
+                # ADICIONADO key="mapa_cidades"
+                st.plotly_chart(fig_cidade, use_container_width=True, key="mapa_cidades")
+        else:
+            st.warning("⚠️ A coluna 'Cidade' não foi encontrada nos dados.")
+
+    with tab_equipe:
+        df_equipes_mapa = df.groupby(["Nome Equipe", "Supervisor"]).agg({
+            "lat": "mean",
+            "lon": "mean",
+            "Pontos": "sum"
+        }).reset_index()
+        
+        fig_equipe = Graficos.mapa_pontos(df_equipes_mapa, "Nome Equipe")
+        if fig_equipe:
+            # ADICIONADO key="mapa_equipes"
+            st.plotly_chart(fig_equipe, use_container_width=True, key="mapa_equipes")
+else:
+    st.info("ℹ️ Para exibir os mapas, adicione as colunas 'lat', 'lon' e 'Cidade' na sua planilha.")
+
+st.divider()
 st.subheader("📊 Top 10 Equipes por Pontos")
 
 if not ranking.empty:
+    # ADICIONADO key="grafico_barras_top10"
     st.plotly_chart(
         Graficos.grafico_barras(ranking.head(10), "Nome Equipe", "Pontos"),
         use_container_width=True,
+        key="grafico_barras_top10"
     )
 
 if pd.notna(ultima_atualizacao):
