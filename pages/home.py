@@ -1,13 +1,3 @@
-import subprocess
-import sys
-
-# Forçando a instalação de todas as bibliotecas que estavam faltando
-subprocess.check_call([sys.executable, "-m", "pip", "install", 
-                       "pytz", 
-                       "streamlit-autorefresh", 
-                       "duckdb", 
-                       "st-gsheets-connection"])
-
 import streamlit as st
 import time
 from zoneinfo import ZoneInfo
