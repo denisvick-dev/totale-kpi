@@ -1,5 +1,6 @@
 import streamlit as st
 import time
+import pytz
 from zoneinfo import ZoneInfo
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
@@ -196,7 +197,7 @@ st_autorefresh(interval=1000, key="footer_refresh")
 # =====================================
 # HORÁRIO OFICIAL DE BRASÍLIA
 # =====================================
-tz_brasilia = ZoneInfo("America/Sao_Paulo")
+tz_brasilia = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz_brasilia)
 data_atual = agora.strftime("%d/%m/%Y")
 hora_atual = agora.strftime("%H:%M:%S")
