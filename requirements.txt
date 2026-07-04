@@ -1,0 +1,9 @@
+streamlit
+pandas
+openpyxl
+plotly
+streamlit-carousel
+numpy
+st-gsheets-connection
+chardet
+pytz
