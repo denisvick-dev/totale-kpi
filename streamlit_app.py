@@ -159,11 +159,12 @@ def main():
     qtde_os = st.Page("pages/qtde_os.py", title="Quantidade de O.S.", icon="📊")
     consultivo = st.Page("pages/consultivo.py", title="Consultivos", icon="📋")
     gestao_ativos = st.Page(page="pages/gestao_ativos.py", title="Gestão de Ativos", icon="👷")
+    jogo_da_velha = st.Page(page="pages/jogodavelha.py", title="Jogo da Velha IA", icon="🕹️"')
 
 
     # 2. Configurar a navegação passando a lista de páginas
     pg = st.logo("assets/images/novo-logo-totale.png")
-    pg = st.navigation([home_page, envio_excel, ranking_pontos, qtde_os, consultivo, gestao_ativos])
+    pg = st.navigation([home_page, envio_excel, ranking_pontos, qtde_os, consultivo, gestao_ativos, jogo_da_velha])
 
     pg.run()
 
