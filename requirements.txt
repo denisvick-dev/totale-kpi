@@ -77,3 +77,4 @@ validators==0.35.0
 watchdog==6.0.0
 websockets==16.0
 wheel==0.47.0
+streamlit-autorefresh==1.0.1
