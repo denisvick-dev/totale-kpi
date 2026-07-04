@@ -7,3 +7,4 @@ numpy
 st-gsheets-connection
 chardet
 pytz
+streamlit-autorefresh
