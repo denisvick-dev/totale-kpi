@@ -20,3 +20,4 @@ altair
 pydeck
 pyarrow
 pillow
+matplotlib
