@@ -7,29 +7,25 @@ st.html("""
     
     /* CRIAÇÃO DE ESTILOS PARA A SIDEBAR */
     
-    /* Altera a cor do texto "Filtros" no topo da Sidebar */
     .stSidebar h2 {
-        color: #012869 !important; /* Azul escuro */
+        color: #012869 !important;
         font-size: 26px !important;
         font-weight: 700 !important;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.5); /* Sombra suave para ajudar a leitura no fundo claro */
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
     }
 
-    /* Altera a cor das etiquetas (labels) dos widgets na Sidebar */
     .stSidebar [data-testid="stWidgetLabel"] p {
-        color: #000047 !important; /* Azul escuro */
+        color: #000047 !important;
         font-size: 16px !important;
         font-weight: 600 !important;
     }
 
-    /* Altera a cor de fundo e do texto das TAGS SELECIONADAS no multiselect */
     .stSidebar [data-baseweb="tag"] {
-        background-color: #012869 !important; /* Fundo laranja */
-        color: #FFFFFF !important; /* Texto branco */
+        background-color: #012869 !important;
+        color: #FFFFFF !important;
         border-radius: 4px !important;
     }
 
-    /* Altera a cor do ícone de "X" para fechar a tag */
     .stSidebar [data-baseweb="tag"] svg {
         fill: #FFFFFF !important;
     }
@@ -45,11 +41,11 @@ st.html("""
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] a {
         color: white !important;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.3); /* Sombra suave para ajudar a leitura no fundo claro */
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
     }
     
     [data-testid="stSidebar"] .stButton button {
-        background-color: #012869 !important; /* Azul escuro */
+        background-color: #012869 !important;
         color: white !important;
         border-radius: 4px !important;
         border: none !important;    
@@ -63,81 +59,74 @@ st.html("""
     /* CRIAÇÃO DE ESTILOS PARA O SELECTBOX */
     
     [data-testid="stSelectbox"] label p {
-        color: #012869 !important; /* Azul Escuro */
+        color: #012869 !important;
         font-weight: bold !important;
     }
 
-    /* Borda padrão da caixa */
     [data-testid="stSelectbox"] div[data-baseweb="select"] > div {
-        border: 2px solid #012869 !important; /* Borda Azul Escuro */
+        border: 2px solid #012869 !important;
         border-radius: 6px !important;
         background-color: white !important;
     }
 
-    /* Borda e sombra quando passa o mouse ou clica (Foco) */
     [data-testid="stSelectbox"] div[data-baseweb="select"] > div:hover,
     [data-testid="stSelectbox"] div[data-baseweb="select"] > div:focus-within {
-        border-color: #F37C04 !important; /* Borda fica Laranja */
+        border-color: #F37C04 !important;
         box-shadow: 0 0 0 1px #F37C04 !important;
     }
 
-    /* Cor do texto da opção que está aparecendo na caixa */
     [data-testid="stSelectbox"] div[data-baseweb="select"] div {
-        color: #012869 !important; /* Azul escuro */
+        color: #012869 !important;
         font-weight: 500 !important;
     }
 
-    /* Setinha para baixo (Dropdown icon) */
     [data-testid="stSelectbox"] div[data-baseweb="select"] svg {
-        fill: #F37C04 !important; /* Setinha Laranja */
+        fill: #F37C04 !important;
     }
 
-    /* Fundo e borda da lista */
     ul[role="listbox"] {
         background-color: white !important;
         border: 2px solid #012869 !important;
         border-radius: 6px !important;
     }
 
-    /* Cor do texto dos itens da lista */
     ul[role="listbox"] li {
-        color: #012869 !important; /* Azul escuro */
+        color: #012869 !important;
     }
 
-    /* Cor do item ao passar o mouse E do item que está selecionado */
     ul[role="listbox"] li:hover, 
     ul[role="listbox"] li[aria-selected="true"] {
-        background-color: #F37C04 !important; /* Fundo Laranja */
-        color: white !important; /* Texto Branco para dar leitura */
+        background-color: #F37C04 !important;
+        color: white !important;
         font-weight: bold !important;
     }
     
     /* CRIAÇÃO DE ESTILOS PARA O DATE INPUT */
     
     [data-testid="stDateInput"] label p {
-        color: #012869 !important; /* Azul Escuro */
+        color: #012869 !important;
         font-weight: bold !important;
     }
 
     [data-testid="stDateInput"] div[data-baseweb="input"] > div {
         background-color: white !important;
-        border: 2px solid #012869 !important; /* Borda Azul Escura */
+        border: 2px solid #012869 !important;
         border-radius: 6px !important;
     }
 
     [data-testid="stDateInput"] div[data-baseweb="input"] > div:hover,
     [data-testid="stDateInput"] div[data-baseweb="input"] > div:focus-within {
-        border-color: #F37C04 !important; /* Borda fica Laranja */
+        border-color: #F37C04 !important;
         box-shadow: 0 0 0 1px #F37C04 !important;
     }
 
     [data-testid="stDateInput"] input {
-        color: #012869 !important; /* Letras Azul Escuro */
+        color: #012869 !important;
         font-weight: 500 !important;
     }
     
     [data-testid="stDateInput"] svg {
-        fill: #F37C04 !important; /* Ícone Laranja */
+        fill: #F37C04 !important;
         color: #F37C04 !important;
     }
     </style>
@@ -150,23 +139,28 @@ st.set_page_config(
 )
 
 def main():
+    # Logotipo
+    st.logo("assets/images/novo-logo-totale.png", size="medium")
 
-    st.image("assets/images/novo-logo-totale.png", width=200)
-
+    # Definição das páginas (sem o section)
     home_page = st.Page("pages/home.py", title="Home", icon="🏠", default=True)
     envio_excel = st.Page("pages/envio_excel.py", title="Atualização de Dados", icon="🔁")
     ranking_pontos = st.Page("pages/pontos.py", title="Ranking de Pontos", icon="📈")
     qtde_os = st.Page("pages/qtde_os.py", title="Quantidade de O.S.", icon="📊")
     consultivo = st.Page("pages/consultivo.py", title="Consultivos", icon="📋")
-    gestao_ativos = st.Page(page="pages/gestao_ativos.py", title="Gestão de Ativos", icon="👷")
-    # jogo_da_velha = st.Page(page="pages/jogodavelha.py", title="Jogo da Velha IA", icon="🕹️")
-    visao_tec_prod = st.Page(page="pages/visao_tecnico_prod.py", title="Produção Técnico", icon="🛠️")
-    visao_tec_cons = st.Page(page="pages/visao_tecnico_cons.py", title="Consultivo Técnico", icon="🛠️")
+    gestao_ativos = st.Page("pages/gestao_ativos.py", title="Gestão de Ativos", icon="👷")
+    visao_tec_prod = st.Page("pages/visao_tecnico_prod.py", title="Produção", icon="🛠️")
+    visao_tec_cons = st.Page("pages/visao_tecnico_cons.py", title="Consultivo", icon="🗣️")
 
+    # Criando o Dicionário para agrupar as seções
+    paginas_agrupadas = {
+        "MENU PRINCIPAL": [home_page],
+        "PAINÉIS DE PROD. E CONS.": [envio_excel, ranking_pontos, qtde_os, consultivo, gestao_ativos],
+        "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons]
+    }
 
-    # 2. Configurar a navegação passando a lista de páginas
-    pg = st.logo("assets/images/novo-logo-totale.png")
-    pg = st.navigation([home_page, envio_excel, ranking_pontos, qtde_os, consultivo, gestao_ativos, visao_tec_prod, visao_tec_cons])
+    # Passando o dicionário para a navegação
+    pg = st.navigation(paginas_agrupadas)
 
     pg.run()
 
