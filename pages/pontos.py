@@ -179,23 +179,36 @@ class Utilitarios:
 
         return dias_brutos, dias_seguros, data_maxima, dias_passados
 
+  
     @staticmethod
     def exportar_excel(dataframe: pd.DataFrame) -> bytes:
-        # Mantido seu código perfeito de exportação
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             dataframe.to_excel(writer, index=False, sheet_name="Ranking")
             ws = writer.sheets["Ranking"]
+            
+            # 1. Identifica a posição da coluna "Pontuação" (openpyxl começa a contar no 1)
+            idx_pontuacao = None
+            if "Pontuação" in dataframe.columns:
+                idx_pontuacao = dataframe.columns.get_loc("Pontuação") + 1
+
             cor_cabecalho = PatternFill(start_color="FF012869", end_color="FF012869", fill_type="solid")
             f_cabecalho = Font("Calibri", size=10.5, bold=True, color="FFFFFFFF")
             borda = Border(left=Side(style="thin", color="FFD9D9D9"), right=Side(style="thin", color="FFD9D9D9"), top=Side(style="thin", color="FFD9D9D9"), bottom=Side(style="thin", color="FFD9D9D9"))
+            
             for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
                 for celula in row:
                     celula.border = borda
-                    if celula.row == 1:
+                    if celula.row == 1: # Formatação do Cabeçalho
                         celula.fill, celula.font, celula.alignment = cor_cabecalho, f_cabecalho, Alignment(horizontal="center", vertical="center")
+                    else: # Formatação dos Dados
+                        # 2. Aplica as duas casas decimais na coluna correta
+                        if celula.column == idx_pontuacao:
+                            celula.number_format = '#,##0.00' # Formato do Excel para 2 casas decimais
+                            
             for col in ws.columns:
                 ws.column_dimensions[get_column_letter(col[0].column)].width = max(max(len(str(cell.value or "")) for cell in col) + 4, 12)
+                
         return output.getvalue()
 
 
