@@ -95,10 +95,11 @@ class ProcessadorDados:
         df["Check_ND"] = str_tipo_os.str.contains("ADESAO", case=False, na=False)
         df["Check_Migracao"] = str_tipo_os.str.strip().str.upper() == "24 - MUDANCA DE PACOTE"
         df["Check_GPON"] = str_hab_trab.str.contains(r"PON\(1/100\)", regex=True, case=False, na=False)
-        df["Check_Streaming"] = str_hab_trab.str.strip().eq("TV VAS(1/100)")
-        df["Check_Ponto_Ultra"] = str_hab_trab.str.strip().eq("NETLAR")
-        df["Check_4K"] = str_produto.str.strip().eq("4K")
-        df["Check_Soundbox"] = str_produto.str.strip().eq("SOUND")
+        df["Check_Streaming"] = str_hab_trab.str.contains("TV VAS(1/100)", case=False, na=False)
+        df["Check_Ponto_Ultra"] = str_hab_trab.str.contains("NETLAR", case=False, na=False)
+        df["Check_4K"] = str_produto.str.contains("4K", case=False, na=False)
+        df["Check_Soundbox"] = str_produto.str.contains("SOUND", case=False, na=False)
+        df["Check_Mesh"] = str_hab_trab.str.contains("Mesh", case=False, na=False)
 
         # Mapeamento de Períodos
         if "Intervalo de Tempo" in df.columns:
@@ -124,6 +125,7 @@ class ProcessadorDados:
             Qtd_4K=("Check_4K", "sum"),
             Soundbox=("Check_Soundbox", "sum"),
             PontoUltra=("Check_Ponto_Ultra", "sum"),
+            Mesh=("Check_Mesh", "sum"),
             Equipe=("Login do Técnico", "nunique") if "Login do Técnico" in df_periodo.columns else ("Login do Técnico", "count")
         ).reset_index()
 
@@ -286,6 +288,7 @@ class AplicativoDashboard:
             f_ponto = st.checkbox("📶 Requer Ponto Ultra")
             f_4k = st.checkbox("🔌 Possui Equipamento 4K")
             f_soundbox = st.checkbox("🔊 Possui Soundbox")
+            f_mesh = st.checkbox("📡 Requer Mesh")
 
             # Aplicando os filtros booleanos
             if f_nd: df_filtrado = df_filtrado[df_filtrado["Check_ND"] == True]
@@ -295,6 +298,7 @@ class AplicativoDashboard:
             if f_ponto: df_filtrado = df_filtrado[df_filtrado["Check_Ponto_Ultra"] == True]
             if f_4k: df_filtrado = df_filtrado[df_filtrado["Check_4K"] == True]
             if f_soundbox: df_filtrado = df_filtrado[df_filtrado["Check_Soundbox"] == True]
+            if f_mesh: df_filtrado = df_filtrado[df_filtrado["Check_Mesh"] == True]
                 
         return df_filtrado
 

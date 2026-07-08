@@ -14,23 +14,24 @@ from streamlit_gsheets import GSheetsConnection
 class Configuracoes:
     """Configurações globais e paleta de cores do sistema."""
     
-    TEMAS_CARD = {
-        "amarelo": {"fundo": "#FEF9C3", "texto": "#854D0E", "borda": "#EAB308", "titulo": "#A16207"},
-        "azul":    {"fundo": "#F0F9FF", "texto": "#0369A1", "borda": "#0EA5E9", "titulo": "#075985"},
-        "verde":   {"fundo": "#F0FDF4", "texto": "#15803D", "borda": "#22C55E", "titulo": "#166534"},
-        "roxo":    {"fundo": "#FAF5FF", "texto": "#7E22CE", "borda": "#A855F7", "titulo": "#6B21A8"},
-        "cinza":   {"fundo": "#F8FAFC", "texto": "#334155", "borda": "#94A3B8", "titulo": "#64748B"},
-        "escuro":  {"fundo": "#1E293B", "texto": "#FFFFFF", "borda": "#475569", "titulo": "#E2E8F0"},
+    temas_card = {
+        "amarelo":  {"fundo": "#FEF9C3", "texto": "#854D0E", "borda": "#EAB308", "titulo": "#A16207"},
+        "azul":     {"fundo": "#F0F9FF", "texto": "#0369A1", "borda": "#0EA5E9", "titulo": "#075985"},
+        "verde":    {"fundo": "#F0FDF4", "texto": "#15803D", "borda": "#22C55E", "titulo": "#166534"},
+        "roxo":     {"fundo": "#FAF5FF", "texto": "#7E22CE", "borda": "#A855F7", "titulo": "#6B21A8"},
+        "cinza":    {"fundo": "#F8FAFC", "texto": "#334155", "borda": "#94A3B8", "titulo": "#64748B"},
+        "escuro":   {"fundo": "#1E293B", "texto": "#FFFFFF", "borda": "#475569", "titulo": "#E2E8F0"},
+        "vermelho": {"fundo": "#FEF2F2", "texto": "#B91C1C", "borda": "#EF4444", "titulo": "#991B1B"}, 
     }
     
-    CORES_GRAFICO = ["#0EA5E9", "#22C55E", "#A855F7", "#F97316", "#EF4444", "#3B82F6"]
+    cores_grafico = ["#0EA5E9", "#22C55E", "#A855F7", "#F97316", "#EF4444", "#3B82F6"]
     
-    PAGINA = {
+    pagina = {
         "titulo": "📋 Total de Consultivos",
         "icon": "📋"
     }
     
-    URL_ATIVOS = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
+    url_ativos = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
 
 
 # ====================================================
@@ -42,7 +43,7 @@ class ComponenteVisual:
     
     @staticmethod
     def criar_card(titulo: str, valor: str, tema: str = "azul", delta: Optional[str] = None) -> str:
-        cores = Configuracoes.TEMAS_CARD.get(tema, Configuracoes.TEMAS_CARD["azul"])
+        cores = Configuracoes.temas_card.get(tema, Configuracoes.temas_card["azul"])
         
         delta_html = ""
         if delta:
@@ -132,7 +133,7 @@ class Utilitarios:
 
 
 # ====================================================
-# BLOCO 4: PROCESSAMENTO DE DADOS E GRÁFICOS (+ NOVOS)
+# BLOCO 4: PROCESSAMENTO DE DADOS E GRÁFICOS
 # ====================================================
 
 class ProcessamentoDados:
@@ -157,14 +158,14 @@ class ProcessamentoDados:
         colunas_soma = ["Qtde. Cons.", "Qtde. Prod.", "Qtde. Mesh", "Qtde. TV", "Qtde. Virtua"]
         colunas_soma = [col for col in colunas_soma if col in df.columns]
         
-        resultado = df.groupby(colunas_grupo)[colunas_soma].sum().reset_index().sort_values(coluna_ordenacao, ascending=False)
+        resultado = df.groupby(colunas_grupo, dropna=False)[colunas_soma].sum().reset_index().sort_values(coluna_ordenacao, ascending=False)
         resultado.insert(0, "Posição", range(1, len(resultado) + 1))
         
         renomeios = {"Qtde. Cons.": "Total Consultivos", "Qtde. Prod.": "Total Produtos", "Qtde. Mesh": "Mesh", "Qtde. TV": "TV Box", "Qtde. Virtua": "Virtua"}
         resultado = resultado.rename(columns=renomeios)
         
         col_ints = [renomeios.get(c, c) for c in colunas_soma] + ["Posição"]
-        resultado[col_ints] = resultado[col_ints].astype(int)
+        resultado[col_ints] = resultado[col_ints].fillna(0).astype(int)
         
         return resultado
 
@@ -183,13 +184,12 @@ class Graficos:
     @staticmethod
     def grafico_pizza(df: pd.DataFrame, names: str, values: str, tipo: str = "pizza") -> Figure:
         hole_size = 0.4 if tipo == "rosca" else 0
-        fig = px.pie(df, names=names, values=values, hole=hole_size, color_discrete_sequence=Configuracoes.CORES_GRAFICO)
+        fig = px.pie(df, names=names, values=values, hole=hole_size, color_discrete_sequence=Configuracoes.cores_grafico)
         fig.update_layout(font=dict(family="Roboto"), paper_bgcolor="rgba(0,0,0,0)")
         if tipo == "rosca":
             fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
         return fig
 
-    # --- NOVOS GRÁFICOS GERENCIAIS ---
     @staticmethod
     def grafico_evolucao_temporal(df: pd.DataFrame) -> Figure:
         df_tempo = df.groupby(df['DATA'].dt.date)[['Qtde. Cons.', 'Qtde. Prod.']].sum().reset_index()
@@ -212,7 +212,6 @@ class Graficos:
 
     @staticmethod
     def grafico_dispersao_eficiencia(df_ranking: pd.DataFrame) -> Figure:
-        # Usa o df já agrupado por ranking para poupar processamento
         df_disp = df_ranking[df_ranking['Total Consultivos'] > 0]
         fig = px.scatter(df_disp, x='Total Consultivos', y='Total Produtos', 
                          color='Monitor', hover_name='VENDEDOR',
@@ -224,7 +223,6 @@ class Graficos:
     @staticmethod
     def grafico_heatmap_semana(df: pd.DataFrame) -> Figure:
         df_heat = df.copy()
-        # Mapeamento manual seguro contra falhas de localidade do servidor
         dias_map = {0: '1-Seg', 1: '2-Ter', 2: '3-Qua', 3: '4-Qui', 4: '5-Sex', 5: '6-Sáb', 6: '7-Dom'}
         df_heat['Dia da Semana'] = df_heat['DATA'].dt.dayofweek.map(dias_map)
         
@@ -238,8 +236,8 @@ class Graficos:
 # ====================================================
 # BLOCO 5: INÍCIO DA PÁGINA E PREPARAÇÃO DOS DADOS
 # ====================================================
-st.set_page_config(page_title=Configuracoes.PAGINA["titulo"], page_icon=Configuracoes.PAGINA["icon"], layout=cast(Literal["wide"], "wide"))
-st.title(Configuracoes.PAGINA["titulo"])
+st.set_page_config(page_title=Configuracoes.pagina["titulo"], page_icon=Configuracoes.pagina["icon"], layout=cast(Literal["wide"], "wide"))
+st.title(Configuracoes.pagina["titulo"])
 
 if "dados_cons" not in st.session_state or "Consultivo" not in st.session_state["dados_cons"]:
     st.warning("⚠️ Carregue os dados na aba principal primeiro.")
@@ -257,48 +255,58 @@ for origem, destino in mapa_colunas.items():
     else:
         df[destino] = 0
 
-# Converte Data garantindo que continue no DF original
 if "DATA" in df.columns:
     df["DATA"] = pd.to_datetime(df["DATA"], errors="coerce", dayfirst=True)
+
 
 # ====================================================
 # BLOCO 6: INTEGRAÇÃO COM GOOGLE SHEETS
 # ====================================================
 try:
-    df_ativos = ProcessamentoDados.carregar_ativos(Configuracoes.URL_ATIVOS)
+    df_ativos = ProcessamentoDados.carregar_ativos(Configuracoes.url_ativos)
 except Exception as erro:
     st.error(f"❌ Falha ao conectar com as planilhas: {erro}")
     st.stop()
 
 df = ProcessamentoDados.limpar_strings(df, ["LOGIN NETSALES"])
-df_ativos = ProcessamentoDados.limpar_strings(df_ativos, ["Login", "Monitor", "Base"])
+df_ativos = ProcessamentoDados.limpar_strings(df_ativos, ["Login", "Técnico", "Monitor", "Base"])
 
-df_ativos_subset = df_ativos[["Login", "Monitor", "Base"]].drop_duplicates(subset=["Login"])
+df_ativos_subset = df_ativos[["Login", "Técnico", "Monitor", "Base"]].drop_duplicates(subset=["Login"])
 df = df.drop(columns=["Monitor", "Base"], errors="ignore")
-df = pd.merge(df, df_ativos_subset, left_on="LOGIN NETSALES", right_on="Login", how="left")
+
+df = pd.merge(df, df_ativos_subset, left_on="LOGIN NETSALES", right_on="Login", how="outer")
+
+df["LOGIN NETSALES"] = df["LOGIN NETSALES"].fillna(df["Login"]).fillna("SEM LOGIN")
+
+if "VENDEDOR" in df.columns:
+    df["VENDEDOR"] = df["VENDEDOR"].fillna(df["Técnico"]).fillna(df["LOGIN NETSALES"]).fillna("Nome Não Cadastrado")
+else:
+    df["VENDEDOR"] = df.get("Técnico", pd.Series(dtype=str)).fillna(df["LOGIN NETSALES"]).fillna("Nome Não Cadastrado")
 
 df["Monitor"] = df["Monitor"].fillna("Não Identificado")
-df["Base"] = df["Base"].fillna("Não Identificado")
+df["Base"] = df["Base"].fillna("Não Identificada")
+
+colunas_metricas = ["Qtde. Cons.", "Qtde. Prod.", "Qtde. Mesh", "Qtde. TV", "Qtde. Virtua"]
+for col in colunas_metricas:
+    if col in df.columns:
+        df[col] = df[col].fillna(0)
 
 
 # ====================================================
-# BLOCO 7: CÁLCULO DOS INDICADORES GLOBAIS (BASE)
+# BLOCO 7: CÁLCULO DOS INDICADORES GLOBAIS
 # ====================================================
-TOTAL_GERAL_CONS = int(df["Qtde. Cons."].sum())
-TOTAL_GERAL_PROD = int(df["Qtde. Prod."].sum())
-TOTAL_GERAL_MESH = int(df["Qtde. Mesh"].sum())
-TOTAL_GERAL_TV = int(df["Qtde. TV"].sum())
-TOTAL_GERAL_VIRTUA = int(df["Qtde. Virtua"].sum())
+total_geral_cons = int(df["Qtde. Cons."].sum())
+total_geral_prod = int(df["Qtde. Prod."].sum())
+total_geral_mesh = int(df["Qtde. Mesh"].sum())
+total_geral_tv = int(df["Qtde. TV"].sum())
+total_geral_virtua = int(df["Qtde. Virtua"].sum())
 
-TOTAL_EQUIPES_GERAL = df_ativos["Login"].dropna().nunique() if not df_ativos.empty else 0
+eq_cons_geral = df.groupby("LOGIN NETSALES")["Qtde. Cons."].sum()
+total_equipes_geral = eq_cons_geral.shape[0]
+eq_ativas_geral = eq_cons_geral[eq_cons_geral > 0].shape[0]
+eq_zeradas_geral = total_equipes_geral - eq_ativas_geral
 
-if "VENDEDOR" in df.columns and not df.empty:
-    eq_cons_geral = df.groupby("VENDEDOR")["Qtde. Cons."].sum()
-    eq_ativas_geral = eq_cons_geral[eq_cons_geral > 0].shape[0]
-else:
-    eq_ativas_geral = 0
-
-TOTAL_EFIC_GERAL = (eq_ativas_geral / TOTAL_EQUIPES_GERAL) if TOTAL_EQUIPES_GERAL > 0 else 0
+total_efic_geral = (eq_ativas_geral / total_equipes_geral) if total_equipes_geral > 0 else 0
 
 
 # ====================================================
@@ -319,7 +327,7 @@ if "DATA" in df.columns:
     datas_validas = df["DATA"].dropna()
     if not datas_validas.empty:
         intervalo_datas = st.sidebar.date_input(
-            "Selecione o período:", 
+            "Selecione o período (Apenas para Oportunidades com Data):", 
             value=(datas_validas.min().date(), datas_validas.max().date()),
             min_value=datas_validas.min().date(), 
             max_value=datas_validas.max().date(), 
@@ -329,24 +337,21 @@ if "DATA" in df.columns:
 if st.sidebar.button("🔄 Limpar Filtros"):
     st.rerun()
 
-# Aplicando Filtros
 if base_sel != "Todas": 
     df = df[df["Base"] == base_sel]
-    if not df_ativos.empty: df_ativos = df_ativos[df_ativos["Base"] == base_sel]
-
 if monitor_sel != "Todos": 
     df = df[df["Monitor"] == monitor_sel]
-    if not df_ativos.empty: df_ativos = df_ativos[df_ativos["Monitor"] == monitor_sel]
-
 if intervalo_datas and isinstance(intervalo_datas, tuple) and len(intervalo_datas) == 2:
-    df = df[(df["DATA"].dt.date >= intervalo_datas[0]) & (df["DATA"].dt.date <= intervalo_datas[1])]
+    df = df[(df["DATA"].isnull()) | ((df["DATA"].dt.date >= intervalo_datas[0]) & (df["DATA"].dt.date <= intervalo_datas[1]))]
 
 
 # ====================================================
-# BLOCO 9: MÉTRICAS FILTRADAS, TICKER E CARDS
+# BLOCO 9: MÉTRICAS FILTRADAS E CARDS
 # ====================================================
-equipes_ativas = df.groupby("VENDEDOR")["Qtde. Cons."].sum().reset_index()[lambda x: x["Qtde. Cons."] > 0].shape[0] if "VENDEDOR" in df.columns else 0
-total_equipes_filtro = df_ativos["Login"].dropna().nunique() if not df_ativos.empty else 0
+eq_cons_filtro = df.groupby("LOGIN NETSALES")["Qtde. Cons."].sum()
+total_equipes_filtro = eq_cons_filtro.shape[0]
+equipes_ativas = eq_cons_filtro[eq_cons_filtro > 0].shape[0]
+equipes_sem_cons = total_equipes_filtro - equipes_ativas
 
 qtde_cons = int(df["Qtde. Cons."].sum())
 qtde_prod = int(df["Qtde. Prod."].sum())
@@ -356,13 +361,12 @@ qtde_virtua = int(df["Qtde. Virtua"].sum())
 
 eficiencia = (equipes_ativas / total_equipes_filtro) if total_equipes_filtro > 0 else 0
 
-# Ticker
-var_cons = Utilitarios.calcular_share(qtde_cons, TOTAL_GERAL_CONS)
-var_efic = Utilitarios.calcular_variacao(eficiencia, TOTAL_EFIC_GERAL)
-var_prod = Utilitarios.calcular_share(qtde_prod, TOTAL_GERAL_PROD)
-var_mesh = Utilitarios.calcular_share(qtde_mesh, TOTAL_GERAL_MESH)
-var_tv = Utilitarios.calcular_share(qtde_tv, TOTAL_GERAL_TV)
-var_virtua = Utilitarios.calcular_share(qtde_virtua, TOTAL_GERAL_VIRTUA)
+var_cons = Utilitarios.calcular_share(qtde_cons, total_geral_cons)
+var_efic = Utilitarios.calcular_variacao(eficiencia, total_efic_geral)
+var_prod = Utilitarios.calcular_share(qtde_prod, total_geral_prod)
+var_mesh = Utilitarios.calcular_share(qtde_mesh, total_geral_mesh)
+var_tv = Utilitarios.calcular_share(qtde_tv, total_geral_tv)
+var_virtua = Utilitarios.calcular_share(qtde_virtua, total_geral_virtua)
 
 st.markdown(ComponenteVisual.exibir_ticker([
     {"label": "Consultivos", "valor": Utilitarios.formatar_numero(qtde_cons), "variacao": var_cons[0], "delta": var_cons[1]},
@@ -373,36 +377,32 @@ st.markdown(ComponenteVisual.exibir_ticker([
     {"label": "Virtua", "valor": Utilitarios.formatar_numero(qtde_virtua), "variacao": var_virtua[0], "delta": var_virtua[1]},
 ]), unsafe_allow_html=True)
 
-# Cards
-c1, c2, c3, c4, c5 = st.columns(5)
-with c1: st.markdown(ComponenteVisual.criar_card("Eq. c/ Consultivo", Utilitarios.formatar_numero(equipes_ativas), "amarelo", Utilitarios.calcular_variacao(equipes_ativas, eq_ativas_geral)[1]), unsafe_allow_html=True)
-with c2: st.markdown(ComponenteVisual.criar_card("Total Equipes", Utilitarios.formatar_numero(total_equipes_filtro), "azul", Utilitarios.calcular_variacao(total_equipes_filtro, TOTAL_EQUIPES_GERAL)[1]), unsafe_allow_html=True)
-with c3: st.markdown(ComponenteVisual.criar_card("Eficiência", f"{eficiencia:.1%}", "verde", var_efic[1]), unsafe_allow_html=True)
-with c4: st.markdown(ComponenteVisual.criar_card("Tot. Consultivos", Utilitarios.formatar_numero(qtde_cons), "azul", var_cons[1]), unsafe_allow_html=True)
-with c5: st.markdown(ComponenteVisual.criar_card("Tot. Produtos", Utilitarios.formatar_numero(qtde_prod), "cinza", var_prod[1]), unsafe_allow_html=True)
+c1, c2, c3, c4 = st.columns(4)
+with c1: st.markdown(ComponenteVisual.criar_card("Total Equipes", Utilitarios.formatar_numero(total_equipes_filtro), "azul", Utilitarios.calcular_variacao(total_equipes_filtro, total_equipes_geral)[1]), unsafe_allow_html=True)
+with c2: st.markdown(ComponenteVisual.criar_card("Equipes Produtivas", Utilitarios.formatar_numero(equipes_ativas), "verde", Utilitarios.calcular_variacao(equipes_ativas, eq_ativas_geral)[1]), unsafe_allow_html=True)
+with c3: st.markdown(ComponenteVisual.criar_card("Técnicos Sem Consultivo", Utilitarios.formatar_numero(equipes_sem_cons), "vermelho", Utilitarios.calcular_variacao(equipes_sem_cons, eq_zeradas_geral)[1]), unsafe_allow_html=True)
+with c4: st.markdown(ComponenteVisual.criar_card("Eficiência (Conversão)", f"{eficiencia:.1%}", "roxo", var_efic[1]), unsafe_allow_html=True)
 
 st.write("")
-c6, c7, c8 = st.columns(3)
-with c6: st.markdown(ComponenteVisual.criar_card("Total de Mesh", Utilitarios.formatar_numero(qtde_mesh), "roxo", var_mesh[1]), unsafe_allow_html=True)
-with c7: st.markdown(ComponenteVisual.criar_card("Total de TV Box", Utilitarios.formatar_numero(qtde_tv), "roxo", var_tv[1]), unsafe_allow_html=True)
-with c8: st.markdown(ComponenteVisual.criar_card("Total de Virtua", Utilitarios.formatar_numero(qtde_virtua), "roxo", var_virtua[1]), unsafe_allow_html=True)
+
+c5, c6, c7, c8, c9 = st.columns(5)
+with c5: st.markdown(ComponenteVisual.criar_card("Tot. Consultivos", Utilitarios.formatar_numero(qtde_cons), "azul", var_cons[1]), unsafe_allow_html=True)
+with c6: st.markdown(ComponenteVisual.criar_card("Tot. Produtos", Utilitarios.formatar_numero(qtde_prod), "cinza", var_prod[1]), unsafe_allow_html=True)
+with c7: st.markdown(ComponenteVisual.criar_card("Total de Mesh", Utilitarios.formatar_numero(qtde_mesh), "escuro", var_mesh[1]), unsafe_allow_html=True)
+with c8: st.markdown(ComponenteVisual.criar_card("Total de TV Box", Utilitarios.formatar_numero(qtde_tv), "escuro", var_tv[1]), unsafe_allow_html=True)
+with c9: st.markdown(ComponenteVisual.criar_card("Total de Virtua", Utilitarios.formatar_numero(qtde_virtua), "escuro", var_virtua[1]), unsafe_allow_html=True)
 st.divider()
 
 
 # ====================================================
 # BLOCO 10: TABELAS DE DADOS
 # ====================================================
-colunas_necessarias = ["LOGIN NETSALES", "VENDEDOR", "Monitor", "Base", "Qtde. Cons.", "Qtde. Prod."]
-if not all(col in df.columns for col in colunas_necessarias):
-    st.error("⚠️ Faltam colunas necessárias no DataFrame para gerar as tabelas.")
-    st.stop()
-
 total_consultivos = ProcessamentoDados.preparar_ranking(df, ["LOGIN NETSALES", "VENDEDOR", "Monitor", "Base"], "Qtde. Cons.")
 total_por_monitor = ProcessamentoDados.preparar_ranking(df, ["Monitor"], "Qtde. Prod.")
 
 col_tit, col_tog, _ = st.columns([3, 1, 1])
 with col_tit: st.subheader("👷 Visão por Técnico e Monitor")
-with col_tog: modo_visao = st.toggle("Expandir Detalhes por Técnico", help="Ver dados individuais")
+with col_tog: modo_visao = st.toggle("Expandir Detalhes por Técnico", help="Ver dados individuais (Incluindo Zerados)")
 
 if modo_visao:
     st.dataframe(total_consultivos.style.format(formatter=cast(Any, {c: "{:,}" for c in ["Total Consultivos", "Total Produtos", "Mesh", "TV Box", "Virtua"] if c in total_consultivos.columns}))
@@ -415,7 +415,7 @@ st.divider()
 
 
 # ====================================================
-# BLOCO 11: GRÁFICOS GERENCIAIS (SISTEMA DE ABAS) E EXPORTAÇÃO
+# BLOCO 11: GRÁFICOS GERENCIAIS E ALERTAS
 # ====================================================
 aba1, aba2, aba3 = st.tabs(["📈 Desempenho e Evolução", "📦 Mix de Produtos", "🎯 Eficiência e Alertas"])
 
@@ -429,7 +429,7 @@ with aba1:
             st.subheader("Evolução Temporal")
             st.plotly_chart(Graficos.grafico_evolucao_temporal(df), use_container_width=True)
         else:
-            st.info("Sem dados de data para traçar evolução.")
+            st.info("Sem dados de data suficientes para traçar evolução.")
 
 with aba2:
     col_m1, col_m2 = st.columns([1, 1])
@@ -449,25 +449,27 @@ with aba3:
         st.plotly_chart(Graficos.grafico_dispersao_eficiencia(total_consultivos), use_container_width=True)
     
     with col_e2:
-        st.subheader("🚨 Alerta: Foco em Treinamento")
-        st.markdown("<p style='font-size:13px; color:#64748B;'>Técnicos com consultivos mas sem fechamentos (Bottom 10):</p>", unsafe_allow_html=True)
+        st.subheader("🚨 Alerta: Oportunidades Desperdiçadas")
+        st.markdown("<p style='font-size:13px; color:#64748B;'>Fizeram Consultivo mas NENHUM fechamento:</p>", unsafe_allow_html=True)
         
-        # Pega quem tem consultivo, ordena do menor produto pro maior, e do maior consultivo pro menor
-        df_alerta = total_consultivos[total_consultivos['Total Consultivos'] > 0].sort_values(by=['Total Produtos', 'Total Consultivos'], ascending=[True, False]).head(10)
-        st.dataframe(
-            df_alerta[['VENDEDOR', 'Monitor', 'Total Consultivos', 'Total Produtos']].style.background_gradient(cmap='Reds', subset=['Total Produtos']),
-            use_container_width=True, hide_index=True
-        )
+        # Alerta 1: Fez Consultivo, mas 0 produtos fechados (REMOVIDO .style para evitar erro do matplotlib)
+        df_alerta = total_consultivos[(total_consultivos['Total Consultivos'] > 0) & (total_consultivos['Total Produtos'] == 0)].sort_values(by='Total Consultivos', ascending=False)
+        st.dataframe(df_alerta[['VENDEDOR', 'Monitor', 'Total Consultivos']].head(10), use_container_width=True, hide_index=True)
+        
+        st.write("")
+        st.subheader("🛑 Alerta Crítico: Inativos")
+        st.markdown("<p style='font-size:13px; color:#64748B;'>Técnicos com ZERO Consultivos e ZERO Vendas:</p>", unsafe_allow_html=True)
+        df_zerados = total_consultivos[total_consultivos['Total Consultivos'] == 0]
+        st.dataframe(df_zerados[['VENDEDOR', 'Monitor', 'Base']], use_container_width=True, hide_index=True, height=200)
 
-# Mapa de Calor ocupando largura total da Aba 3 (Abaixo do scatter e alerta)
 with aba3:
     if "DATA" in df.columns and not df["DATA"].isnull().all():
         st.write("")
-        st.plotly_chart(Graficos.grafico_heatmap_semana(df), use_container_width=True)
+        st.plotly_chart(Graficos.grafico_heatmap_semana(df.dropna(subset=['DATA'])), use_container_width=True)
 
 
 # ====================================================
-# EXPORTAÇÃO (No rodapé da página)
+# EXPORTAÇÃO
 # ====================================================
 st.divider()
 st.subheader("📥 Exportar Dados Atuais")
@@ -476,7 +478,7 @@ with col_exp1:
     formato = st.selectbox("Formato do Arquivo:", ["Excel", "CSV"])
 
 with col_exp2:
-    st.write("") # Alinhamento
+    st.write("")
     if formato == "CSV":
         csv_data = total_consultivos.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(label="Baixar Relatório Completo", data=csv_data, file_name="relatorio_consultivos.csv", mime="text/csv")
