@@ -22,7 +22,7 @@ class Configuracoes:
     
     # URLs de Exportação
     URL_PROD = "https://docs.google.com/spreadsheets/d/11Dp9WdZYUrT_LBvfo07Mi8muKXZykU7v/export?format=xlsx"
-    URL_CONS = "https://drive.google.com/uc?id=1VEeL3fV8SyKo9j5YMqvjUu98dZxtMtKA&export=download"
+    URL_CONS = "https://drive.google.com/uc?id=1YOWJ0HuGcEP2vJaZwl2kcgrtNgsoMBDs&export=download"
     URL_ATIVOS = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/export?format=csv"
 
 
