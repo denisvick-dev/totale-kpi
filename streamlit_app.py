@@ -155,8 +155,8 @@ def main():
 
     # Criando o Dicionário para agrupar as seções
     paginas_agrupadas = {
-        "MENU PRINCIPAL": [home_page],
-        "PAINÉIS DE PROD. E CONS.": [envio_excel, ranking_pontos, qtde_os, consultivo, gestao_ativos],
+        "MENU PRINCIPAL": [home_page, envio_excel],
+        "PAINÉIS DE PROD. E CONS.": [ranking_pontos, qtde_os, consultivo, gestao_ativos],
         "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons],
         "ROTA INICIAL": [rota_inicial]
     }
