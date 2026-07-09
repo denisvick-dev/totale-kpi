@@ -442,7 +442,7 @@ if tec_selecionado and not df_tec_prod.empty:
     pontos_por_os = (t_pontos / t_os) if t_os > 0 else 0.0
     media_pontos = df_tec_prod["Pontos"].mean()
 
-    # 1. CARDS DE KPI COM TOOLTIPS
+    # 1. CARDS DE KPI
     st.markdown(f"### ⚙️ Execução Física de **{tec_selecionado}**")
     kr1, kr2, kr3, kr4 = st.columns(4)
 
