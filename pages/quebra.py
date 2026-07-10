@@ -205,44 +205,13 @@ st.set_page_config(page_title="Quebra de Agenda", page_icon="📊", layout="wide
 st.title("🗣️ Indicador: Quebra de Agenda")
 st.markdown("Auditoria de ordens não executadas, absenteísmo e fila de tratamento de clientes.")
 
-# 1. Cria a variável na memória do Streamlit (se não existir)
-if 'df_memoria' not in st.session_state:
-    st.session_state['df_memoria'] = None
+arquivo = st.file_uploader("📥 Envie sua base de dados (Excel ou CSV)", type=["xlsx", "xls", "csv"])
 
-# 2. SE NÃO TIVER ARQUIVO NA MEMÓRIA: Mostra o Uploader
-if st.session_state['df_memoria'] is None:
-    arquivo = st.file_uploader("📥 Envie sua base de dados (Excel ou CSV)", type=["xlsx", "xls", "csv"])
+if arquivo is not None:
+    df_bruto = CarregadorDados.ler_arquivo(arquivo)
+    df_gsheets = CarregadorDados.buscar_dados_gsheets()
+    df_full = preparar_base_cache(df_bruto, df_gsheets)
     
-    if arquivo is not None:
-        with st.spinner("Processando dados e cruzando com Google Sheets..."):
-            # Lê o arquivo e o GSheets
-            df_bruto = CarregadorDados.ler_arquivo(arquivo)
-            df_gsheets = CarregadorDados.buscar_dados_gsheets()
-            
-            # Prepara a base e cruza os dados
-            df_full = preparar_base_cache(df_bruto, df_gsheets)
-            
-            # SALVA NA MEMÓRIA
-            st.session_state['df_memoria'] = df_full
-            
-        # Recarrega a página automaticamente (Isso faz o Uploader sumir!)
-        st.rerun()
-
-# 3. SE JÁ TIVER ARQUIVO NA MEMÓRIA: Esconde Uploader e Mostra Dashboard
-else:
-    # Puxa os dados salvos da memória
-    df_full = st.session_state['df_memoria']
-    
-    # Cabeçalho com botão de reset
-    col_aviso, col_btn = st.columns([4, 1])
-    with col_aviso:
-        st.success("✅ Base processada com sucesso!")
-    with col_btn:
-        if st.button("🔄 Enviar outra base", use_container_width=True):
-            st.session_state['df_memoria'] = None
-            st.rerun() # Limpa a memória e volta o Uploader
-            
-    # --- DAQUI PARA BAIXO É O SEU DASHBOARD NORMAL ---
     if not df_full.empty:
         col_status = Utilitarios.buscar_coluna(df_full, ['STATUS DA O.S 1', 'STATUS OS', 'STATUS'])
         col_motivo = encontrar_coluna_motivo(df_full)
