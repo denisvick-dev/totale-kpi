@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
+from streamlit_gsheets import GSheetsConnection
 from typing import Optional, List
-import datetime
 
 # ====================================================
 # BLOCO 1: CONFIGURAÇÕES GLOBAIS
@@ -14,8 +12,10 @@ class Configuracoes:
         "verde": {"fundo": "#F0FDF4", "texto": "#15803D", "borda": "#22C55E", "titulo": "#166534"},
         "laranja": {"fundo": "#FFF7ED", "texto": "#C2410C", "borda": "#F97316", "titulo": "#9A3412"},
         "amarelo": {"fundo": "#FEF9C3", "texto": "#A16207", "borda": "#EAB308", "titulo": "#854D0E"},
-        "roxo": {"fundo": "#FAF5FF", "texto": "#7E22CE", "borda": "#A855F7", "titulo": "#581C87"}, 
+        "roxo": {"fundo": "#FAF5FF", "texto": "#7E22CE", "borda": "#A855F7", "titulo": "#581C87"}
     }
+
+    URL_ATIVOS = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
 
 # ====================================================
 # BLOCO 2: COMPONENTES VISUAIS
@@ -25,9 +25,9 @@ class ComponenteVisual:
     def criar_card(titulo: str, valor: str, tema: str = "azul", subtitulo: str = "", icone: str = "") -> str:
         cores = Configuracoes.TEMAS_CARD.get(tema, Configuracoes.TEMAS_CARD["azul"])
         titulo_formatado = f"{icone} {titulo}" if icone else titulo
-        
+
         return f"""
-        <div style="background-color: {cores['fundo']}; padding: 20px; border-radius: 10px; border-left: 6px solid {cores['borda']}; box-shadow: 0 4px 6px rgba(0,0,0,0.05); height: 100%; display: flex; flex-direction: column; justify-content: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+        <div style="background-color: {cores['fundo']}; padding: 20px; border-radius: 10px; border-left: 6px solid {cores['borda']}; box-shadow: 0 4px 6px rgba(0,0,0,0.05); height: 100%; display: flex; flex-direction: column; justify-content: center;">
             <p style="margin: 0; font-size: 14px; color: {cores['titulo']}; font-weight: bold;">{titulo_formatado}</p>
             <h2 style="margin: 5px 0 0 0; color: {cores['texto']}; font-weight: 900; font-size: 32px;">{valor}</h2>
             <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748B; font-weight: 500;">{subtitulo}</p>
@@ -35,281 +35,259 @@ class ComponenteVisual:
         """
 
 # ====================================================
-# BLOCO 3: FUNÇÕES UTILITÁRIAS
+# BLOCO 3: UTILITÁRIOS
 # ====================================================
 class Utilitarios:
     @staticmethod
+    def buscar_coluna(df: pd.DataFrame, palavras_chave: List[str]) -> Optional[str]:
+        if df.empty: return None
+        cols_upper = {c.upper().strip(): c for c in df.columns}
+        for palavra in palavras_chave:
+            chave = palavra.upper().strip()
+            if chave in cols_upper: return cols_upper[chave]
+        return None
+
+    @staticmethod
     def padronizar_colunas(df: pd.DataFrame) -> pd.DataFrame:
         if df.empty: return df
+        df = df.copy()
         df.columns = df.columns.str.upper().str.strip()
-        
-        mapa = {
-            "QTDE_CONSULTIVO": "CONSULTIVOS", "QTDE. CONS.": "CONSULTIVOS", "QTDE_CONS": "CONSULTIVOS",
-            "QTDE_PRODUTOS": "VENDAS", "QTDE. PROD.": "VENDAS", "PRODUTOS": "VENDAS",
-            "QTDE_MESH": "MESH", "QTDE. MESH": "MESH",
-            "QTDE_TV": "TV", "QTDE. TV": "TV",
-            "QTDE_VIRTUA": "VIRTUA", "QTDE. VIRTUA": "VIRTUA"
-        }
-        for col_origem, col_destino in mapa.items():
-            if col_origem in df.columns:
-                df[col_destino] = pd.to_numeric(df[col_origem], errors="coerce").fillna(0).astype(int)
         return df
 
     @staticmethod
-    def buscar_coluna(df: pd.DataFrame, palavras_chave: List[str]) -> Optional[str]:
-        """Busca genérica de colunas baseada em palavras-chave."""
-        cols_upper = {c.upper(): c for c in df.columns}
-        for palavra in palavras_chave:
-            if palavra in cols_upper: 
-                return cols_upper[palavra]
-        return None
+    def normalizar_login(serie: pd.Series) -> pd.Series:
+        return serie.astype(str).str.replace(".0", "", regex=False).str.strip().str.upper()
 
 # ====================================================
-# BLOCO 4: GRÁFICOS
-# ====================================================
-class Graficos:
-    @staticmethod
-    def grafico_linhas_vendas(df: pd.DataFrame, x_col: str, y_cons: str, y_prod: str) -> go.Figure:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df[x_col], y=df[y_cons], name='Oportunidades', mode='lines+markers', line=dict(color='#94A3B8', width=2)))
-        fig.add_trace(go.Scatter(x=df[x_col], y=df[y_prod], name='Vendas', mode='lines+markers', line=dict(color='#22C55E', width=3), marker=dict(size=8)))
-        
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=30, b=0),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), hovermode="x unified",
-            yaxis=dict(title="Quantidade", showgrid=True, gridcolor="rgba(0,0,0,0.05)")
-        )
-        return fig
-
-    @staticmethod
-    def grafico_rosca_mix(df_mix: pd.DataFrame) -> go.Figure:
-        fig = px.pie(df_mix, names="Produto", values="Quantidade", hole=0.6, color_discrete_sequence=['#A855F7', '#F97316', '#3B82F6'])
-        fig.update_traces(textposition='inside', textinfo='percent+label')
-        fig.update_layout(margin=dict(t=10, b=10, l=0, r=0), showlegend=False, paper_bgcolor="rgba(0,0,0,0)")
-        return fig
-
-# ====================================================
-# BLOCO 5: MOCK DE DADOS E CACHE DE PREPARAÇÃO
+# BLOCO 4: DADOS MOCK (TESTE)
 # ====================================================
 @st.cache_data(show_spinner=False)
-def gerar_dados_teste():
+def gerar_dados_teste() -> pd.DataFrame:
     import numpy as np
     datas = pd.date_range(start="2023-10-01", periods=15, freq="D").tolist() * 3
-    tecnicos = ["JOAO SILVA", "MARIA SOUZA", "CARLOS ALBERTO"] * 15
+    logins = ["1001", "1002", "1003"] * 15
     return pd.DataFrame({
-        "DATA": datas, "VENDEDOR": tecnicos, "MONITOR": ["SUP A", "SUP B", "SUP A"] * 15,
+        "DATA": datas,
+        "LOGIN": logins,
         "BASE": ["SP", "SP", "CAMPINAS"] * 15,
-        "QTDE_CONSULTIVO": np.random.randint(3, 12, size=45), 
-        "QTDE_PRODUTOS": np.random.randint(0, 5, size=45),
-        "QTDE_MESH": np.random.randint(0, 3, size=45), 
-        "QTDE_TV": np.random.randint(0, 2, size=45), 
-        "QTDE_VIRTUA": np.random.randint(0, 2, size=45)
+        "STATUS": ["CONCLUÍDO", "PENDENTE", "CONCLUÍDO"] * 15
     })
 
-# 🔥 NOVA FUNÇÃO DE CACHE (Performance melhorada)
+# ====================================================
+# BLOCO 5: CARREGAMENTO E PREPARAÇÃO
+# ====================================================
+class CarregadorDados:
+    @staticmethod
+    @st.cache_data(show_spinner=False)
+    def ler_arquivo(arquivo_enviado) -> pd.DataFrame:
+        try:
+            nome_arquivo = arquivo_enviado.name.lower()
+            if nome_arquivo.endswith(".csv"): return pd.read_csv(arquivo_enviado, sep=None, engine="python", encoding="utf-8")
+            if nome_arquivo.endswith((".xlsx", ".xls")): return pd.read_excel(arquivo_enviado, engine="openpyxl")
+            return pd.DataFrame()
+        except Exception: return pd.DataFrame()
+
+    @staticmethod
+    @st.cache_data(ttl=300, show_spinner=False)
+    def carregar_ativos(url: str) -> pd.DataFrame:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        return conn.read(spreadsheet=url, ttl=0)
+
+    @staticmethod
+    @st.cache_data(ttl=600, show_spinner=False)
+    def buscar_dados_gsheets() -> pd.DataFrame:
+        try:
+            df_gs = CarregadorDados.carregar_ativos(Configuracoes.URL_ATIVOS)
+            if df_gs.empty: return df_gs
+
+            df_gs = Utilitarios.padronizar_colunas(df_gs)
+
+            col_login = Utilitarios.buscar_coluna(df_gs, ["LOGIN", "ID", "MATRÍCULA", "MATRICULA", "USUARIO"])
+            col_tec = Utilitarios.buscar_coluna(df_gs, ["TÉCNICO", "TECNICO", "NOME", "VENDEDOR"])
+            col_mon = Utilitarios.buscar_coluna(df_gs, ["MONITOR", "GESTOR", "SUPERVISOR"])
+
+            renomear = {}
+            if col_login: renomear[col_login] = "LOGIN"
+            if col_tec: renomear[col_tec] = "TÉCNICO"
+            if col_mon: renomear[col_mon] = "MONITOR"
+
+            df_gs = df_gs.rename(columns=renomear)
+
+            if "LOGIN" in df_gs.columns: df_gs["LOGIN"] = Utilitarios.normalizar_login(df_gs["LOGIN"])
+            if "TÉCNICO" in df_gs.columns: df_gs["TÉCNICO"] = df_gs["TÉCNICO"].astype(str).str.strip().str.upper()
+            if "MONITOR" in df_gs.columns: df_gs["MONITOR"] = df_gs["MONITOR"].astype(str).str.strip().str.upper()
+
+            colunas_validas = [c for c in ["LOGIN", "TÉCNICO", "MONITOR"] if c in df_gs.columns]
+            return df_gs[colunas_validas].drop_duplicates()
+        except Exception: return pd.DataFrame()
+
 @st.cache_data(show_spinner=False)
-def preparar_dataframe_cache(df: pd.DataFrame) -> pd.DataFrame:
-    """Faz a limpeza das colunas apenas uma vez na memória."""
-    return Utilitarios.padronizar_colunas(df.copy())
+def preparar_base_cache(df: pd.DataFrame, df_hierarquia: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty: return pd.DataFrame()
+
+    df = df.copy()
+    df = Utilitarios.padronizar_colunas(df)
+
+    # Tenta localizar login da base enviada
+    col_login_upload = Utilitarios.buscar_coluna(df, ["LOGIN", "LOGIN DO TÉCNICO", "USUÁRIO", "MATRÍCULA", "ID"])
+
+    # Cruzamento com Google Sheets
+    if col_login_upload and not df_hierarquia.empty and "LOGIN" in df_hierarquia.columns:
+        df[col_login_upload] = Utilitarios.normalizar_login(df[col_login_upload])
+        df_hierarquia = df_hierarquia.copy()
+        df_hierarquia["LOGIN"] = Utilitarios.normalizar_login(df_hierarquia["LOGIN"])
+
+        colunas_remover = [c for c in ["TÉCNICO", "MONITOR"] if c in df.columns]
+        if colunas_remover: df = df.drop(columns=colunas_remover)
+
+        df = df.merge(
+            df_hierarquia[["LOGIN", "TÉCNICO", "MONITOR"]].drop_duplicates(subset=["LOGIN"], keep="last"),
+            left_on=col_login_upload, right_on="LOGIN", how="left"
+        )
+
+        df["TÉCNICO"] = df["TÉCNICO"].fillna("NÃO MAPEADO NO SHEETS")
+        df["MONITOR"] = df["MONITOR"].fillna("SEM MONITOR")
+        if col_login_upload != "LOGIN": df = df.drop(columns=["LOGIN"], errors="ignore")
+
+    # Se não conseguiu merge, garante colunas
+    if "TÉCNICO" not in df.columns:
+        col_tec_existente = Utilitarios.buscar_coluna(df, ["TÉCNICO", "TECNICO", "NOME EQUIPE"])
+        if col_tec_existente: df = df.rename(columns={col_tec_existente: "TÉCNICO"})
+        else: df["TÉCNICO"] = "NÃO INFORMADO"
+
+    if "MONITOR" not in df.columns:
+        col_monitor_existente = Utilitarios.buscar_coluna(df, ["MONITOR", "GESTOR", "SUPERVISOR"])
+        if col_monitor_existente: df = df.rename(columns={col_monitor_existente: "MONITOR"})
+        else: df["MONITOR"] = "SEM MONITOR"
+
+    df["TÉCNICO"] = df["TÉCNICO"].astype(str).str.strip().str.upper()
+    df["MONITOR"] = df["MONITOR"].astype(str).str.strip().str.upper()
+
+    col_data = Utilitarios.buscar_coluna(df, ["DATA", "DATA AGENDAMENTO", "DATE"])
+    if col_data: df[col_data] = pd.to_datetime(df[col_data], errors="coerce").dt.date
+
+    return df
 
 # ====================================================
-# BLOCO 6: INICIALIZAÇÃO DA PÁGINA E BASE
+# BLOCO 6: FRONT-END (PÁGINA)
 # ====================================================
-st.set_page_config(page_title="Visão Consultivo", page_icon="🗣️", layout="wide")
-st.title("🗣️ Raio-X: Módulo Consultivo (Vendas)")
-st.markdown("Auditoria de performance comercial, taxa de conversão e mix de produtos ofertados.")
+st.set_page_config(page_title="Dashboard Base", page_icon="📊", layout="wide")
+st.title("📊 Dashboard: Análise de Dados")
+st.markdown("Visualização e tratamento da base cruzada com a hierarquia atual.")
 
-# Busca dados da Sessão
-df_cons = None
-if "df_consultivo" in st.session_state:
-    df_cons = st.session_state["df_consultivo"]
-elif "dados_cons" in st.session_state:
-    df_cons = st.session_state["dados_cons"].get("Consultivo", pd.DataFrame())
+CHAVE_MEMORIA = "df_geral_upload"
 
-if df_cons is None or df_cons.empty:
-    st.warning("⚠️ Base não encontrada na sessão. Carregando dados de demonstração.")
-    df_cons = gerar_dados_teste()
-
-# 🔥 APLICA O CACHE AQUI
-df_cons = preparar_dataframe_cache(df_cons)
-
-# Identificação de colunas 
-col_tec = Utilitarios.buscar_coluna(df_cons, ["VENDEDOR", "TÉCNICO", "TECNICO", "NOME EQUIPE", "LOGIN"])
-col_sup = Utilitarios.buscar_coluna(df_cons, ["SUPERVISOR", "MONITOR", "GESTOR", "COORDENADOR", "LÍDER"])
-col_base = Utilitarios.buscar_coluna(df_cons, ["BASE", "PROJETO", "CIDADE", "FILIAL", "LOCALIDADE"])
-col_data = Utilitarios.buscar_coluna(df_cons, ["DATA", "DATA AGENDAMENTO", "DATE"])
-
-if not col_tec:
-    st.error("❌ Coluna de Vendedor/Técnico não encontrada.")
-    st.stop()
-
-# Limpeza e preparação prévia
-df_cons[col_tec] = df_cons[col_tec].astype(str).str.strip().str.upper()
-if col_data:
-    df_cons[col_data] = pd.to_datetime(df_cons[col_data], errors="coerce").dt.date
+if CHAVE_MEMORIA not in st.session_state:
+    st.session_state[CHAVE_MEMORIA] = None
 
 # ====================================================
-# BLOCO 7: MOTOR DE BUSCA EM CASCATA COM DATAS
+# BLOCO 7: UPLOADER OCULTO
 # ====================================================
-with st.container(border=True):
-    st.markdown("#### 🎯 Localizar Técnico e Período")
-    
-    # 🔥 NOVO LAYOUT COM 3 COLUNAS (INCLUINDO DATA)
-    f_data, f_base, f_sup = st.columns([1.5, 1, 1])
-    mask = pd.Series(True, index=df_cons.index)
+if st.session_state[CHAVE_MEMORIA] is None:
+    arquivo = st.file_uploader("📥 Envie sua base de dados (Excel/CSV)", type=["xlsx", "xls", "csv"])
 
-    # 1. Filtro de Data
-    with f_data:
-        if col_data and not df_cons[col_data].dropna().empty:
-            min_date = df_cons[col_data].min()
-            max_date = df_cons[col_data].max()
+    col_mock1, col_mock2 = st.columns([1, 5])
+    with col_mock1: usar_mock = st.button("🧪 Testar demo")
+
+    if usar_mock:
+        st.session_state[CHAVE_MEMORIA] = preparar_base_cache(gerar_dados_teste(), CarregadorDados.buscar_dados_gsheets())
+        st.rerun()
+
+    if arquivo is not None:
+        with st.spinner("Processando base e cruzando com Google Sheets..."):
+            df_bruto = CarregadorDados.ler_arquivo(arquivo)
+            df_gsheets = CarregadorDados.buscar_dados_gsheets()
+            df_full = preparar_base_cache(df_bruto, df_gsheets)
+            st.session_state[CHAVE_MEMORIA] = df_full
+        st.rerun()
+
+else:
+    df_full = st.session_state[CHAVE_MEMORIA]
+
+    col_aviso, col_btn = st.columns([4, 1])
+    with col_aviso: st.success("✅ Base carregada e cruzada com sucesso!")
+    with col_btn:
+        if st.button("🔄 Enviar outra base", use_container_width=True):
+            st.session_state[CHAVE_MEMORIA] = None
+            st.rerun()
+
+    if df_full is None or df_full.empty:
+        st.warning("⚠️ A base carregada está vazia.")
+        st.stop()
+
+    # ====================================================
+    # BLOCO 8: IDENTIFICAÇÃO DE COLUNAS & AUDITORIA
+    # ====================================================
+    col_data = Utilitarios.buscar_coluna(df_full, ["DATA", "DATA AGENDAMENTO", "DATE"])
+    col_base = Utilitarios.buscar_coluna(df_full, ["BASE", "PROJETO", "FILIAL", "CIDADE"])
+
+    qtd_nao_mapeados = 0
+    if "TÉCNICO" in df_full.columns:
+        qtd_nao_mapeados = len(df_full[df_full["TÉCNICO"] == "NÃO MAPEADO NO SHEETS"])
+
+    # ====================================================
+    # BLOCO 9: SIDEBAR (FILTROS)
+    # ====================================================
+    with st.sidebar:
+        st.header("🎯 Filtros")
+
+        if qtd_nao_mapeados > 0:
+            st.error(f"⚠️ {qtd_nao_mapeados} registros sem cadastro no Google Sheets.")
+            st.divider()
+
+        mask = pd.Series(True, index=df_full.index)
+
+        # Filtro Data
+        if col_data and not df_full[col_data].dropna().empty:
+            min_date, max_date = df_full[col_data].min(), df_full[col_data].max()
             datas_sel = st.date_input("📅 Período:", [min_date, max_date], min_value=min_date, max_value=max_date, format="DD/MM/YYYY")
-            
-            if len(datas_sel) == 2: # Garante que o usuário escolheu data de início e fim
-                mask &= (df_cons[col_data] >= datas_sel[0]) & (df_cons[col_data] <= datas_sel[1])
-        else:
-            st.info("📅 Coluna de data não disponível")
+            if len(datas_sel) == 2: mask &= (df_full[col_data] >= datas_sel[0]) & (df_full[col_data] <= datas_sel[1])
 
-    # 2. Filtro de Base
-    with f_base:
+        # Filtro Base
         if col_base:
-            bases = ["Todas"] + sorted([str(b) for b in df_cons.loc[mask, col_base].dropna().unique() if str(b).strip() != ""])
-            base_sel = st.selectbox("📍 Filtrar por Base:", bases)
-            if base_sel != "Todas":
-                mask &= (df_cons[col_base] == base_sel)
+            bases = ["Todas"] + sorted([str(b) for b in df_full.loc[mask, col_base].dropna().unique() if str(b).strip() != "" and str(b).lower() != "nan"])
+            base_sel = st.selectbox("📍 Base:", bases)
+            if base_sel != "Todas": mask &= (df_full[col_base] == base_sel)
 
-    # 3. Filtro de Supervisor
-    with f_sup:
-        if col_sup:
-            monitores = ["Todos"] + sorted([str(m) for m in df_cons.loc[mask, col_sup].dropna().unique() if str(m).strip() != ""])
-            sup_sel = st.selectbox("👤 Filtrar por Gestor:", monitores)
-            if sup_sel != "Todos":
-                mask &= (df_cons[col_sup] == sup_sel)
+        # Filtro Monitor
+        if "MONITOR" in df_full.columns:
+            monitores = ["Todos"] + sorted([str(m) for m in df_full.loc[mask, "MONITOR"].dropna().unique() if str(m).strip() != "" and str(m).lower() != "nan"])
+            monitor_sel = st.selectbox("👔 Monitor:", monitores)
+            if monitor_sel != "Todos": mask &= (df_full["MONITOR"] == monitor_sel)
+
+        st.divider()
+
+        # Filtro Técnico
+        tecnicos_filtrados = sorted([str(t) for t in df_full.loc[mask, "TÉCNICO"].dropna().unique() if str(t).strip() != "" and str(t).lower() != "nan"])
+        if not tecnicos_filtrados:
+            st.warning("⚠️ Nenhum dado encontrado com os filtros atuais.")
+            st.stop()
+
+        tec_selecionado = st.selectbox("🔎 Analisar Técnico:", options=["(Visão Geral)"] + tecnicos_filtrados)
+
+    # ====================================================
+    # BLOCO 10: RENDERIZAÇÃO DE DADOS
+    # ====================================================
+    df_filtrado = df_full[mask].copy()
+    if tec_selecionado != "(Visão Geral)": df_filtrado = df_filtrado[df_filtrado["TÉCNICO"] == tec_selecionado]
 
     st.divider()
-
-    # 🔥 PROTEÇÃO DE EDGE CASE (Se a lista ficar vazia após os filtros)
-    tecnicos_filtrados = sorted([t for t in df_cons.loc[mask, col_tec].unique() if t and t != "NAN"])
     
-    if not tecnicos_filtrados:
-        st.warning("⚠️ Nenhum técnico encontrado para o período/base/gestor selecionado.")
-        st.stop()
-
-    col_busca, col_info = st.columns([1, 2], gap="large")
-    
-    with col_busca:
-        tec_selecionado = st.selectbox("🔎 Selecione o Técnico:", options=[""] + tecnicos_filtrados)
-
-    df_tec = pd.DataFrame()
-    if tec_selecionado:
-        # Puxa os dados apenas do técnico escolhido e DENTRO DO PERÍODO filtrado pela máscara
-        df_tec = df_cons[(df_cons[col_tec] == tec_selecionado) & mask].copy()
-        
-        sup_tec = df_tec[col_sup].mode()[0] if col_sup and not df_tec[col_sup].empty else "Não Atribuído"
-        base_tec = df_tec[col_base].mode()[0] if col_base and not df_tec[col_base].empty else "Não Atribuída"
-        
-        with col_info:
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.info(f"**👤 Gestor Comercial:** {sup_tec} ㅤ|ㅤ **📍 Base:** {base_tec}")
-
-# ====================================================
-# BLOCO 8: RENDERIZAÇÃO DO DASHBOARD
-# ====================================================
-if tec_selecionado and not df_tec.empty:
-    st.divider()
-    
-    if "CONSULTIVOS" not in df_tec.columns or "VENDAS" not in df_tec.columns:
-        st.error("Colunas métricas (CONSULTIVOS/VENDAS) ausentes.")
-        st.stop()
-
-    t_cons = int(df_tec["CONSULTIVOS"].sum())
-    t_prod = int(df_tec["VENDAS"].sum())
-    taxa_conversao = (t_prod / t_cons) if t_cons > 0 else 0
-
-    # 1. CARDS
-    st.markdown(f"### 🎯 Funil de Abordagem de **{tec_selecionado}**")
-    vc1, vc2, vc3 = st.columns(3)
-    with vc1: st.markdown(ComponenteVisual.criar_card("Oportunidades", str(t_cons), "azul", "Tentativas", "🗣️"), unsafe_allow_html=True)
-    with vc2: st.markdown(ComponenteVisual.criar_card("Vendas Fechadas", str(t_prod), "amarelo", "Produtos", "🚀"), unsafe_allow_html=True)
-    
-    cor_win = "verde" if taxa_conversao >= 0.1 else "laranja"
-    with vc3: st.markdown(ComponenteVisual.criar_card("Win Rate", f"{taxa_conversao:.1%}", cor_win, "Conversão", "📈"), unsafe_allow_html=True)
-    
-    st.write("---")
-
-    # 2. GRÁFICOS
-    g_linha, g_pizza = st.columns([2, 1])
-    
-    with g_linha:
-        st.markdown("#### 📉 Ritmo de Ofertas Diárias")
-        if col_data:
-            df_tec_grafico = df_tec.dropna(subset=[col_data])
-            if not df_tec_grafico.empty:
-                df_tempo = df_tec_grafico.groupby(col_data)[["CONSULTIVOS", "VENDAS"]].sum().reset_index()
-                # 🔥 UI LIMPA NO PLOTLY (config={'displayModeBar': False})
-                st.plotly_chart(Graficos.grafico_linhas_vendas(df_tempo, col_data, "CONSULTIVOS", "VENDAS"), use_container_width=True, config={'displayModeBar': False})
-            else:
-                st.info("Nenhuma data válida encontrada para este técnico no período.")
-        else:
-            st.info("Coluna de data não encontrada na base.")
-
-    with g_pizza:
-        st.markdown("#### 📦 Mix de Produtos")
-        mix_data = {
-            "Mesh": int(df_tec["MESH"].sum()) if "MESH" in df_tec.columns else 0,
-            "TV": int(df_tec["TV"].sum()) if "TV" in df_tec.columns else 0,
-            "Virtua": int(df_tec["VIRTUA"].sum()) if "VIRTUA" in df_tec.columns else 0
-        }
-        
-        df_mix = pd.DataFrame(list(mix_data.items()), columns=["Produto", "Quantidade"])
-        df_mix = df_mix[df_mix["Quantidade"] > 0]
-        
-        if not df_mix.empty:
-            # 🔥 UI LIMPA NO PLOTLY
-            st.plotly_chart(Graficos.grafico_rosca_mix(df_mix), use_container_width=True, config={'displayModeBar': False})
-        else:
-            st.warning("Nenhum produto (Mesh/TV/Virtua) vendido neste período.")
+    # Card Simples
+    st.markdown("### 📊 Resumo")
+    c1, c2, c3 = st.columns(3)
+    with c1: 
+        st.markdown(ComponenteVisual.criar_card("Total de Registros", f"{len(df_filtrado):,}".replace(",", "."), "azul", "Linhas Filtradas", "📋"), unsafe_allow_html=True)
 
     st.write("---")
 
-    # 3. TABELA DETALHADA E DOWNLOAD
-    st.markdown("#### 🧾 Extrato Comercial Detalhado")
+    # Tabela e Download
+    st.markdown("#### 🧾 Base de Dados Processada")
     
-    colunas_exibir = [c for c in [col_data, col_tec, "CONSULTIVOS", "VENDAS", "MESH", "TV", "VIRTUA"] if c is not None and c in df_tec.columns]
-    df_exibir = df_tec[colunas_exibir].copy()
-    
-    if col_data:
-        df_exibir = df_exibir.sort_values(by=col_data, ascending=False)
+    if col_data and col_data in df_filtrado.columns:
+        df_filtrado = df_filtrado.sort_values(by=col_data, ascending=False)
 
-    max_vendas = int(df_exibir["VENDAS"].max()) if not df_exibir.empty else 10
+    st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
 
-    configs_tabela = {
-        "CONSULTIVOS": st.column_config.NumberColumn("🗣️ Oportunidades", help="Total de abordagens"),
-        "VENDAS": st.column_config.ProgressColumn("💰 Vendas", format="%d", min_value=0, max_value=max_vendas),
-        "MESH": st.column_config.NumberColumn("📶 Mesh"),
-        "TV": st.column_config.NumberColumn("📺 TV"),
-        "VIRTUA": st.column_config.NumberColumn("🌐 Virtua")
-    }
-
-    if col_data is not None:
-        configs_tabela[col_data] = st.column_config.DateColumn("Data", format="DD/MM/YYYY")
-        
-    if col_tec is not None:
-        configs_tabela[col_tec] = st.column_config.TextColumn("Técnico")
-
-    st.dataframe(
-        df_exibir, 
-        use_container_width=True, 
-        hide_index=True,
-        column_config=configs_tabela
-    )
-
-    # 🔥 BOTÃO DE DOWNLOAD (Excel amigável)
-    csv_bytes = df_exibir.to_csv(index=False, sep=';', decimal=',').encode('utf-8-sig')
-    st.download_button(
-        label="📥 Baixar Extrato (Excel/CSV)",
-        data=csv_bytes,
-        file_name=f"extrato_{tec_selecionado.replace(' ', '_')}.csv",
-        mime="text/csv",
-        type="primary"
-    )
+    csv_bytes = df_filtrado.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
+    st.download_button(label="📥 Baixar Base (.CSV)", data=csv_bytes, file_name="base_tratada.csv", mime="text/csv", type="primary")
