@@ -73,7 +73,7 @@ def preparar_base_cache(df: pd.DataFrame) -> pd.DataFrame:
         
     return df
  
-def localizar_tipos(df: pd.DataFrame, coluna: str, valor: str) -> pd.DataFrame:
+def localizar_hab_trab(df: pd.DataFrame, coluna: str, valor: str) -> pd.DataFrame:
     """Localiza linhas em que a coluna especificada contém o valor desejado (case insensitive) e coloca em uma nova coluna."""
     if 'HABILIDADE DE TRABALHO' in df.columns:
        df['Check_MESH'] = df['HABILIDADE DE TRABALHO'].astype(str).str.contains('MESH', case=False, na=False)
@@ -81,7 +81,17 @@ def localizar_tipos(df: pd.DataFrame, coluna: str, valor: str) -> pd.DataFrame:
        return df
     else:
         st.warning(f"⚠️ Coluna '{coluna}' não encontrada na base de dados.")
-        return pd.DataFrame() 
+        return pd.DataFrame()
+    
+def localizar_tipo_os(df: pd.DataFrame, coluna: str, valor: str) -> pd.DataFrame:
+    """Localiza linhas em que a coluna especificada contém o valor desejado (case insensitive) e coloca em uma nova coluna."""
+    if coluna in df.columns:
+        df[f'Check_ND'] = df['TIPO DE O.S 1'].astype(str).str.contains('ADESAO', case=False, na=False)
+        df[f'Check_Migracao'] = df['TIPO DE O.S 1'].astype(str).str.len = "24 - MUDANCA DE PACOTE"
+        return df
+    else:
+        st.warning(f"⚠️ Coluna '{coluna}' não encontrada na base de dados.")
+        return pd.DataFrame()
 
 # ====================================================
 # BLOCO 4: INICIALIZAÇÃO DA PÁGINA E FRONT-END
@@ -121,11 +131,11 @@ if arquivo is not None:
             qtd_pendente = int(df.loc[df['Status Contrato'] == 'Pendente', 'TOTAL DE TAREFAS'].sum())
             
             # 🔥 Nova Fórmula da Quebra: Não Executadas / Total de Tarefas
-            tx_quebra = (qtd_nao_exec / total_os) if total_os > 0 else 0
+            tx_quebra = (qtd_nao_exec / (qtd_exec + qtd_nao_exec)) if (qtd_exec + qtd_nao_exec) > 0 else 0
             
             # Cria as colunas de verificação de tipo (MESH e PME) e as renomeia
-            df = localizar_tipos(df, 'HABILIDADE DE TRABALHO', 'MESH')
-            df = localizar_tipos(df, 'HABILIDADE DE TRABALHO', 'PME')
+            df = localizar_hab_trab(df, 'HABILIDADE DE TRABALHO', 'MESH')
+            df = localizar_hab_trab(df, 'HABILIDADE DE TRABALHO', 'PME')
             df = df.rename(columns={'Check_MESH': 'É MESH?', 'Check_PME': 'É PME?'})
             
             # 4. RENDERIZAÇÃO DOS CARDS
@@ -137,11 +147,11 @@ if arquivo is not None:
             with c2: st.markdown(ComponenteVisual.criar_card("Executadas", str(qtd_exec), "verde", "Sucesso", "✅"), unsafe_allow_html=True)
             with c3: st.markdown(ComponenteVisual.criar_card("Não Executadas", str(qtd_nao_exec), "laranja", "Quebras", "⚠️"), unsafe_allow_html=True)
             
-            # Define a cor baseada no % de quebra (Ex: Acima de 15% fica vermelho)
-            cor_quebra = "vermelho" if tx_quebra > 0.15 else "roxo"
+            # Define a cor baseada no % de quebra (Ex: Acima de 20% fica vermelho)
+            cor_quebra = "vermelho" if tx_quebra > 0.20 else "roxo"
             
             # 🔥 Subtítulo do card atualizado para refletir o cálculo pelo Total
-            with c4: st.markdown(ComponenteVisual.criar_card("Taxa de Quebra", f"{tx_quebra:.1%}", cor_quebra, "Não Exec. / Total Tarefas", "📉"), unsafe_allow_html=True)
+            with c4: st.markdown(ComponenteVisual.criar_card("Taxa de Quebra", f"{tx_quebra:.2%}", cor_quebra, "% Quebra", "📉"), unsafe_allow_html=True)
             
             st.write("---")
             
