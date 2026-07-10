@@ -1,4 +1,5 @@
 {
     "editor.fontFamily": "'Lekton', monospace",
-    "editor.fontSize": 16
+    "editor.fontSize": 16,
+    "editor.defaultFormatter": "shamanu4.django-intellisense"
 }

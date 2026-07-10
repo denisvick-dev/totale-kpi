@@ -153,13 +153,14 @@ def main():
     visao_tec_cons = st.Page("pages/visao_tecnico_cons.py", title="Consultivo", icon="🗣️")
     rota_inicial = st.Page("pages/rota_inicial.py", title="Rota Inicial", icon="🗺️")
     quebra = st.Page("pages/quebra.py", title="Quebra de Agenda", icon="📊")
+    volumetria = st.Page("pages/volumetria.py", title="Volumetria", icon="📊")
 
     # Criando o Dicionário para agrupar as seções
     paginas_agrupadas = {
         "MENU PRINCIPAL": [home_page, envio_excel],
         "PAINÉIS DE PROD. E CONS.": [ranking_pontos, qtde_os, consultivo, gestao_ativos],
         "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons],
-        "DISPAROS DIÁRIOS": [rota_inicial, quebra]
+        "DISPAROS DIÁRIOS": [rota_inicial, quebra, volumetria]
     }
 
     # Passando o dicionário para a navegação
