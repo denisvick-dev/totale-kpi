@@ -190,7 +190,13 @@ class Utilitarios:
             # 1. Identifica a posição da coluna "Pontuação" (openpyxl começa a contar no 1)
             idx_pontuacao = None
             if "Pontuação" in dataframe.columns:
-                idx_pontuacao = dataframe.columns.get_loc("Pontuação") + 1
+                loc = dataframe.columns.get_loc("Pontuação")
+                if isinstance(loc, slice):
+                    idx_pontuacao = loc.start + 1
+                elif isinstance(loc, np.ndarray):
+                    idx_pontuacao = int(np.flatnonzero(loc)[0]) + 1
+                else:
+                    idx_pontuacao = int(loc) + 1
 
             cor_cabecalho = PatternFill(start_color="FF012869", end_color="FF012869", fill_type="solid")
             f_cabecalho = Font("Calibri", size=10.5, bold=True, color="FFFFFFFF")

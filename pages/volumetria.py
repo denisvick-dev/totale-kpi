@@ -20,9 +20,10 @@ class Configuracoes:
         "laranja": {"fundo": "#FFF7ED", "texto": "#C2410C", "borda": "#F97316", "titulo": "#9A3412"},
         "vermelho": {"fundo": "#FEF2F2", "texto": "#B91C1C", "borda": "#EF4444", "titulo": "#991B1B"},
         "cinza": {"fundo": "#F8FAFC", "texto": "#334155", "borda": "#94A3B8", "titulo": "#64748B"},
+        "escuro":  {"fundo": "#1E293B", "texto": "#FFFFFF", "borda": "#475569", "titulo": "#E2E8F0"}
     }
-    # Versão da lógica de preparação. Mude este número se alterar a função preparar_base.
-    PREPARACAO_BASE_VERSAO = 2
+    # Versão atualizada para forçar o cache a ler a regra de contratos vazios
+    PREPARACAO_BASE_VERSAO = 5 
 
 # ====================================================
 # UTILITÁRIOS E COMPONENTES
@@ -31,7 +32,7 @@ class Utilitarios:
     @staticmethod
     def buscar_coluna(df: pd.DataFrame, palavras_chave: List[str]) -> Optional[str]:
         if df is None or df.empty: return None
-        cols_upper = {c.upper(): c for c in df.columns}
+        cols_upper = {str(c).strip().upper(): c for c in df.columns}
         for p in palavras_chave:
             if p.upper() in cols_upper: return cols_upper[p.upper()]
         return None
@@ -40,13 +41,18 @@ class Utilitarios:
     def classificar_os_series(status_series: pd.Series) -> pd.Series:
         s = status_series.fillna("").astype(str).str.strip().str.upper()
         executada = s == "EXECUTADA"
-        nao_exec = s.isin(["NÃO EXECUTADA", "NAO EXECUTADA"])
+        nao_exec = s.isin(["NÃO EXECUTADA", "NAO EXECUTADA", "NÃO EXECUTADO", "NAO EXECUTADO"])
         return pd.Series(np.select([executada, nao_exec], ["Executada", "Não Executada"], default="Pendente"), index=status_series.index)
 
     @staticmethod
     def to_excel(df: pd.DataFrame) -> bytes:
         output = BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        try:
+            import importlib.util
+            engine = 'xlsxwriter' if importlib.util.find_spec('xlsxwriter') else 'openpyxl'
+        except Exception:
+            engine = 'openpyxl'
+        with pd.ExcelWriter(output, engine=engine) as writer:
             df.to_excel(writer, index=False, sheet_name='Relatorio')
         return output.getvalue()
 
@@ -60,6 +66,10 @@ class ComponenteVisual:
             <h2 style="margin:4px 0;color:{cores['texto']};font-weight:900;font-size:26px;line-height:1.1;">{valor}</h2>
             <p style="margin:0;font-size:11px;color:#64748B;font-weight:500;">{subtitulo}</p>
         </div>"""
+        
+    @staticmethod
+    def colorir_projecao(valor):
+        return "background-color: #334155; color: white; font-weight: bold"
 
 # ====================================================
 # CAMADA DE DADOS E PROCESSAMENTO
@@ -69,10 +79,11 @@ class DadosManager:
     @st.cache_data(show_spinner=False)
     def ler_arquivo_bytes(file_bytes: bytes, filename: str) -> pd.DataFrame:
         try:
-            name, bio = filename.lower(), BytesIO(file_bytes)
-            engine = "openpyxl" if name.endswith((".xlsx", ".xls")) else "python"
-            read_func = pd.read_excel if engine == "openpyxl" else pd.read_csv
-            return read_func(bio, engine=engine, sep=None if engine == 'python' else None)
+            name = filename.lower()
+            bio = BytesIO(file_bytes)
+            if name.endswith((".xlsx", ".xls")):
+                return pd.read_excel(bio, engine="openpyxl")
+            return pd.read_csv(bio, sep=None, engine="python")
         except Exception as e:
             st.error(f"Erro ao ler arquivo: {e}")
             return pd.DataFrame()
@@ -82,21 +93,23 @@ class DadosManager:
     def buscar_gsheets() -> pd.DataFrame:
         try:
             conn = st.connection("gsheets", type=GSheetsConnection)
-            df_gs = conn.read(spreadsheet=Configuracoes.URL_ATIVOS, usecols=list(range(3)))
+            df_gs = conn.read(spreadsheet=Configuracoes.URL_ATIVOS)
             if df_gs is None or df_gs.empty: return pd.DataFrame()
+            
             df_gs.columns = df_gs.columns.astype(str).str.strip().str.upper()
             rename_map = {
                 Utilitarios.buscar_coluna(df_gs, ["LOGIN", "ID", "MATRÍCULA"]): "LOGIN",
-                Utilitarios.buscar_coluna(df_gs, ["TÉCNICO", "NOME"]): "TÉCNICO",
+                Utilitarios.buscar_coluna(df_gs, ["TÉCNICO", "NOME", "TECNICO"]): "TÉCNICO",
                 Utilitarios.buscar_coluna(df_gs, ["MONITOR", "GESTOR"]): "MONITOR",
             }
             df_gs = df_gs.rename(columns={k: v for k, v in rename_map.items() if k})
+            
             if "LOGIN" in df_gs.columns:
                 df_gs["LOGIN"] = df_gs["LOGIN"].astype(str).str.replace(r"\.0$", "", regex=True).str.strip().str.upper()
                 df_gs = df_gs.dropna(subset=["LOGIN"]).drop_duplicates(subset=["LOGIN"], keep="last")
             return df_gs
         except Exception as e:
-            st.warning(f"Falha ao sincronizar com Google Sheets: {e}. A hierarquia pode não ser carregada.")
+            st.warning(f"Aviso: Falha ao sincronizar com Google Sheets ({e}). A hierarquia não será aplicada.")
             return pd.DataFrame()
 
     @staticmethod
@@ -107,21 +120,49 @@ class DadosManager:
         df = df.copy()
         df.columns = df.columns.astype(str).str.strip().str.upper()
 
-        col_status = Utilitarios.buscar_coluna(df, ["STATUS DA O.S 1"])
+        # --- LÓGICA NOVA: REMOVER CONTRATOS VAZIOS ---
+        col_contrato = Utilitarios.buscar_coluna(df, ["CONTRATO", "Nº CONTRATO", "NÚMERO DO CONTRATO", "OS", "ORDEM DE SERVIÇO"])
+        if col_contrato:
+            # Transforma em texto, retira espaços em branco e substitui valores vazios ("") por nulo real do pandas (pd.NA)
+            contratos_tratados = df[col_contrato].astype(str).str.strip().str.upper()
+            df[col_contrato] = contratos_tratados.replace(["", "NAN", "NONE", "NULL"], pd.NA)
+            # Remove as linhas onde a coluna de contrato ficou nula
+            df = df.dropna(subset=[col_contrato]).copy()
+            
+            if df.empty:
+                st.warning("A base ficou vazia após remover os contratos em branco.")
+                return pd.DataFrame()
+        # ---------------------------------------------
+
+        # --- LÓGICA: REMOVER SUSPENSOS ---
+        col_status = Utilitarios.buscar_coluna(df, ["STATUS DA O.S 1", "STATUS", "STATUS DA ATIVIDADE", "SITUACAO", "SITUAÇÃO"])
         if not col_status:
-            st.error("ERRO CRÍTICO: Nenhuma coluna de status ('Status da Atividade' ou 'Status') encontrada na base. A análise não pode continuar.")
+            st.error("ERRO CRÍTICO: Nenhuma coluna de status (Ex: 'Status', 'Status da O.S 1') encontrada na base enviada.")
             st.stop()
         
+        status_temp = df[col_status].astype(str).str.strip().str.upper()
+        # Filtra mantendo apenas as linhas onde o status NÃO CONTÉM "SUSPENS"
+        df = df[~status_temp.str.contains("SUSPENS", na=False)].copy()
+        
+        if df.empty:
+            st.warning("Após remover as atividades 'Suspensas', a base de dados ficou vazia.")
+            return pd.DataFrame()
+        # --------------------------------------
+
         df["Status Contrato"] = Utilitarios.classificar_os_series(df[col_status])
-        df["TOTAL DE TAREFAS"] = pd.to_numeric(df.get("TOTAL DE TAREFAS", 1), errors="coerce").fillna(1)
+        
+        if "TOTAL DE TAREFAS" not in df.columns:
+            df["TOTAL DE TAREFAS"] = 1
+        df["TOTAL DE TAREFAS"] = pd.to_numeric(df["TOTAL DE TAREFAS"], errors="coerce").fillna(1)
 
         col_login = Utilitarios.buscar_coluna(df, ["LOGIN", "LOGIN DO TÉCNICO", "USUÁRIO", "MATRÍCULA"])
         if col_login and not df_gsheets.empty and "LOGIN" in df_gsheets.columns:
             df[col_login] = df[col_login].astype(str).str.replace(r"\.0$", "", regex=True).str.strip().str.upper()
             df = df.merge(df_gsheets, left_on=col_login, right_on="LOGIN", how="left")
 
-        df["TÉCNICO"] = df.get("TÉCNICO", "NÃO MAPEADO").fillna("NÃO MAPEADO")
-        df["MONITOR"] = df.get("MONITOR", "SEM MONITOR").fillna("SEM MONITOR")
+        df["TÉCNICO"] = df.get("TÉCNICO", df.get(col_login, pd.Series("NÃO MAPEADO", index=df.index))).fillna("NÃO MAPEADO")
+        df["MONITOR"] = df.get("MONITOR", pd.Series("SEM MONITOR", index=df.index)).fillna("SEM MONITOR")
+        
         return df
 
 def calcular_volumetria(df: pd.DataFrame, grupo: List[str]) -> pd.DataFrame:
@@ -130,13 +171,14 @@ def calcular_volumetria(df: pd.DataFrame, grupo: List[str]) -> pd.DataFrame:
     
     pv = pd.pivot_table(df, index=grupo, columns="Status Contrato", values="TOTAL DE TAREFAS", aggfunc="sum", fill_value=0)
     for col in ["Executada", "Não Executada", "Pendente"]:
-        if col not in pv: pv[col] = 0.0
+        if col not in pv: pv[col] = 0
     
     df_vol = pv.reset_index().copy()
     df_vol["Baixadas"] = df_vol["Executada"] + df_vol["Não Executada"]
     df_vol["Total Alocado"] = df_vol["Baixadas"] + df_vol["Pendente"]
-    df_vol["Taxa Execução"] = np.where(df_vol["Baixadas"] > 0, df_vol["Executada"] / df_vol["Baixadas"], 0.0)
+    df_vol["Taxa Execução"] = np.where(df_vol["Baixadas"] > 0, df_vol["Executada"] / df_vol["Baixadas"], 0)
     df_vol["Taxa Quebra"] = 1 - df_vol["Taxa Execução"]
+    df_vol["Projeção"] = df_vol["Executada"] + (df_vol["Taxa Execução"] * df_vol["Pendente"])
     
     return df_vol.sort_values("Total Alocado", ascending=False).reset_index(drop=True)
 
@@ -174,11 +216,19 @@ def main():
 
     df_full = st.session_state.df_memoria
     
+    if df_full is None or df_full.empty:
+        st.warning("Nenhum dado válido para exibição após a filtragem inicial.")
+        return
+
     # --- Filtros na Barra Lateral ---
     st.sidebar.header("Filtros")
-    monitores_disponiveis = sorted(df_full["MONITOR"].unique())
+    monitores_disponiveis = sorted([m for m in df_full["MONITOR"].unique() if pd.notna(m)])
     monitores_selecionados = st.sidebar.multiselect("Filtrar por Monitor", options=monitores_disponiveis, default=monitores_disponiveis)
     df_filtrado = df_full[df_full["MONITOR"].isin(monitores_selecionados)]
+
+    if df_filtrado.empty:
+        st.warning("Nenhum dado encontrado para os filtros selecionados.")
+        return
 
     # --- KPIs Globais ---
     total_os = df_filtrado['TOTAL DE TAREFAS'].sum()
@@ -186,22 +236,35 @@ def main():
     nao_executadas = df_filtrado[df_filtrado['Status Contrato'] == 'Não Executada']['TOTAL DE TAREFAS'].sum()
     pendentes = total_os - executadas - nao_executadas
     taxa_quebra = (nao_executadas / (executadas + nao_executadas)) if (executadas + nao_executadas) > 0 else 0
+    projecao = executadas + (pendentes * 1-taxa_quebra)
 
     st.subheader("Visão Geral da Operação (Filtrada)")
-    kpi1, kpi2, kpi3 = st.columns(3)
-    kpi1.markdown(ComponenteVisual.criar_card("Total de OS Alocadas", f"{total_os:,.0f}", "azul", f"Pendentes: {pendentes:,.0f}"), unsafe_allow_html=True)
-    kpi2.markdown(ComponenteVisual.criar_card("OS Executadas", f"{executadas:,.0f}", "verde", f"{1-taxa_quebra:.1%} de Sucesso"), unsafe_allow_html=True)
-    kpi3.markdown(ComponenteVisual.criar_card("OS Não Executadas", f"{nao_executadas:,.0f}", "vermelho", f"{taxa_quebra:.1%} de Quebra"), unsafe_allow_html=True)    
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    kpi1.markdown(ComponenteVisual.criar_card("Total de O.S. Alocadas", f"{total_os:,.0f}", "azul", f"Pendentes: {pendentes:,.0f}"), unsafe_allow_html=True)
+    kpi2.markdown(ComponenteVisual.criar_card("O.S. Executadas", f"{executadas:,.0f}", "verde", f"{1-taxa_quebra:.1%} de Sucesso"), unsafe_allow_html=True)
+    kpi3.markdown(ComponenteVisual.criar_card("O.S. Não Executadas", f"{nao_executadas:,.0f}", "vermelho", f"{taxa_quebra:.1%} de Quebra"), unsafe_allow_html=True)
+    kpi4.markdown(ComponenteVisual.criar_card("Projeção", f"{projecao:,.0f}", "escuro"), unsafe_allow_html=True)    
     st.markdown("---")
 
     # --- Abas para Análise Detalhada ---
-    tabs = st.tabs(["📊 Desempenho por Equipe", "🧑‍🔧 Análise por Técnico"])
+    tabs = st.tabs(["📊 Desempenho por Equipe", "🧑‍🔧 Análise por Técnico", "📋 Base Completa"])
 
     with tabs[0]:
         df_vol_monitor = calcular_volumetria(df_filtrado, grupo=["MONITOR"])
-        st.subheader("Desempenho Consolidado por Monitor")
-        st.dataframe(df_vol_monitor, use_container_width=True, hide_index=True)
-        st.download_button("📥 Baixar Relatório por Equipe", Utilitarios.to_excel(df_vol_monitor), "desempenho_equipes.xlsx")
+        if not df_vol_monitor.empty:
+            st.subheader("Desempenho Consolidado por Monitor")
+            st.dataframe(df_vol_monitor.style.format({
+                "Executada": "{:.0f}",
+                "Não Executada": "{:.0f}",
+                "Pendente": "{:.0f}",
+                "Baixadas": "{:.0f}",
+                "Total Alocado": "{:.0f}",
+                "Taxa Execução": "{:.1%}",
+                "Taxa Quebra": "{:.1%}", 
+                "Projeção": "{:.0f}"
+            }).map(ComponenteVisual.colorir_projecao, subset=["Projeção"]),
+                use_container_width=True, hide_index=True)
+            st.download_button("📥 Baixar Relatório por Equipe", Utilitarios.to_excel(df_vol_monitor), "desempenho_equipes.xlsx")
 
     with tabs[1]:
         st.subheader("Desempenho Individual por Técnico")
@@ -209,8 +272,25 @@ def main():
         if monitor_selecionado:
             df_tecnicos_monitor = df_filtrado[df_filtrado["MONITOR"] == monitor_selecionado]
             df_vol_tecnico = calcular_volumetria(df_tecnicos_monitor, grupo=["TÉCNICO"])
-            st.dataframe(df_vol_tecnico, use_container_width=True, hide_index=True)
-            st.download_button(f"📥 Baixar Relatório de Técnicos ({monitor_selecionado})", Utilitarios.to_excel(df_vol_tecnico), f"desempenho_tecnicos_{monitor_selecionado}.xlsx")
+            if not df_vol_tecnico.empty:
+                st.dataframe(df_vol_tecnico.style.format({
+                    "Executada": "{:.0f}",
+                    "Não Executada": "{:.0f}",
+                    "Pendente": "{:.0f}",
+                    "Baixadas": "{:.0f}",
+                    "Total Alocado": "{:.0f}",
+                    "Taxa Execução": "{:.1%}",
+                    "Taxa Quebra": "{:.1%}", 
+                    "Projeção": "{:.0f}"
+                }).map(ComponenteVisual.colorir_projecao, subset=["Projeção"]), use_container_width=True, hide_index=True)
+                st.download_button(f"📥 Baixar Relatório ({monitor_selecionado})", Utilitarios.to_excel(df_vol_tecnico), f"desempenho_{monitor_selecionado}.xlsx")
+                
+    with tabs[2]:
+        st.subheader("Base Completa")
+        if not df_full.empty:
+            st.dataframe(df_full,
+                         use_container_width=True,
+                         hide_index=True)
 
 if __name__ == "__main__":
     main()
