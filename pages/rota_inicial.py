@@ -3,405 +3,581 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from streamlit_gsheets import GSheetsConnection
+from io import BytesIO
+from typing import Any
 
 # ==========================================
-# 1. CLASSE DE CONFIGURAÇÃO GLOBAL
+# 1. CONFIGURAÇÕES E ESTILOS
 # ==========================================
-class ConfiguracaoApp:
-    URL_GSHEETS = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit?usp=drive_link"
-    
-    MAPEAMENTO_PERIODOS = {
-        "08:00 - 10:00": "Manhã", "08:00 - 11:00": "Manhã", "08:00 - 12:00": "Manhã",
-        "10:00 - 12:00": "Manhã", "11:00 - 14:00": "Manhã", "12:00 - 14:00": "Tarde I",
-        "12:00 - 15:00": "Tarde I", "12:00 - 18:00": "Tarde II", "14:00 - 16:00": "Tarde II",
-        "14:00 - 17:00": "Tarde II", "15:00 - 18:00": "Tarde II", "16:00 - 18:00": "Tarde II",
-        "17:00 - 20:00": "Tarde II", "Imediata": "Imediata"
-    }
+st.set_page_config(
+    page_title="Painel Operacional Totale",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-    TEMAS_CARD = {
-        "amarelo": {"fundo": "#FEF9C3", "texto": "#854D0E", "borda": "#EAB308", "titulo": "#A16207"},
-        "azul":    {"fundo": "#F0F9FF", "texto": "#0369A1", "borda": "#0EA5E9", "titulo": "#075985"},
-        "verde":   {"fundo": "#F0FDF4", "texto": "#15803D", "borda": "#22C55E", "titulo": "#166534"},
-        "roxo":    {"fundo": "#FAF5FF", "texto": "#7E22CE", "borda": "#A855F7", "titulo": "#6B21A8"},
-        "cinza":   {"fundo": "#F8FAFC", "texto": "#334155", "borda": "#94A3B8", "titulo": "#64748B"},
-        "escuro":  {"fundo": "#1E293B", "texto": "#FFFFFF", "borda": "#475569", "titulo": "#E2E8F0"},
-        "vermelho":{"fundo": "#FEF2F2", "texto": "#B91C1C", "borda": "#EF4444", "titulo": "#991B1B"},
-    }
+URL_GSHEETS = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit?usp=drive_link"
 
-    @staticmethod
-    def configurar_pagina():
-        st.set_page_config(page_title="Painel Operacional Totale", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
+MAPEAMENTO_PERIODOS = {
+    "08:00 - 10:00": "Manhã",
+    "08:00 - 11:00": "Manhã",
+    "08:00 - 12:00": "Manhã",
+    "10:00 - 12:00": "Manhã",
+    "11:00 - 14:00": "Manhã",
+    "12:00 - 14:00": "Tarde I",
+    "12:00 - 15:00": "Tarde I",
+    "12:00 - 18:00": "Tarde II",
+    "14:00 - 16:00": "Tarde II",
+    "14:00 - 17:00": "Tarde II",
+    "15:00 - 18:00": "Tarde II",
+    "16:00 - 18:00": "Tarde II",
+    "17:00 - 20:00": "Tarde II",
+    "Imediata": "Imediata",
+}
+
+TEMAS_CARD = {
+    "azul": {
+        "fundo": "#F0F9FF",
+        "texto": "#0369A1",
+        "borda": "#0EA5E9",
+        "titulo": "#075985",
+    },
+    "verde": {
+        "fundo": "#F0FDF4",
+        "texto": "#15803D",
+        "borda": "#22C55E",
+        "titulo": "#166534",
+    },
+    "roxo": {
+        "fundo": "#FAF5FF",
+        "texto": "#7E22CE",
+        "borda": "#A855F7",
+        "titulo": "#6B21A8",
+    },
+    "cinza": {
+        "fundo": "#F8FAFC",
+        "texto": "#334155",
+        "borda": "#94A3B8",
+        "titulo": "#64748B",
+    },
+    "escuro": {
+        "fundo": "#1E293B",
+        "texto": "#FFFFFF",
+        "borda": "#475569",
+        "titulo": "#E2E8F0",
+    },
+    "laranja": {
+        "fundo": "#FFF7ED",
+        "texto": "#C2410C",
+        "borda": "#F97316",
+        "titulo": "#9A3412",
+    },
+    "vermelho": {
+        "fundo": "#FEF2F2",
+        "texto": "#B91C1C",
+        "borda": "#EF4444",
+        "titulo": "#991B1B",
+    },
+}
 
 
-# ==========================================
-# 2. CLASSE DE EXTRAÇÃO DE DADOS
-# ==========================================
-class CarregadorDados:
-    @staticmethod
-    @st.cache_data(ttl=600, show_spinner=False)
-    def buscar_google_sheets() -> pd.DataFrame:
-        colunas = ["Login", "Técnico", "Monitor", "Base"]
-        try:
-            conn = st.connection("gsheets", type=GSheetsConnection)
-            df = conn.read(spreadsheet=ConfiguracaoApp.URL_GSHEETS, usecols=colunas)
-            df = df.dropna(subset=["Login"])
-            df["Login"] = df["Login"].astype(str).str.strip()
-            return df
-        except Exception:
-            st.sidebar.error("⚠️ Falha ao sincronizar com Google Sheets.")
-            return pd.DataFrame(columns=colunas)
-
-    @staticmethod
-    @st.cache_data(show_spinner=False)
-    def ler_excel(arquivo_enviado) -> pd.DataFrame:
-        return pd.read_excel(arquivo_enviado, engine="openpyxl")
+def renderizar_card(
+    titulo: str, valor: str, tema: str = "azul", subtitulo: str = ""
+) -> str:
+    cores = TEMAS_CARD.get(tema, TEMAS_CARD["azul"])
+    sub_html = (
+        f'<p style="margin: 0; font-size: 13px; color: {cores["titulo"]}; opacity: 0.85; padding-top: 5px; font-weight: 600;">{subtitulo}</p>'
+        if subtitulo
+        else ""
+    )
+    return f"""
+    <div style="background-color: {cores['fundo']}; padding: 20px; border-radius: 10px; border-left: 8px solid {cores['borda']}; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="margin: 0; font-size: 13px; color: {cores['titulo']}; text-transform: uppercase; font-weight: bold;">{titulo}</p>
+        <h1 style="margin: 0; padding-top: 5px; color: {cores['texto']}; font-weight: 900; font-size: 34px;">{valor}</h1>
+        {sub_html}
+    </div>
+    """
 
 
-# ==========================================
-# 3. CLASSE DE REGRAS DE NEGÓCIO
-# ==========================================
-class ProcessadorDados:
-    @staticmethod
-    @st.cache_data(show_spinner=False)
-    def transformar_base_principal(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFrame:
-        df = df_bruto.copy()
-
-        # Padronização Global
-        df.columns = df.columns.str.strip()
-
-        if "Contrato" in df.columns:
-            df = df[~df["Contrato"].astype(str).str.fullmatch(r'^\s*$|nan', case=False, na=True)]
-        if "Login do Técnico" in df.columns:
-            df["Login do Técnico"] = df["Login do Técnico"].astype(str).str.replace(".0", "", regex=False).str.strip()
-        
-        # Numéricos
-        if "Total de tarefas" in df.columns:
-            df["Total de tarefas"] = pd.to_numeric(df["Total de tarefas"].astype(str).str.replace(",", "."), errors="coerce").fillna(0)
-        else:
-            df["Total de tarefas"] = 1 
-
-        # Merge (PROCV) com Google Sheets
-        if not df_ativos.empty and "Login do Técnico" in df.columns:
-            df = df.merge(df_ativos, left_on="Login do Técnico", right_on="Login", how="left")
-            df = df.rename(columns={"Técnico": "Nome Oficial (Sheets)"})
-
-        # Preenchimento Padrão para Falhas no Merge
-        if "Monitor" not in df.columns: df["Monitor"] = "SEM MONITOR"
-        else: df["Monitor"] = df["Monitor"].fillna("SEM MONITOR")
-
-        # Tipificação e Limpeza de Strings
-        str_tipo_os = df.get("Tipo O.S 1", pd.Series(dtype=str)).astype(str).str.upper()
-        str_hab_trab = df.get("Habilidade de Trabalho", pd.Series(dtype=str)).astype(str).str.upper()
-        str_produto = df.get("Produto", pd.Series(dtype=str)).astype(str).str.upper()
-        
-        if "Status da Atividade" in df.columns:
-            df["Status da Atividade"] = df["Status da Atividade"].astype(str).str.strip().str.upper()
-        else:
-            df["Status da Atividade"] = "NÃO INFORMADO"
-
-        # Flags Booleanas (Corrigido para usar & com parênteses)
-        df["Check_GPON"] = str_hab_trab.str.contains(r"PON\(1/100\)", regex=True, na=False)
-        df["Check_ND"] = str_tipo_os.str.contains("ADESAO", na=False)
-        df["Check_Migracao"] = (str_tipo_os.str.strip() == "24 - MUDANCA DE PACOTE") & (df["Check_GPON"] == True)
-        df["Check_Streaming"] = str_hab_trab.str.strip() == "TV VAS(1/100)"
-        df["Check_Ponto_Ultra"] = str_hab_trab.str.strip() == "NETLAR"
-        df["Check_4K"] = str_produto.str.strip() == "4K"
-        df["Check_Soundbox"] = str_produto.str.strip() == "SOUND"
-
-        # Mapeamento de Períodos
-        if "Intervalo de Tempo" in df.columns:
-            df["Período"] = df["Intervalo de Tempo"].astype(str).str.strip().map(ConfiguracaoApp.MAPEAMENTO_PERIODOS).fillna("Outros/Sem Período")
-        else:
-            df["Período"] = "Sem Período"
-
-        return df
-
-    @staticmethod
-    def calcular_metricas_monitor(df_periodo: pd.DataFrame):
-        if "Monitor" not in df_periodo.columns or df_periodo.empty:
-            return pd.DataFrame(), {}
-
-        df_resumo = df_periodo.groupby("Monitor").agg(
-            WO=("Número da WO", "nunique") if "Número da WO" in df_periodo.columns else ("Login do Técnico", "count"),
-            OS=("Total de tarefas", "sum"),
-            ND=("Check_ND", "sum"),
-            Migração=("Check_Migracao", "sum"),
-            GPON=("Check_GPON", "sum"),
-            Streaming=("Check_Streaming", "sum"),
-            Qtd_4K=("Check_4K", "sum"),
-            Soundbox=("Check_Soundbox", "sum"),
-            PontoUltra=("Check_Ponto_Ultra", "sum"),
-            Equipe=("Login do Técnico", "nunique") if "Login do Técnico" in df_periodo.columns else ("Login do Técnico", "count")
-        ).reset_index()
-
-        df_resumo["Média"] = np.where(df_resumo["Equipe"] > 0, df_resumo["OS"] / df_resumo["Equipe"], 0)
-
-        totais = {
-            "WO": df_resumo["WO"].sum(),
-            "O.S.": int(df_resumo["OS"].sum()),
-            "GPON": df_resumo["GPON"].sum(),
-            "ND": df_resumo["ND"].sum(),
-            "Migração": df_resumo["Migração"].sum(),
-            "Equipe": df_resumo["Equipe"].sum(),
-        }
-        totais["Média"] = totais["O.S."] / totais["Equipe"] if totais["Equipe"] > 0 else 0
-
-        return df_resumo, totais
+def renderizar_mini_card(titulo: str, valor: Any, tema: str = "cinza") -> str:
+    cores = TEMAS_CARD.get(tema, TEMAS_CARD["cinza"])
+    return f"""
+    <div style="background-color: {cores['fundo']}; padding: 10px; border-radius: 6px; border-left: 4px solid {cores['borda']}; text-align: center; margin-bottom: 10px;">
+        <p style="margin: 0; font-size: 11px; color: {cores['titulo']}; font-weight: bold; text-transform: uppercase;">{titulo}</p>
+        <h3 style="margin: 0; color: {cores['texto']}; font-size: 18px; font-weight: 800;">{valor}</h3>
+    </div>
+    """
 
 
 # ==========================================
-# 4. CLASSE DE COMPONENTES VISUAIS
+# 2. EXTRAÇÃO E TRATAMENTO DE DADOS
 # ==========================================
-class ComponentesVisuais:
-    @staticmethod
-    def desenhar_upload_arquivo(chave: str):
-        st.markdown("""
-            <style>
-                [data-testid="stFileUploadDropzone"] {
-                    border: 2px dashed #0EA5E9 !important; border-radius: 8px !important;
-                    padding: 15px !important; background-color: #F0F9FF !important; transition: all 0.3s ease;
-                }
-                [data-testid="stFileUploadDropzone"]:hover { background-color: #E0F2FE !important; border-color: #0284C7 !important; }
-                [data-testid="stFileUploadDropzone"] small { display: none; }
-            </style>
-        """, unsafe_allow_html=True)
-        return st.file_uploader(label="Upload", type=["xlsx", "csv"], key=chave, label_visibility="collapsed")
-
-    @staticmethod
-    def desenhar_cartao_html(titulo, valor, tema="azul", subtitulo=""):
-        cores = ConfiguracaoApp.TEMAS_CARD.get(tema, ConfiguracaoApp.TEMAS_CARD["azul"])
-        sub_html = f'<p style="margin: 0; font-size: 13px; color: {cores["titulo"]}; opacity: 0.85; padding-top: 5px; font-weight: 600;">{subtitulo}</p>' if subtitulo else ""
-        return f"""
-        <div style="background-color: {cores['fundo']}; padding: 20px; border-radius: 10px; border-left: 8px solid {cores['borda']}; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-            <p style="margin: 0; font-size: 13px; color: {cores['titulo']}; text-transform: uppercase; font-weight: bold;">{titulo}</p>
-            <h1 style="margin: 0; padding-top: 5px; color: {cores['texto']}; font-weight: 900; font-size: 34px;">{valor}</h1>
-            {sub_html}
-        </div>
-        """
-
-    @staticmethod
-    def desenhar_mini_cartao_html(titulo, valor, tema="cinza"):
-        cores = ConfiguracaoApp.TEMAS_CARD.get(tema, ConfiguracaoApp.TEMAS_CARD["cinza"])
-        return f"""
-        <div style="background-color: {cores['fundo']}; padding: 10px; border-radius: 6px; border-left: 4px solid {cores['borda']}; text-align: center; margin-bottom: 10px;">
-            <p style="margin: 0; font-size: 11px; color: {cores['titulo']}; font-weight: bold; text-transform: uppercase;">{titulo}</p>
-            <h3 style="margin: 0; color: {cores['texto']}; font-size: 18px; font-weight: 800;">{valor}</h3>
-        </div>
-        """
-        
-    @staticmethod
-    def renderizar_tabela_monitor(titulo: str, df_dados: pd.DataFrame):
-        df_resumo, totais = ProcessadorDados.calcular_metricas_monitor(df_dados)
-        if df_resumo.empty: return
-
-        st.markdown(f"#### {titulo}")
-        
-        # Configuração das colunas visuais da Tabela
-        st.dataframe(
-            df_resumo,
-            column_config={
-                "Monitor": st.column_config.TextColumn("Nome do Monitor", width="medium"),
-                "OS": st.column_config.ProgressColumn("O.S. (Total)", format="%d", min_value=0, max_value=int(df_resumo["OS"].max())),
-                "Qtd_4K": st.column_config.NumberColumn("4K"),
-                "Média": st.column_config.NumberColumn("Média/Téc.", format="%.2f")
-            }, hide_index=True, use_container_width=True
+@st.cache_data(ttl=600, show_spinner=False)
+def buscar_google_sheets() -> pd.DataFrame:
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df = conn.read(
+            spreadsheet=URL_GSHEETS, usecols=["Login", "Técnico", "Monitor", "Base"]
         )
-        
-        # Mini cards principais de resumo abaixo da tabela
-        t1, t2, t3, t4, t5, t6, t7 = st.columns(7)
-        with t1: st.markdown(ComponentesVisuais.desenhar_mini_cartao_html("WO", totais['WO'], "cinza"), unsafe_allow_html=True)
-        with t2: st.markdown(ComponentesVisuais.desenhar_mini_cartao_html("O.S.", totais['O.S.'], "azul"), unsafe_allow_html=True)
-        with t3: st.markdown(ComponentesVisuais.desenhar_mini_cartao_html("GPON", totais['GPON'], "escuro"), unsafe_allow_html=True)
-        with t4: st.markdown(ComponentesVisuais.desenhar_mini_cartao_html("Novos Dom.", totais['ND'], "escuro"), unsafe_allow_html=True)
-        with t5: st.markdown(ComponentesVisuais.desenhar_mini_cartao_html("Migração", totais['Migração'], "escuro"), unsafe_allow_html=True)
-        with t6: st.markdown(ComponentesVisuais.desenhar_mini_cartao_html("Equipe", totais['Equipe'], "roxo"), unsafe_allow_html=True)
-        with t7: st.markdown(ComponentesVisuais.desenhar_mini_cartao_html("Média", f"{totais['Média']:.2f}", "azul"), unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
+        df = df.dropna(subset=["Login"])
+        df["Login"] = (
+            df["Login"]
+            .astype(str)
+            .str.replace(r"\.0$", "", regex=True)
+            .str.strip()
+            .str.upper()
+        )
+        return df
+    except Exception:
+        return pd.DataFrame(columns=["Login", "Técnico", "Monitor", "Base"])
+
+
+@st.cache_data(show_spinner=False)
+def ler_arquivo(file_bytes: bytes, filename: str) -> pd.DataFrame:
+    bio = BytesIO(file_bytes)
+    try:
+        if filename.lower().endswith(".csv"):
+            try:
+                # sep=None com engine='python' faz o Pandas descobrir o separador automaticamente
+                return pd.read_csv(
+                    bio, sep=None, engine="python", encoding="utf-8-sig", dtype=str
+                )
+            except UnicodeDecodeError:
+                # Se falhar por causa de acentos (Windows antigo), tenta com 'latin1'
+                bio.seek(0)
+                return pd.read_csv(
+                    bio, sep=None, engine="python", encoding="latin1", dtype=str
+                )
+        else:
+            return pd.read_excel(bio, engine="openpyxl", dtype=str)
+
+    except Exception as e:
+        st.error(
+            f"Erro ao ler o arquivo. Certifique-se de que é um Excel ou CSV válido. Detalhe: {e}"
+        )
+        return pd.DataFrame()
+
+
+@st.cache_data(show_spinner=False)
+def processar_base_principal(
+    df_bruto: pd.DataFrame, df_ativos: pd.DataFrame
+) -> pd.DataFrame:
+    if df_bruto.empty:
+        return pd.DataFrame()
+    df = df_bruto.copy()
+
+    # Padronizar nomes das colunas para letras maiúsculas para facilitar a busca
+    df.columns = df.columns.astype(str).str.strip().str.upper()
+
+    # --- MAPEAMENTO INTELIGENTE DE COLUNAS ---
+    mapa_colunas = {
+        "CONTRATO": ["CONTRATO"],
+        "LOGIN_TECNICO": ["LOGIN DO TÉCNICO", "LOGIN DO TECNICO"],
+        "STATUS_ATIVIDADE": ["STATUS DA ATIVIDADE"],
+        "TOTAL_TAREFAS": ["TOTAL DE TAREFAS"],
+        "TIPO_OS": ["TIPO O.S 1"],
+        "HABILIDADE": ["HABILIDADE DE TRABALHO"],
+        "PRODUTO": ["PRODUTO"],
+        "INTERVALO": ["INTERVALO DE TEMPO", "INTERVALO"],
+        "CIDADE": ["CIDADE"],
+        "COORD_X": ["COORDENADA X", "LONGITUDE", "LON"],
+        "COORD_Y": ["COORDENADA Y", "LATITUDE", "LAT"],
+    }
+
+    # Renomear colunas dinamicamente
+    for padrao, variacoes in mapa_colunas.items():
+        col_encontrada = next((c for c in df.columns if c in variacoes), None)
+        if col_encontrada:
+            df = df.rename(columns={col_encontrada: padrao})
+        else:
+            df[padrao] = (
+                np.nan
+            )  # Cria a coluna vazia caso não exista para não quebrar o código
+
+    # --- LIMPEZA DE DADOS E EXCLUSÃO DE VAZIOS ---
+
+    # 1. Excluir contratos vazios com tratamento robusto
+    contrato = (
+        df["CONTRATO"].astype("string").str.replace("\u00a0", " ", regex=False).str.strip()
+    )
+
+    mask_contrato_vazio = (
+        contrato.isna()
+        | contrato.eq("")
+        | contrato.str.upper().isin(["NAN", "NONE", "NULL", "<NA>"])
+    )
+
+    removidos = int(mask_contrato_vazio.sum())
+
+    df = df.loc[~mask_contrato_vazio].copy()
+    df["CONTRATO"] = contrato.loc[df.index].str.upper()
+
+    st.sidebar.info(f"Contratos vazios removidos: {removidos}")
+
+    if df.empty:
+        st.warning("⚠️ A base de dados ficou vazia após a remoção de contratos em branco.")
+        return pd.DataFrame()
+
+    # 2. Demais limpezas
+    df["LOGIN_TECNICO"] = (
+        df["LOGIN_TECNICO"]
+        .astype(str)
+        .str.replace(r"\.0$", "", regex=True)
+        .str.strip()
+        .str.upper()
+    )
+    df["TOTAL_TAREFAS"] = (
+        pd.to_numeric(
+            df["TOTAL_TAREFAS"].astype(str).str.replace(",", "."), errors="coerce"
+        )
+        .fillna(1)
+        .astype(int)
+    )
+    df["STATUS_ATIVIDADE"] = df["STATUS_ATIVIDADE"].astype(str).str.strip().str.upper()
+
+    # --- MERGE COM GOOGLE SHEETS ---
+    if not df_ativos.empty:
+        # Remove colunas antigas caso existam na base para não duplicar
+        df = df.drop(
+            columns=[
+                c for c in ["Técnico", "Monitor", "Base"] if c.upper() in df.columns
+            ],
+            errors="ignore",
+        )
+        df = df.merge(df_ativos, left_on="LOGIN_TECNICO", right_on="Login", how="left")
+        df = df.rename(columns={"Técnico": "NOME_OFICIAL"})
+
+    df["NOME_OFICIAL"] = df.get("NOME_OFICIAL", df["LOGIN_TECNICO"]).fillna(
+        df["LOGIN_TECNICO"]
+    )
+    df["Monitor"] = df.get("Monitor", pd.Series(dtype=str)).fillna("SEM MONITOR")
+
+    # --- FLAGS BOOLEANAS (SERVIÇOS PREMIUM E TIPOS) ---
+    hab = df["HABILIDADE"].astype(str).str.upper()
+    tipo = df["TIPO_OS"].astype(str).str.upper()
+    prod = df["PRODUTO"].astype(str).str.upper()
+
+    df["Check_GPON"] = hab.str.contains(r"PON\(1/100\)", regex=True, na=False)
+    df["Check_ND"] = tipo.str.contains("ADESAO", na=False)
+    df["Check_Migracao"] = (tipo.str.strip() == "24 - MUDANCA DE PACOTE") & df["Check_GPON"]
+    df["Check_Streaming"] = hab.str.contains("TV VAS(1/100)", na=False)
+    df["Check_Ponto_Ultra"] = hab.str.contains("NETLAR", na=False)
+    df["Check_4K"] = prod.str.contains("4K", na=False)
+    df["Check_Soundbox"] = prod.str.contains("SOUND", na=False)
+
+    # --- MAPEAR PERÍODO ---
+    df["PERIODO_TRATADO"] = (
+        df["INTERVALO"]
+        .astype(str)
+        .str.strip()
+        .map(MAPEAMENTO_PERIODOS)
+        .fillna("Outros/Sem Período")
+    )
+
+    return df
 
 
 # ==========================================
-# 5. CLASSE CONTROLADORA DA APLICAÇÃO
+# 3. INTERFACE E APLICAÇÃO PRINCIPAL
 # ==========================================
-class AplicativoDashboard:
-    def __init__(self):
-        ConfiguracaoApp.configurar_pagina()
-        
-        # Inicialização do Session State para ocultar o Uploader
-        if "df_master" not in st.session_state:
+def main():
+    if "df_master" not in st.session_state:
+        st.session_state["df_master"] = None
+
+    # TELA DE UPLOAD
+    if st.session_state["df_master"] is None:
+        st.title("Bem-vindo ao Painel Operacional Totale 🚀")
+        st.subheader("📥 Entrada de Dados")
+
+        st.markdown(
+            """<style>[data-testid="stFileUploadDropzone"] {border: 2px dashed #0EA5E9; border-radius: 8px; padding: 15px; background-color: #F0F9FF;}</style>""",
+            unsafe_allow_html=True,
+        )
+        arquivo = st.file_uploader(
+            "Envie a planilha extraída do sistema (Excel ou CSV):", type=["xlsx", "csv"]
+        )
+
+        if arquivo is not None:
+            with st.spinner("🚀 Processando dados e conectando à nuvem..."):
+                df_bruto = ler_arquivo(arquivo.getvalue(), arquivo.name)
+                df_ativos = buscar_google_sheets()
+                df_processado = processar_base_principal(df_bruto, df_ativos)
+
+                if not df_processado.empty:
+                    st.session_state["df_master"] = df_processado
+                    st.rerun()
+        return
+
+    # TELA DO DASHBOARD
+    df_master = st.session_state["df_master"].copy()
+
+    # --- BARRA LATERAL ---
+    with st.sidebar:
+        st.success("✅ Base carregada com sucesso!")
+        if st.button("🔄 Substituir Base", use_container_width=True):
             st.session_state["df_master"] = None
+            st.rerun()
 
-    def renderizar_filtros_laterais(self, df: pd.DataFrame) -> pd.DataFrame:
-        st.sidebar.markdown("---")
-        st.sidebar.header("🔍 Filtros Operacionais")
-        df_filtrado = df.copy()
+        st.markdown("---")
+        st.header("🔍 Filtros")
 
-        with st.sidebar.expander("📍 Estrutura e Localidade", expanded=True):
-            if "Período" in df_filtrado.columns:
-                periodos = st.selectbox("⏰ Período", ["Todos"] + sorted(df_filtrado["Período"].unique()))
-                if periodos != "Todos": df_filtrado = df_filtrado[df_filtrado["Período"] == periodos]
-                
-            if "Monitor" in df_filtrado.columns:
-                monitores = st.multiselect("👨‍💼 Monitor", sorted(df_filtrado["Monitor"].dropna().astype(str).unique()))
-                if monitores: df_filtrado = df_filtrado[df_filtrado["Monitor"].isin(monitores)]
-                
-            if "Cidade" in df_filtrado.columns:
-                cidades = st.multiselect("📍 Cidade", sorted(df_filtrado["Cidade"].dropna().astype(str).unique()))
-                if cidades: df_filtrado = df_filtrado[df_filtrado["Cidade"].isin(cidades)]
-        
-        with st.sidebar.expander("🛠️ Filtros Especiais", expanded=False):
-            if st.checkbox("🟢 Apenas Adesão (ND)"): df_filtrado = df_filtrado[df_filtrado["Check_ND"] == True]
-            if st.checkbox("🔄 Apenas Migração"): df_filtrado = df_filtrado[df_filtrado["Check_Migracao"] == True]
-            if st.checkbox("📡 Requer GPON"): df_filtrado = df_filtrado[df_filtrado["Check_GPON"] == True]
-                
-        return df_filtrado
+        periodos = st.selectbox(
+            "⏰ Período", ["Todos"] + sorted(df_master["PERIODO_TRATADO"].unique())
+        )
+        if periodos != "Todos":
+            df_master = df_master[df_master["PERIODO_TRATADO"] == periodos]
 
-    def renderizar_kpis_cabecalho(self, df: pd.DataFrame):
-        soma_os = df["Total de tarefas"].sum()
-        tecnicos = df.get("Login do Técnico", pd.Series()).nunique()
-        monitores = df.get("Monitor", pd.Series()).nunique()
-        
-        status_concluidos = ["CONCLUÍDO", "EXECUTADA", "BAIXADA", "REALIZADA"]
-        if "Status da Atividade" in df.columns:
-            os_concluidas = df[df["Status da Atividade"].isin(status_concluidos)]["Total de tarefas"].sum()
-            tx_conclusao = (os_concluidas / soma_os) if soma_os > 0 else 0
-            texto_status = f"{tx_conclusao:.1%} Concluídas"
-            tema_status = "verde" if tx_conclusao > 0.5 else ("laranja" if tx_conclusao > 0.2 else "vermelho")
+        monitores = st.multiselect(
+            "👨‍💼 Monitor", sorted(df_master["Monitor"].dropna().unique())
+        )
+        if monitores:
+            df_master = df_master[df_master["Monitor"].isin(monitores)]
+
+        if st.checkbox("🟢 Apenas Adesão (Novos Dom.)"):
+            df_master = df_master[df_master["Check_ND"]]
+        if st.checkbox("🔄 Apenas Migração (MP GPON)"):
+            df_master = df_master[df_master["Check_Migracao"]]
+        if st.checkbox("📡 Requer GPON"):
+            df_master = df_master[df_master["Check_GPON"]]
+        if st.checkbox("📡 Requer Streaming"):
+            df_master = df_master[df_master["Check_Streaming"]]
+        if st.checkbox("📡 Requer 4K"):
+            df_master = df_master[df_master["Check_4K"]]
+        if st.checkbox("📡 Requer Ponto Ultra"):
+            df_master = df_master[df_master["Check_Ponto_Ultra"]]
+        if st.checkbox("📡 Requer Soundbox"):
+            df_master = df_master[df_master["Check_Soundbox"]]
+
+    # --- CABEÇALHO (KPIs) ---
+    st.title("📈 Dashboard Totale: Visão Geral")
+
+    soma_os = df_master["TOTAL_TAREFAS"].sum()
+    tecnicos = df_master["LOGIN_TECNICO"].nunique()
+    monitores_qtd = df_master["Monitor"].nunique()
+
+    os_concluidas = df_master[
+        df_master["STATUS_ATIVIDADE"].isin(
+            ["CONCLUÍDO", "EXECUTADA", "BAIXADA", "REALIZADA"]
+        )
+    ]["TOTAL_TAREFAS"].sum()
+    tx_conclusao = (os_concluidas / soma_os) if soma_os > 0 else 0
+    tema_status = (
+        "verde"
+        if tx_conclusao > 0.5
+        else "laranja" if tx_conclusao > 0.2 else "vermelho"
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(
+            renderizar_card("Volume O.S.", f"{soma_os:,.0f}", "azul"),
+            unsafe_allow_html=True,
+        )
+    with c2:
+        st.markdown(
+            renderizar_card(
+                "Técnicos Operando",
+                f"{tecnicos}",
+                "escuro",
+                f"Média: {soma_os/tecnicos:.1f} O.S./Téc." if tecnicos > 0 else "",
+            ),
+            unsafe_allow_html=True,
+        )
+    with c3:
+        st.markdown(
+            renderizar_card("Monitores (Gestão)", f"{monitores_qtd}", "roxo"),
+            unsafe_allow_html=True,
+        )
+    with c4:
+        st.markdown(
+            renderizar_card(
+                "Andamento do Dia",
+                f"{os_concluidas:,.0f} O.S.",
+                tema_status,
+                f"{tx_conclusao:.1%} Concluídas",
+            ),
+            unsafe_allow_html=True,
+        )
+
+    # --- GRÁFICOS EXECUTIVOS ---
+    st.markdown("### 📈 Visão Executiva")
+    g1, g2, g3 = st.columns([1, 1, 1.2])
+
+    with g1:
+        st.markdown("##### 🚦 Status da Frota")
+        df_status = (
+            df_master.groupby("STATUS_ATIVIDADE")["TOTAL_TAREFAS"].sum().reset_index()
+        )
+        fig_stat = px.pie(
+            df_status,
+            names="STATUS_ATIVIDADE",
+            values="TOTAL_TAREFAS",
+            hole=0.5,
+            color_discrete_sequence=px.colors.qualitative.Prism,
+        )
+        fig_stat.update_layout(
+            showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=250
+        )
+        st.plotly_chart(fig_stat, use_container_width=True)
+
+    with g2:
+        st.markdown("##### ⏰ Pico de Agendamento")
+        df_per = (
+            df_master.groupby("PERIODO_TRATADO")["TOTAL_TAREFAS"].sum().reset_index()
+        )
+        fig_per = px.bar(
+            df_per,
+            x="PERIODO_TRATADO",
+            y="TOTAL_TAREFAS",
+            text_auto=True,
+            color="PERIODO_TRATADO",
+            color_discrete_sequence=["#0EA5E9", "#F59E0B", "#F97316", "#8B5CF6"],
+        )
+        fig_per.update_layout(
+            showlegend=False,
+            margin=dict(t=0, b=0, l=0, r=0),
+            height=250,
+            xaxis_title="",
+            yaxis_title="",
+        )
+        st.plotly_chart(fig_per, use_container_width=True)
+
+    with g3:
+        st.markdown("##### 💎 Mix de Serviços Premium")
+        df_prem = pd.DataFrame(
+            [
+                {"Serviço": "GPON", "Qtd": df_master["Check_GPON"].sum()},
+                {"Serviço": "4K", "Qtd": df_master["Check_4K"].sum()},
+                {"Serviço": "Soundbox", "Qtd": df_master["Check_Soundbox"].sum()},
+                {"Serviço": "Ponto Ultra", "Qtd": df_master["Check_Ponto_Ultra"].sum()},
+            ]
+        )
+        df_prem = df_prem[df_prem["Qtd"] > 0]
+        if not df_prem.empty:
+            fig_prem = px.bar(
+                df_prem,
+                x="Qtd",
+                y="Serviço",
+                orientation="h",
+                text_auto=True,
+                color_discrete_sequence=["#10B981"],
+            )
+            fig_prem.update_layout(
+                showlegend=False,
+                margin=dict(t=0, b=0, l=0, r=0),
+                height=250,
+                xaxis_title="",
+                yaxis_title="",
+            )
+            st.plotly_chart(fig_prem, use_container_width=True)
         else:
-            os_concluidas = 0
-            texto_status = "Status Não Informado"
-            tema_status = "cinza"
+            st.info("Nenhum serviço premium.")
 
-        c1, c2, c3, c4 = st.columns(4)
-        with c1: st.markdown(ComponentesVisuais.desenhar_cartao_html("Volume O.S.", f"{soma_os:,.0f}", "azul"), unsafe_allow_html=True)
-        with c2: st.markdown(ComponentesVisuais.desenhar_cartao_html("Técnicos Operando", f"{tecnicos}", "escuro", f"Média: {soma_os/tecnicos:.1f} OS/Téc" if tecnicos > 0 else ""), unsafe_allow_html=True)
-        with c3: st.markdown(ComponentesVisuais.desenhar_cartao_html("Monitores (Gestão)", f"{monitores}", "roxo"), unsafe_allow_html=True)
-        with c4: st.markdown(ComponentesVisuais.desenhar_cartao_html("Andamento do Dia", f"{os_concluidas:,.0f} OS", tema_status, texto_status), unsafe_allow_html=True)
+    st.divider()
 
-    def renderizar_graficos_executivos(self, df: pd.DataFrame):
-        st.markdown("### 📈 Visão Executiva")
-        g1, g2, g3 = st.columns([1, 1, 1.2])
+    # --- ABAS DE DETALHAMENTO ---
+    aba_dash, aba_tec, aba_rotas, aba_dados = st.tabs(
+        [
+            "📋 Dash Monitores",
+            "🏆 Top Técnicos",
+            "🗺️ Mapa Geográfico",
+            "🗃️ Base de Dados",
+        ]
+    )
 
-        with g1:
-            st.markdown("##### 🚦 Status da Frota")
-            if "Status da Atividade" in df.columns:
-                df_status = df.groupby("Status da Atividade")["Total de tarefas"].sum().reset_index()
-                fig_stat = px.pie(df_status, names="Status da Atividade", values="Total de tarefas", hole=0.5,
-                                  color_discrete_sequence=px.colors.qualitative.Prism)
-                fig_stat.update_traces(textposition='inside', textinfo='percent')
-                fig_stat.update_layout(showlegend=False, margin=dict(t=10, b=10, l=0, r=0), height=250)
-                st.plotly_chart(fig_stat, use_container_width=True, config={'displayModeBar': False})
-            else:
-                st.info("Sem dados de Status.")
+    with aba_dash:
+        df_resumo = (
+            df_master.groupby("Monitor")
+            .agg(
+                OS=("TOTAL_TAREFAS", "sum"),
+                GPON=("Check_GPON", "sum"),
+                ND=("Check_ND", "sum"),
+                Migração=("Check_Migracao", "sum"),
+                Qtd_4K=("Check_4K", "sum"),
+                Ultra=("Check_Ponto_Ultra", "sum"),
+                Soundbox=("Check_Soundbox", "sum"),
+                Equipe=("LOGIN_TECNICO", "nunique"),
+            )
+            .reset_index()
+        )
+        df_resumo["Média"] = np.where(
+            df_resumo["Equipe"] > 0, df_resumo["OS"] / df_resumo["Equipe"], 0
+        )
 
-        with g2:
-            st.markdown("##### ⏰ Pico de Agendamento")
-            if "Período" in df.columns:
-                df_per = df.groupby("Período")["Total de tarefas"].sum().reset_index()
-                fig_per = px.bar(df_per, x="Período", y="Total de tarefas", text_auto=True, color="Período",
-                                 color_discrete_sequence=["#0EA5E9", "#F59E0B", "#F97316", "#8B5CF6"])
-                fig_per.update_layout(showlegend=False, margin=dict(t=10, b=10, l=0, r=0), height=250, xaxis_title="", yaxis_title="")
-                st.plotly_chart(fig_per, use_container_width=True, config={'displayModeBar': False})
+        if not df_resumo.empty:
+            st.dataframe(
+                df_resumo,
+                column_config={
+                    "Monitor": st.column_config.TextColumn("Monitor", width="medium"),
+                    "OS": st.column_config.ProgressColumn(
+                        "Volume OS",
+                        format="%d",
+                        min_value=0,
+                        max_value=int(df_resumo["OS"].max()),
+                    ),
+                    "Média": st.column_config.NumberColumn("Média/Téc.", format="%.1f"),
+                },
+                hide_index=True,
+                use_container_width=True,
+            )
 
-        with g3:
-            st.markdown("##### 💎 Mix de Serviços Premium")
-            dados_premium = {
-                "Tecnologia GPON": df["Check_GPON"].sum(),
-                "Instalação 4K": df["Check_4K"].sum(),
-                "Soundbox": df["Check_Soundbox"].sum(),
-                "Ponto Ultra": df["Check_Ponto_Ultra"].sum(),
-            }
-            df_prem = pd.DataFrame(list(dados_premium.items()), columns=["Serviço", "Qtd"])
-            df_prem = df_prem[df_prem["Qtd"] > 0]
-            
-            if not df_prem.empty:
-                fig_prem = px.bar(df_prem, x="Qtd", y="Serviço", orientation='h', text_auto=True, color_discrete_sequence=["#10B981"])
-                fig_prem.update_layout(showlegend=False, margin=dict(t=10, b=10, l=0, r=0), height=250, xaxis_title="", yaxis_title="")
-                st.plotly_chart(fig_prem, use_container_width=True, config={'displayModeBar': False})
-            else:
-                st.info("Nenhum serviço premium escalado para hoje.")
+    with aba_tec:
+        prod_df = (
+            df_master.groupby("NOME_OFICIAL")
+            .agg({"TOTAL_TAREFAS": "sum"})
+            .reset_index()
+            .sort_values("TOTAL_TAREFAS", ascending=False)
+            .head(15)
+        )
+        fig_tec = px.bar(
+            prod_df,
+            x="TOTAL_TAREFAS",
+            y="NOME_OFICIAL",
+            orientation="h",
+            color="TOTAL_TAREFAS",
+            color_continuous_scale="Blues",
+            text_auto=True,
+        )
+        fig_tec.update_layout(yaxis={"categoryorder": "total ascending"}, height=500)
+        st.plotly_chart(fig_tec, use_container_width=True)
 
-        st.divider()
+    with aba_rotas:
+        df_mapa = df_master.dropna(subset=["COORD_X", "COORD_Y"]).copy()
+        if (
+            not df_mapa.empty
+            and df_mapa["COORD_X"].astype(str).str.contains(r"\d").any()
+        ):
+            df_mapa["COORD_X"] = pd.to_numeric(
+                df_mapa["COORD_X"].astype(str).str.replace(",", "."), errors="coerce"
+            )
+            df_mapa["COORD_Y"] = pd.to_numeric(
+                df_mapa["COORD_Y"].astype(str).str.replace(",", "."), errors="coerce"
+            )
+            df_mapa = df_mapa.dropna(subset=["COORD_X", "COORD_Y"])
 
-    def executar(self):
-        # 1. Verifica se não há dados na memória (Exibe o Uploader)
-        if st.session_state["df_master"] is None:
-            st.title("Bem-vindo ao Painel Operacional Totale 🚀")
-            st.subheader("📥 Entrada de Dados")
-            
-            arquivo = ComponentesVisuais.desenhar_upload_arquivo(chave="upload_excel")
-
-            if arquivo is not None:
-                with st.spinner("🚀 Processando base de dados e conectando à nuvem..."):
-                    df_bruto = CarregadorDados.ler_excel(arquivo)
-                    df_ativos = CarregadorDados.buscar_google_sheets()
-                    df_master = ProcessadorDados.transformar_base_principal(df_bruto, df_ativos)
-                    
-                    # Salva o resultado processado na memória e recarrega a página (para o uploader sumir)
-                    st.session_state["df_master"] = df_master
-                    st.rerun()
-            else:
-                st.info("👆 Faça o upload da planilha (Excel) para iniciar o Dashboard...")
-                return
-
-        # 2. Se já houver dados na memória (Oculta Uploader e Mostra Dashboard)
+            if not df_mapa.empty:
+                fig_mapa = px.scatter_mapbox(
+                    df_mapa,
+                    lat="COORD_Y",
+                    lon="COORD_X",
+                    color="STATUS_ATIVIDADE",
+                    zoom=9,
+                    height=500,
+                    hover_name="NOME_OFICIAL",
+                )
+                fig_mapa.update_layout(
+                    mapbox_style="open-street-map",
+                    margin={"r": 0, "t": 0, "l": 0, "b": 0},
+                )
+                st.plotly_chart(fig_mapa, use_container_width=True)
         else:
-            df_master = st.session_state["df_master"]
-            
-            # Botão de Reset
-            col_msg, col_btn = st.columns([4, 1])
-            with col_msg:
-                st.success("✅ Base processada e cruzada com sucesso!")
-            with col_btn:
-                if st.button("🔄 Enviar outro arquivo", use_container_width=True):
-                    st.session_state["df_master"] = None
-                    st.rerun()
+            st.info(
+                "Sua planilha não possui coordenadas GPS válidas para desenhar o mapa."
+            )
 
-            # Renderiza a Sidebar
-            df_filtrado = self.renderizar_filtros_laterais(df_master)
-
-            # Renderiza o Dashboard
-            st.title("📈 Dashboard Totale: Visão Geral")
-            
-            self.renderizar_kpis_cabecalho(df_filtrado)
-            self.renderizar_graficos_executivos(df_filtrado)
-
-            aba_dash, aba_tec, aba_rotas, aba_dados = st.tabs([
-                "📋 Dash Monitores", "🏆 Top Técnicos", "🗺️ Mapa Geográfico", "🗃️ Base de Dados"
-            ])
-
-            with aba_dash:
-                ComponentesVisuais.renderizar_tabela_monitor("🌎 RESUMO GERAL (Consolidado)", df_filtrado)
-                st.markdown("<br>", unsafe_allow_html=True)
-                
-                for periodo in ["Manhã", "Tarde I", "Tarde II", "Imediata"]:
-                    ComponentesVisuais.renderizar_tabela_monitor(f"🕒 {periodo}", df_filtrado[df_filtrado["Período"] == periodo])
-
-            with aba_tec:
-                col_nome = "Nome Oficial (Sheets)" if "Nome Oficial (Sheets)" in df_filtrado.columns else "Login do Técnico"
-                prod_df = df_filtrado.groupby(col_nome).agg({"Total de tarefas": "sum"}).reset_index()
-                prod_df = prod_df.sort_values("Total de tarefas", ascending=False).head(15)
-                
-                st.markdown("#### 🚀 Top 15 Técnicos com Maior Carga")
-                fig_tec = px.bar(prod_df, x="Total de tarefas", y=col_nome, orientation='h', color="Total de tarefas", color_continuous_scale="Blues", text_auto=True)
-                fig_tec.update_layout(yaxis={'categoryorder':'total ascending'}, height=500)
-                st.plotly_chart(fig_tec, use_container_width=True)
-
-            with aba_rotas:
-                df_mapa = df_filtrado.dropna(subset=["Coordenada X", "Coordenada Y"]).copy()
-                if not df_mapa.empty:
-                    df_mapa["Coordenada X"] = pd.to_numeric(df_mapa["Coordenada X"].astype(str).str.replace(',', '.'), errors="coerce")
-                    df_mapa["Coordenada Y"] = pd.to_numeric(df_mapa["Coordenada Y"].astype(str).str.replace(',', '.'), errors="coerce")
-                    
-                    fig_mapa = px.scatter_mapbox(df_mapa, lat="Coordenada Y", lon="Coordenada X", color="Status da Atividade", zoom=9, height=550, hover_name="Login do Técnico")
-                    fig_mapa.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
-                    st.plotly_chart(fig_mapa, use_container_width=True)
-
-            with aba_dados:
-                st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
-                csv = df_filtrado.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
-                st.download_button("📥 Exportar Base Consolidada", data=csv, file_name="base_totale_processada.csv", mime="text/csv")
+    with aba_dados:
+        st.dataframe(df_master, use_container_width=True, hide_index=True)
 
 
 if __name__ == "__main__":
-    app = AplicativoDashboard()
-    app.executar()
+    main()
