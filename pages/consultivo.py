@@ -1,6 +1,7 @@
 # VERSÃO CLEAN: PROJEÇÕES ORDENADAS (REAIS PRIMEIRO, PROJEÇÕES DEPOIS)
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 from plotly.graph_objects import Figure
 from io import BytesIO
@@ -118,7 +119,7 @@ def preparar_ranking(df: pd.DataFrame, colunas_grupo: list, fator_proj: float = 
     return res[nova_ordem]
 
 # ====================================================
-# BLOCO 3: CARREGAMENTO PRINCIPAL
+# BLOCO 3: CARREGAMENTO PRINCIPAL E TRATAMENTO
 # ====================================================
 st.title("📋 Painel de Consultivos e Produtos")
 
@@ -128,24 +129,42 @@ if "dados_cons" not in st.session_state or "Consultivo" not in st.session_state[
 
 df = st.session_state["dados_cons"]["Consultivo"].copy()
 
-# Tratamento de Colunas
+# Tratamento de Colunas Numéricas Iniciais
 mapa = {"QTDE_CONSULTIVO": "Qtde. Cons.", "QTDE_PRODUTOS": "Qtde. Prod.", "QTDE_MESH": "Qtde. Mesh", "QTDE_TV": "Qtde. TV", "QTDE_VIRTUA": "Qtde. Virtua"}
-for k, v in mapa.items(): df[v] = pd.to_numeric(df.get(k, 0), errors="coerce").fillna(0).astype(int)
-if "DATA" in df.columns: df["DATA"] = pd.to_datetime(df["DATA"], errors="coerce", dayfirst=True)
+for k, v in mapa.items(): 
+    df[v] = pd.to_numeric(df.get(k, 0), errors="coerce").fillna(0).astype(int)
+    
+if "DATA" in df.columns: 
+    df["DATA"] = pd.to_datetime(df["DATA"], errors="coerce", dayfirst=True)
 
-# Merge com GSheets
+# Merge com GSheets (Hierarquia)
 try:
     df_ativos = carregar_hierarquia()
     df["LOGIN NETSALES"] = df.get("LOGIN NETSALES", "").astype(str).str.strip()
     df = df.drop(columns=["Monitor", "Base"], errors="ignore")
+    # Outer merge: traz todos da base + todos da planilha do google (mesmo zerados)
     df = pd.merge(df, df_ativos, left_on="LOGIN NETSALES", right_on="Login", how="outer")
 except Exception as e:
     st.error(f"Erro ao carregar hierarquia: {e}")
 
+# 1. Arruma os Logins (Se não tem Netsales, pega o Login do GSheets)
 df["LOGIN NETSALES"] = df["LOGIN NETSALES"].fillna(df["Login"]).fillna("SEM LOGIN")
-df["VENDEDOR"] = df.get("VENDEDOR", df.get("Técnico", df["LOGIN NETSALES"])).fillna("Nome Não Cadastrado")
+
+# 2. Arruma os Nomes (Se não tem Vendedor na base, pega Técnico do GSheets, senão pega Login)
+if "VENDEDOR" not in df.columns:
+    df["VENDEDOR"] = np.nan
+    
+df["VENDEDOR"] = df["VENDEDOR"].fillna(df["Técnico"]).fillna(df["LOGIN NETSALES"]).fillna("Nome Não Cadastrado")
+
+# 3. Arruma a Hierarquia
 df["Monitor"] = df["Monitor"].fillna("Não Identificado")
 df["Base"] = df["Base"].fillna("Não Identificada")
+
+# 4. Preenche com ZERO as métricas dos técnicos zerados puxados do GSheets
+colunas_metricas = ["Qtde. Cons.", "Qtde. Prod.", "Qtde. Mesh", "Qtde. TV", "Qtde. Virtua"]
+for col in colunas_metricas:
+    if col in df.columns:
+        df[col] = df[col].fillna(0).astype(int)
 
 # ====================================================
 # BLOCO 4: FILTROS E CÁLCULOS GLOBAIS
@@ -216,8 +235,9 @@ if colunas_proj: style_df = style_df.set_properties(**{'background-color': '#FEF
 
 st.dataframe(style_df, use_container_width=True, height=450, hide_index=True)
 
-# Abas de Gráficos Rápidos
-aba1, aba2 = st.tabs(["📈 Desempenho e Matriz", "⚠️ Alertas Inativos"])
+# Abas de Gráficos Rápidos e Alertas
+aba1, aba2 = st.tabs(["📈 Desempenho e Matriz", "🚫 Equipes sem Consultivos"])
+
 with aba1:
     g1, g2 = st.columns(2)
     with g1:
@@ -229,8 +249,14 @@ with aba1:
             st.plotly_chart(px.scatter(df_disp, x='Total Consultivos', y='Total Produtos', color='Monitor', title="Matriz: Consultivos x Produtos"), use_container_width=True)
 
 with aba2:
-    st.subheader("🚨 Alerta: Oportunidades Desperdiçadas (Com Consultivo, Zero Vendas)")
-    st.dataframe(df_exibir[(df_exibir['Total Consultivos'] > 0) & (df_exibir['Total Produtos'] == 0)], use_container_width=True, hide_index=True)
+    st.subheader("🚫 Equipes que ainda não fizeram Consultivos")
+    # Filtra quem tem exatamente zero consultivos
+    df_zerados = df_exibir[df_exibir['Total Consultivos'] == 0]
+    
+    if not df_zerados.empty:
+        st.dataframe(df_zerados, use_container_width=True, hide_index=True)
+    else:
+        st.success("✅ Excelente! 100% da operação possui pelo menos um consultivo registrado.")
 
 # Exportação
 st.divider()
