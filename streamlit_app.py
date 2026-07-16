@@ -152,7 +152,7 @@ def main():
     visao_tec_prod = st.Page("pages/visao_tecnico_prod.py", title="Produção", icon="🛠️")
     visao_tec_cons = st.Page("pages/visao_tecnico_cons.py", title="Consultivo", icon="🗣️")
     rota_inicial = st.Page("pages/rota_inicial.py", title="Rota Inicial", icon="🗺️")
-    quebra = st.Page("pages/quebra.py", title="Quebra de Agenda", icon="📊")
+    quebra = st.Page("pages/quebra.py", title="Quebra de Agenda", icon="📉")
     volumetria = st.Page("pages/volumetria.py", title="Volumetria", icon="📊")
 
     # Criando o Dicionário para agrupar as seções
