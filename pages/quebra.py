@@ -474,6 +474,47 @@ class DataLoader:
             df["Status Contrato"] = Utils.classificar_status(df[col_status])
         else:
             df["Status Contrato"] = "Pendente"
+            
+                # ── Classificação de Tipo (mesma lógica das flags premium) ───
+        col_tipo = Utils.buscar_coluna(df, ["TIPO O.S 1", "TIPO OS 1", "TIPO DE O.S"])
+        col_hab  = Utils.buscar_coluna(df, ["HABILIDADE DE TRABALHO", "HABILIDADE"])
+
+        tipo_upper = (
+            df[col_tipo]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .apply(lambda v: unicodedata.normalize("NFKD", v).encode("ASCII", "ignore").decode())
+            if col_tipo
+            else pd.Series("", index=df.index, dtype=str)
+        )
+
+        hab_upper = (
+            df[col_hab]
+            .fillna("")
+            .astype(str)
+            .str.upper()
+            if col_hab
+            else pd.Series("", index=df.index, dtype=str)
+        )
+
+        # Flags booleanas
+        flag_gpon     = hab_upper.str.contains(r"PON\(1/100\)", regex=True, na=False)
+        flag_nd       = tipo_upper.str.contains("ADESAO", na=False)
+        flag_migracao = (tipo_upper.str.strip() == "24 - MUDANCA DE PACOTE") & flag_gpon
+        flag_pme      = hab_upper.str.contains("PME", na=False) & flag_nd
+
+        # ── np.select com default explícito como str ──────────────────
+        df["TIPO_SERVICO"] = pd.Series(
+            np.select(
+                condlist=[flag_nd, flag_migracao, flag_gpon, flag_pme],
+                choicelist=["Novos Domicílios", "Migração", "GPON", "PME"],
+                default="Outros",          # str explícito evita o TypeError
+            ),
+            index=df.index,
+            dtype=str,                  # força dtype string no resultado
+        )
 
         df.attrs["diagnostico"] = {
             "suspensos": removidos_suspensos,
@@ -685,8 +726,8 @@ def main():
     st.markdown("")
 
     # ── Abas ──────────────────────────────────────────
-    aba_visao, aba_rank, aba_causa, aba_back = st.tabs(
-        ["📊 Visão & Projeções", "🧭 Desempenho", "🔍 Causas", "🚨 Backoffice"]
+    aba_visao, aba_rank, aba_causa, aba_back, aba_tipos = st.tabs(
+        ["📊 Visão & Projeções", "🧭 Desempenho", "🔍 Causas", "🚨 Backoffice", "📂 Por Tipo de Serviço"]
     )
 
     with aba_visao:
@@ -832,6 +873,106 @@ def main():
                                Utils.gerar_excel(df_back, "Backoffice"), "backoffice.xlsx")
         else:
             st.success("🎉 Nenhuma quebra para tratamento!")
+            
+    with aba_tipos:
+        render_section("📂 Análise por Tipo de Serviço")
+
+        # ── Verifica se a coluna foi criada ──────────────────────────
+        if "TIPO_SERVICO" not in df.columns:
+            st.warning("Coluna de tipo de O.S. não encontrada na base.")
+        else:
+            # Distribuição geral dos tipos
+            dist_tipos = df["TIPO_SERVICO"].value_counts().reset_index()
+            dist_tipos.columns = ["Tipo", "Quantidade"]
+
+            col_dist, col_pie = st.columns([1, 1])
+            with col_dist:
+                render_dataframe(
+                    dist_tipos,
+                    titulo="Distribuição por Tipo",
+                    icone="📂",
+                    height=250,
+                )
+            with col_pie:
+                fig_tipos = px.pie(
+                    dist_tipos,
+                    names="Tipo",
+                    values="Quantidade",
+                    hole=0.5,
+                    color_discrete_sequence=["#0EA5E9", "#10B981", "#A855F7", "#94A3B8"],
+                )
+                fig_tipos.update_layout(
+                    height=250,
+                    margin=dict(t=20, b=0, l=0, r=0),
+                    showlegend=True,
+                )
+                st.plotly_chart(fig_tipos, use_container_width=True)
+
+            st.markdown("")
+
+            # ── Sub-abas por tipo ────────────────────────────────────
+            tipos_disponiveis = [
+                t for t in ["PME", "Novos Domicílios", "Migração", "GPON", "Outros"]
+                if t in df["TIPO_SERVICO"].unique()
+            ]
+
+            if not tipos_disponiveis:
+                st.info("Nenhum tipo classificado encontrado.")
+            else:
+                sub_abas = st.tabs([f"📋 {t}" for t in tipos_disponiveis])
+
+                fmt_rank: Dict[str, Any] = {
+                    "Quebra Atual": "{:.2%}",
+                    "Fechamento Otimista": "{:.2%}",
+                    "Fechamento Base": "{:.2%}",
+                    "Fechamento Pessimista": "{:.2%}",
+                }
+
+                for sub_aba, tipo in zip(sub_abas, tipos_disponiveis):
+                    with sub_aba:
+                        df_tipo = df[df["TIPO_SERVICO"] == tipo].copy()
+
+                        if df_tipo.empty:
+                            st.info(f"Sem dados para o tipo **{tipo}**.")
+                            continue
+
+                        # KPIs do tipo
+                        m_tipo = Motor.projetar(df_tipo, p_base)
+                        t1, t2, t3, t4 = st.columns(4)
+                        render_kpi(t1, "Alocado",      f"{int(m_tipo['alocado']):,}",   tema="azul")
+                        render_kpi(t2, "Executadas",   f"{int(m_tipo['exec']):,}",      tema="verde")
+                        render_kpi(t3, "Não Exec",     f"{int(m_tipo['naoexec']):,}",   tema="laranja")
+                        render_kpi(
+                            t4, "Quebra Atual", f"{m_tipo['quebra_atual']:.2%}",
+                            tema="vermelho" if m_tipo["quebra_atual"] > Config.SLA_QUEBRA_MAXIMA else "cinza",
+                        )
+
+                        st.markdown("")
+
+                        # Ranking de monitores para este tipo
+                        df_rank_tipo = Motor.tabela_cenarios(
+                            df_tipo, "MONITOR", p_ot, p_base, p_pess, float(min_aloc)
+                        )
+
+                        if not df_rank_tipo.empty:
+                            render_dataframe(
+                                df_rank_tipo.head(int(top_n)),
+                                titulo=f"Monitores — {tipo}",
+                                icone="👔",
+                                fmt=fmt_rank,
+                                color_col="Fechamento Base",
+                                color_meta=Config.SLA_QUEBRA_MAXIMA,
+                                color_invertido=True,
+                                height=400,
+                            )
+                            st.download_button(
+                                f"📥 Baixar {tipo}",
+                                Utils.gerar_excel(df_rank_tipo, tipo[:31]),
+                                f"ranking_{tipo.lower().replace(' ', '_')}.xlsx",
+                                key=f"dl_{tipo}",
+                            )
+                        else:
+                            st.info(f"Dados insuficientes para ranking de **{tipo}**.")
 
 
 if __name__ == "__main__":
