@@ -300,9 +300,8 @@ def render_dataframe(
             novo_nome = RENOMEAR_COLUNAS[col_original]
             # Só renomeia se o novo nome não já existir como outra coluna
             # e se não foi usado por outra renomeação anterior
-            if (
-                novo_nome == col_original  # mesmo nome, ignora
-                or (novo_nome not in nomes_existentes and novo_nome not in nomes_ja_usados)
+            if novo_nome == col_original or (  # mesmo nome, ignora
+                novo_nome not in nomes_existentes and novo_nome not in nomes_ja_usados
             ):
                 colunas_para_renomear[col_original] = novo_nome
                 nomes_ja_usados.add(novo_nome)
@@ -475,7 +474,7 @@ def ler_arquivo(file_bytes: bytes, filename: str) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFrame:
-    if df_bruto.empty:
+    if not isinstance(df_bruto, pd.DataFrame) or df_bruto.empty:
         return pd.DataFrame()
     df = df_bruto.copy()
     df.columns = df.columns.astype(str).str.strip().str.upper()
@@ -517,8 +516,7 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     df = df.loc[~mask_vazio].copy()
     df["CONTRATO"] = contrato.loc[df.index].str.upper()
 
-    if removidos > 0:
-        st.toast(f"🗑️ {removidos} linha(s) sem contrato removida(s).", icon="⚠️")
+    # ❌ REMOVIDO daqui: st.toast(...) — não pode existir em função cacheada
 
     if df.empty:
         return pd.DataFrame()
@@ -541,7 +539,7 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     df["STATUS_ATIVIDADE"] = df["STATUS_ATIVIDADE"].astype(str).str.strip().str.upper()
 
     # Merge GSheets
-    if not df_ativos.empty:
+    if isinstance(df_ativos, pd.DataFrame) and not df_ativos.empty:
         df = df.drop(
             columns=[
                 c for c in ["Técnico", "Monitor", "Base"] if c.upper() in df.columns
@@ -563,9 +561,7 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
 
     df["Check_GPON"] = hab.str.contains(r"PON\(1/100\)", regex=True, na=False)
     df["Check_ND"] = tipo.str.contains("ADESAO", na=False)
-    df["Check_Migracao"] = (tipo.str.strip() == "24 - MUDANCA DE PACOTE") & df[
-        "Check_GPON"
-    ]
+    df["Check_Migracao"] = (tipo.str.strip() == "24 - MUDANCA DE PACOTE") & df["Check_GPON"]
     df["Check_Streaming"] = hab.str.contains("TV VAS(1/100)", na=False)
     df["Check_Ponto_Ultra"] = hab.str.contains("NETLAR", na=False)
     df["Check_4K"] = prod.str.contains("4K", na=False)
@@ -596,35 +592,22 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     df["REGIÃO"] = np.select(
         [
             cidade.isin(["SAO PAULO"]),
-            cidade.isin(
-                [
-                    "GUARULHOS",
-                    "ARUJA",
-                    "MOGI DAS CRUZES",
-                    "SUZANO",
-                    "ITAQUAQUECETUBA",
-                    "FERRAZ DE VASCONCELOS",
-                    "POA",
-                ]
-            ),
-            cidade.isin(
-                [
-                    "SANTO ANDRE",
-                    "SAO BERNARDO DO CAMPO",
-                    "SAO CAETANO DO SUL",
-                    "DIADEMA",
-                    "MAUA",
-                    "RIBEIRAO PIRES",
-                    "RIO GRANDE DA SERRA",
-                ]
-            ),
+            cidade.isin([
+                "GUARULHOS", "ARUJA", "MOGI DAS CRUZES", "SUZANO",
+                "ITAQUAQUECETUBA", "FERRAZ DE VASCONCELOS", "POA",
+            ]),
+            cidade.isin([
+                "SANTO ANDRE", "SAO BERNARDO DO CAMPO", "SAO CAETANO DO SUL",
+                "DIADEMA", "MAUA", "RIBEIRAO PIRES", "RIO GRANDE DA SERRA",
+            ]),
         ],
         ["LESTE", "GRU", "ABCDM"],
         default="OUTRAS",
     )
 
+    # ✅ Contagem transportada via attrs (seguro no cache)
+    df.attrs["diagnostico"] = {"contrato_vazio": removidos}
     return df
-
 
 # ====================================================
 # 6. APLICAÇÃO PRINCIPAL
@@ -657,10 +640,20 @@ def main():
             with st.spinner("Processando..."):
                 raw = ler_arquivo(arq.getvalue(), arq.name)
                 gs = buscar_google_sheets()
-                st.session_state["df_master"] = processar_base(raw, gs)
+                df_proc = processar_base(raw, gs)
+                st.session_state["df_master"] = df_proc
+
+            # ✅ Toast fora da função cacheada
+            diag = df_proc.attrs.get("diagnostico", {})
+            if diag.get("contrato_vazio", 0) > 0:
+                st.toast(
+                    f"🗑️ {diag['contrato_vazio']} linha(s) sem contrato removida(s).",
+                    icon="⚠️",
+                )
+
             st.rerun()
         return
-
+    
     df_master = st.session_state["df_master"].copy()
 
     # ── Sidebar Filtros ───────────────────────────────
@@ -725,7 +718,7 @@ def main():
         c2,
         "Técnicos Operando",
         f"{tecnicos}",
-        sub=f"Média: {soma_os / tecnicos:.1f} OS/Téc." if tecnicos else "",
+        sub=f"Média: {soma_os / tecnicos:.1f} O.S./Téc." if tecnicos else "",
         tema="escuro",
     )
     render_kpi(c3, "Monitores", f"{monitores_qtd}", tema="roxo")
@@ -830,8 +823,14 @@ def main():
             st.info("Nenhum serviço premium identificado.")
 
     # ── Abas de Detalhamento ──────────────────────────
-    aba_mon, aba_tec, aba_mapa, aba_base = st.tabs(
-        ["📋 Monitores", "🏆 Top Técnicos", "🗺️ Mapa", "🗃️ Base Completa"]
+    aba_mon, aba_tec, aba_mapa, aba_base, aba_contratos = st.tabs(
+        [
+            "📋 Monitores",
+            "🏆 Top Técnicos",
+            "🗺️ Mapa",
+            "🗃️ Base Completa",
+            "📄 Resumo Contratos",
+        ]
     )
 
     with aba_mon:
@@ -939,6 +938,105 @@ def main():
             gerar_excel(df_master, "Base"),
             "base_completa.xlsx",
         )
+
+    with aba_contratos:
+        render_section("📄 Resumo dos Contratos da Rota")
+
+        # ── Mapeamento das colunas necessárias ────────────────────────
+        # Os aliases devem refletir os nomes APÓS processar_base()
+        COLUNAS_CONTRATOS: Dict[str, List[str]] = {
+            "CONTRATO": ["CONTRATO"],
+            "INTERVALO": ["PERIODO_TRATADO", "INTERVALO"],
+            "CEP": ["CEP/CÓDIGO POSTAL", "CEP", "CODIGO POSTAL"],
+            "ÁREA TRABALHO": ["ÁREA DE TRABALHO", "AREA DE TRABALHO"],
+            "TIPO OS": ["TIPO_OS", "TIPO O.S 1", "TIPO OS 1"],
+            "TÉCNICO": ["NOME_OFICIAL"],
+            "MONITOR": ["Monitor"],
+        }
+
+        # ── Montar DataFrame apenas com as colunas disponíveis ────────
+        colunas_encontradas: Dict[str, str] = {}
+        for nome_amigavel, aliases in COLUNAS_CONTRATOS.items():
+            for alias in aliases:
+                if alias in df_master.columns:
+                    colunas_encontradas[alias] = nome_amigavel
+                    break
+
+        if not colunas_encontradas:
+            st.warning("Nenhuma das colunas esperadas foi encontrada na base.")
+        else:
+            df_contratos = (
+                df_master[list(colunas_encontradas.keys())]
+                .rename(columns=colunas_encontradas)
+                .copy()
+            )
+
+            # ── Filtros em cascata: Monitor → Técnico ─────────────────
+            col_f1, col_f2, col_info = st.columns([2, 2, 3])
+
+            with col_f1:
+                mon_contratos = ["Todos"] + sorted(
+                    [
+                        str(x)
+                        for x in df_contratos["MONITOR"].dropna().unique()
+                        if str(x) not in {"nan", "SEM MONITOR", "NÃO MAPEADO"}
+                    ]
+                    if "MONITOR" in df_contratos.columns
+                    else []
+                )
+                sel_mon_contratos = st.selectbox(
+                    "👔 Monitor",
+                    mon_contratos,
+                    key="filtro_mon_contratos",
+                )
+
+            df_contratos_filtrado = (
+                df_contratos[df_contratos["MONITOR"] == sel_mon_contratos].copy()
+                if sel_mon_contratos != "Todos"
+                else df_contratos.copy()
+            )
+
+            with col_f2:
+                tec_contratos = ["Todos"] + sorted(
+                    [
+                        str(x)
+                        for x in df_contratos_filtrado["TÉCNICO"].dropna().unique()
+                        if str(x) not in {"nan", "NÃO MAPEADO"}
+                    ]
+                    if "TÉCNICO" in df_contratos_filtrado.columns
+                    else []
+                )
+                sel_tec_contratos = st.selectbox(
+                    "👤 Técnico",
+                    tec_contratos,
+                    key="filtro_tec_contratos",
+                )
+
+            if sel_tec_contratos != "Todos":
+                df_contratos_filtrado = df_contratos_filtrado[
+                    df_contratos_filtrado["TÉCNICO"] == sel_tec_contratos
+                ].copy()
+
+            with col_info:
+                st.markdown("")
+                st.markdown(
+                    f"**{len(df_contratos_filtrado):,}** contratos exibidos "
+                    f"de **{len(df_contratos):,}** total"
+                )
+
+            render_dataframe(
+                df_contratos_filtrado,
+                titulo="Resumo Contratos",
+                icone="📄",
+                badge=f"{len(df_contratos_filtrado)} contratos",
+                height=600,
+            )
+
+            st.download_button(
+                "📥 Baixar Resumo Contratos",
+                gerar_excel(df_contratos_filtrado, "Resumo Contratos"),
+                "ordens_servico.xlsx",
+            )
 
 
 if __name__ == "__main__":

@@ -38,13 +38,13 @@ class Config:
         "1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
     )
     CONTRATO_VALORES_VAZIOS = {"", "NAN", "NONE", "N/A", "NA", "-", "0", "NULL"}
-    STATUS_ORDEM             = ["Executada", "Não Executada", "Pendente"]
-    CORES_STATUS             = {
-        "Executada":     "#10B981",
+    STATUS_ORDEM = ["Executada", "Não Executada", "Pendente"]
+    CORES_STATUS = {
+        "Executada": "#10B981",
         "Não Executada": "#EF4444",
-        "Pendente":      "#94A3B8",
+        "Pendente": "#94A3B8",
     }
-    COL_REGIAO        = "REGIÃO"
+    COL_REGIAO = "REGIÃO"
     REGIOES_PRINCIPAIS = ["LESTE", "GRU", "ABCDM"]
 
 
@@ -66,23 +66,21 @@ CORES_REGIAO: Dict[str, Dict[str, str]] = {
     "OUTRAS": {"bg": "#F1F5F9", "text": "#475569", "border": "#94A3B8"},
 }
 
-# Nomes internos → títulos amigáveis (Quebra)
 RENOMEAR_COLUNAS: Dict[str, str] = {
-    "TÉCNICO":              "Técnico",
-    "MONITOR":              "Monitor",
-    "REGIÃO":               "Região",
-    "Executada":            "Executadas",
-    "Não Executada":        "Não Exec.",
-    "Pendente":             "Pendentes",
-    "Alocado":              "Alocado",
-    "Considerado":          "Considerado",
-    "Quebra Atual":         "Quebra Atual",    # recebe estilo fixo escuro
-    "Fechamento Otimista":  "Fech. Otimista",
-    "Fechamento Base":      "Fech. Base",
-    "Fechamento Pessimista":"Fech. Pessimista",
+    "TÉCNICO": "Técnico",
+    "MONITOR": "Monitor",
+    "REGIÃO": "Região",
+    "Executada": "Executadas",
+    "Não Executada": "Não Exec.",
+    "Pendente": "Pendentes",
+    "Alocado": "Alocado",
+    "Considerado": "Considerado",
+    "Quebra Atual": "Quebra Atual",
+    "Fechamento Otimista": "Fech. Otimista",
+    "Fechamento Base": "Fech. Base",
+    "Fechamento Pessimista": "Fech. Pessimista",
 }
 
-# Colunas de contagem que devem ser exibidas como inteiro
 COLUNAS_INTEIRAS = [
     "Executada", "Não Executada", "Pendente",
     "Alocado", "Considerado",
@@ -174,19 +172,9 @@ def render_section(titulo: str):
     )
 
 
-# ====================================================
-# UTILITÁRIO — Resolver renomeação segura
-# ====================================================
-def resolver_renomeacao(
-    df: pd.DataFrame,
-    mapa: Dict[str, str],
-) -> Dict[str, str]:
-    """
-    Retorna apenas as renomeações que não causam duplicatas.
-    - Ignora se o novo nome já existe como outra coluna.
-    - Ignora se o novo nome já foi usado por outra coluna nesta rodada.
-    """
-    nomes_existentes  = set(df.columns)
+def resolver_renomeacao(df: pd.DataFrame, mapa: Dict[str, str]) -> Dict[str, str]:
+    """Retorna apenas renomeações que não causam duplicatas."""
+    nomes_existentes = set(df.columns)
     nomes_ja_usados: set[str] = set()
     resultado: Dict[str, str] = {}
 
@@ -204,9 +192,6 @@ def resolver_renomeacao(
     return resultado
 
 
-# ====================================================
-# COMPONENTE — DataFrame Estilizado (Quebra)
-# ====================================================
 def render_dataframe(
     df: pd.DataFrame,
     titulo: str = "",
@@ -215,7 +200,7 @@ def render_dataframe(
     fmt: Optional[Dict[str, Any]] = None,
     color_col: Optional[str] = None,
     color_meta: Optional[float] = None,
-    color_invertido: bool = True,           # Quebra: acima da meta = ruim
+    color_invertido: bool = True,
     height: int | Literal["auto", "stretch", "content"] = "auto",
 ):
     badge_text = badge or f"{len(df)} registros"
@@ -230,40 +215,36 @@ def render_dataframe(
 
     df_display = df.copy()
 
-    # ── 1. Renomeação segura ──────────────────────────────────────────
+    # 1. Renomeação segura
     mapa_seguro = resolver_renomeacao(df_display, RENOMEAR_COLUNAS)
-    df_display  = df_display.rename(columns=mapa_seguro)
+    df_display = df_display.rename(columns=mapa_seguro)
 
-    # ── 2. Atualizar fmt e color_col com nomes pós-renomeação ─────────
+    # 2. Atualizar fmt e color_col pós-renomeação
     if fmt:
         fmt = {mapa_seguro.get(k, k): v for k, v in fmt.items()}
     if color_col:
         color_col = mapa_seguro.get(color_col, color_col)
 
-    # Nome pós-renomeação de "Quebra Atual" (para estilo fixo)
     col_quebra_display = mapa_seguro.get("Quebra Atual", "Quebra Atual")
 
-    # ── 3. Float → Int nas colunas de contagem ────────────────────────
+    # 3. Float → Int
     for col_orig in COLUNAS_INTEIRAS:
         col_disp = mapa_seguro.get(col_orig, col_orig)
         if col_disp in df_display.columns:
             df_display[col_disp] = (
                 pd.to_numeric(df_display[col_disp], errors="coerce")
-                .fillna(0)
-                .astype(int)
+                .fillna(0).astype(int)
             )
 
     styler = df_display.style
 
-    # ── 4. Formatação numérica ────────────────────────────────────────
+    # 4. Formatação
     if fmt:
         styler = styler.format(fmt)
 
-    # ── 5. Cor condicional — Fechamento Base (exclui Quebra Atual) ────
+    # 5. Cor condicional (exclui Quebra Atual)
     if color_col and color_col in df_display.columns and color_meta is not None:
-        colunas_condicionais = [
-            c for c in [color_col] if c != col_quebra_display
-        ]
+        colunas_condicionais = [c for c in [color_col] if c != col_quebra_display]
         if colunas_condicionais:
             def _cor(val):
                 try:
@@ -271,34 +252,30 @@ def render_dataframe(
                 except (ValueError, TypeError):
                     return ""
                 if color_invertido:
-                    # Quebra: ACIMA da meta = ruim (vermelho)
                     if v > color_meta:
                         return "background-color:#FEE2E2;color:#991B1B;font-weight:600;"
                     if v > color_meta * 0.85:
                         return "background-color:#FEF9C3;color:#854D0E;font-weight:600;"
                     return "background-color:#DCFCE7;color:#166534;font-weight:600;"
                 else:
-                    # Execução: ACIMA da meta = bom (verde)
                     if v >= color_meta:
                         return "background-color:#DCFCE7;color:#166534;font-weight:600;"
                     if v >= color_meta * 0.85:
                         return "background-color:#FEF9C3;color:#854D0E;font-weight:600;"
                     return "background-color:#FEE2E2;color:#991B1B;font-weight:600;"
-
             styler = styler.map(_cor, subset=pd.Index(colunas_condicionais))
 
-    # ── 6. Estilo fixo — Quebra Atual (cinza escuro + branco) ─────────
+    # 6. Estilo fixo — Quebra Atual
     if col_quebra_display in df_display.columns:
         styler = styler.map(
             lambda val: (
                 "background-color:#1E293B;color:#FFFFFF;font-weight:600;"
-                if not pd.isna(val) and str(val).strip() != ""
-                else ""
+                if not pd.isna(val) and str(val).strip() != "" else ""
             ),
             subset=pd.Index([col_quebra_display]),
         )
 
-    # ── 7. Header estilizado ──────────────────────────────────────────
+    # 7. Header estilizado
     styler = styler.set_table_styles([
         {"selector": "th", "props": [
             ("background-color", "#0F172A"), ("color", "#FFFFFF"),
@@ -391,7 +368,7 @@ class DataLoader:
     def buscar_gsheets() -> pd.DataFrame:
         try:
             conn = st.connection("gsheets", type=GSheetsConnection)
-            raw  = conn.read(spreadsheet=Config.URL_ATIVOS)
+            raw = conn.read(spreadsheet=Config.URL_ATIVOS)
             if raw is None or raw.empty:
                 return pd.DataFrame()
 
@@ -421,18 +398,21 @@ class DataLoader:
     @staticmethod
     @st.cache_data(show_spinner=False)
     def preparar_base(df: pd.DataFrame, df_gs: pd.DataFrame) -> pd.DataFrame:
-        if df is None or df.empty:
+        # Validação sem ambiguidade de truth value
+        if not isinstance(df, pd.DataFrame) or df.empty:
             return pd.DataFrame()
+
         df = df.copy()
         df.columns = df.columns.astype(str).str.strip().str.upper()
+
+        removidos_suspensos = 0
+        removidos_contrato = 0
 
         # Suspensas
         col_atv = Utils.buscar_coluna(df, ["STATUS DA ATIVIDADE"])
         if col_atv:
             susp = df[col_atv].fillna("").astype(str).str.upper().str.contains("SUSP", na=False)
-            n = int(susp.sum())
-            if n > 0:
-                st.toast(f"🗑️ {n} ordens suspensas removidas.", icon="ℹ️")
+            removidos_suspensos = int(susp.sum())
             df = df[~susp].copy()
 
         # Total de tarefas
@@ -445,16 +425,15 @@ class DataLoader:
         # Contrato vazio
         col_con = Utils.buscar_coluna(df, ["CONTRATO", "Nº CONTRATO"])
         if col_con:
-            norm  = df[col_con].astype(str).str.strip().str.upper()
+            norm = df[col_con].astype(str).str.strip().str.upper()
             valido = ~norm.isin(Config.CONTRATO_VALORES_VAZIOS)
-            rem   = (~valido).sum()
-            df    = df[valido].copy()
-            if rem > 0:
-                st.toast(f"🗑️ {rem} linha(s) sem contrato removida(s).", icon="⚠️")
+            removidos_contrato = int((~valido).sum())
+            df = df[valido].copy()
 
         # Merge GSheets
         col_login = Utils.buscar_coluna(df, ["LOGIN", "LOGIN DO TÉCNICO", "USUÁRIO", "MATRÍCULA"])
-        if col_login and not df_gs.empty and "LOGIN" in df_gs.columns:
+        gs_valido = isinstance(df_gs, pd.DataFrame) and not df_gs.empty
+        if col_login and gs_valido and "LOGIN" in df_gs.columns:
             df[col_login] = (
                 df[col_login].astype(str)
                 .str.replace(r"\.0$", "", regex=True).str.strip().str.upper()
@@ -465,7 +444,7 @@ class DataLoader:
             df = df.merge(df_gs, left_on=col_login, right_on="LOGIN", how="left")
 
         df["TÉCNICO"] = df.get("TÉCNICO", pd.Series("NÃO MAPEADO", index=df.index)).fillna("NÃO MAPEADO")
-        df["MONITOR"] = df.get("MONITOR", pd.Series("SEM MONITOR",  index=df.index)).fillna("SEM MONITOR")
+        df["MONITOR"] = df.get("MONITOR", pd.Series("SEM MONITOR", index=df.index)).fillna("SEM MONITOR")
 
         # Regiões
         col_cid = Utils.buscar_coluna(df, ["CIDADE", "LOCALIDADE"])
@@ -489,6 +468,18 @@ class DataLoader:
             default="OUTRAS",
         )
 
+        # ── Status Contrato (classificação da O.S 1) ──────────────────
+        col_status = Utils.buscar_coluna(df, ["STATUS DA O.S 1", "STATUS OS 1"])
+        if col_status:
+            df["Status Contrato"] = Utils.classificar_status(df[col_status])
+        else:
+            df["Status Contrato"] = "Pendente"
+
+        df.attrs["diagnostico"] = {
+            "suspensos": removidos_suspensos,
+            "contrato_vazio": removidos_contrato,
+            "col_status_encontrada": bool(col_status),
+        }
         return df
 
 
@@ -498,22 +489,22 @@ class DataLoader:
 class Motor:
     @staticmethod
     def quebra_atual(df: pd.DataFrame) -> Tuple[float, float]:
-        if df is None or df.empty:
+        if not isinstance(df, pd.DataFrame) or df.empty:
             return 0.0, 0.0
-        exe  = float(df.loc[df["Status Contrato"] == "Executada",     "TOTAL DE TAREFAS"].sum())
-        nex  = float(df.loc[df["Status Contrato"] == "Não Executada", "TOTAL DE TAREFAS"].sum())
+        exe = float(df.loc[df["Status Contrato"] == "Executada", "TOTAL DE TAREFAS"].sum())
+        nex = float(df.loc[df["Status Contrato"] == "Não Executada", "TOTAL DE TAREFAS"].sum())
         cons = exe + nex
         return cons, (nex / cons) if cons > 0 else 0.0
 
     @staticmethod
     def projetar(df: pd.DataFrame, p: float) -> Dict[str, float]:
-        if df is None or df.empty:
+        if not isinstance(df, pd.DataFrame) or df.empty:
             return dict(alocado=0, exec=0, naoexec=0, pend=0,
                         quebra_atual=0, fechamento_proj=0, naoexec_proj=0)
         aloc = float(df["TOTAL DE TAREFAS"].sum())
-        exe  = float(df.loc[df["Status Contrato"] == "Executada",     "TOTAL DE TAREFAS"].sum())
-        nex  = float(df.loc[df["Status Contrato"] == "Não Executada", "TOTAL DE TAREFAS"].sum())
-        pen  = max(0.0, aloc - exe - nex)
+        exe = float(df.loc[df["Status Contrato"] == "Executada", "TOTAL DE TAREFAS"].sum())
+        nex = float(df.loc[df["Status Contrato"] == "Não Executada", "TOTAL DE TAREFAS"].sum())
+        pen = max(0.0, aloc - exe - nex)
         _, qa = Motor.quebra_atual(df)
         nex_proj = nex + (pen * p)
         return dict(
@@ -525,17 +516,17 @@ class Motor:
 
     @staticmethod
     def folga_sla(df: pd.DataFrame, sla: float) -> Dict[str, Any]:
-        if df is None or df.empty:
+        if not isinstance(df, pd.DataFrame) or df.empty:
             return dict(alocado=0, exec=0, naoexec=0, pend=0,
                         limite_ne_total=0, folga_ne_pendente=0,
                         folga_pct_pendente=0, precisa_executar_pendente=0, estourado=False)
-        aloc       = float(df["TOTAL DE TAREFAS"].sum())
-        exe        = float(df.loc[df["Status Contrato"] == "Executada",     "TOTAL DE TAREFAS"].sum())
-        nex        = float(df.loc[df["Status Contrato"] == "Não Executada", "TOTAL DE TAREFAS"].sum())
-        pen        = max(0.0, aloc - exe - nex)
-        limite     = sla * aloc
-        folga_tot  = limite - nex
-        folga_pen  = max(0.0, min(pen, folga_tot))
+        aloc = float(df["TOTAL DE TAREFAS"].sum())
+        exe = float(df.loc[df["Status Contrato"] == "Executada", "TOTAL DE TAREFAS"].sum())
+        nex = float(df.loc[df["Status Contrato"] == "Não Executada", "TOTAL DE TAREFAS"].sum())
+        pen = max(0.0, aloc - exe - nex)
+        limite = sla * aloc
+        folga_tot = limite - nex
+        folga_pen = max(0.0, min(pen, folga_tot))
         return dict(
             alocado=aloc, exec=exe, naoexec=nex, pend=pen,
             limite_ne_total=limite, folga_ne_pendente=folga_pen,
@@ -550,7 +541,7 @@ class Motor:
         p_ot: float, p_base: float, p_pess: float,
         min_aloc: float = 5,
     ) -> pd.DataFrame:
-        if df.empty or grupo not in df.columns:
+        if not isinstance(df, pd.DataFrame) or df.empty or grupo not in df.columns:
             return pd.DataFrame()
         pv = pd.pivot_table(
             df, index=grupo, columns="Status Contrato",
@@ -561,7 +552,7 @@ class Motor:
                 pv[c] = 0.0
         out = pv.reset_index()
         out["Considerado"] = out["Executada"] + out["Não Executada"]
-        out["Alocado"]     = out["Considerado"] + out["Pendente"]
+        out["Alocado"] = out["Considerado"] + out["Pendente"]
         out["Quebra Atual"] = np.where(
             out["Considerado"] > 0, out["Não Executada"] / out["Considerado"], 0
         )
@@ -601,22 +592,37 @@ def main():
         if arq:
             with st.spinner("Processando..."):
                 raw = DataLoader.ler_arquivo(arq.getvalue(), arq.name)
-                gs  = DataLoader.buscar_gsheets()
-                st.session_state["df_memoria"] = DataLoader.preparar_base(raw, gs)
+                gs = DataLoader.buscar_gsheets()
+                df_proc = DataLoader.preparar_base(raw, gs)
+                st.session_state["df_memoria"] = df_proc
+
+            diag = df_proc.attrs.get("diagnostico", {})
+            if diag.get("contrato_vazio", 0) > 0:
+                st.toast(f"🗑️ {diag['contrato_vazio']} linha(s) sem contrato removida(s).", icon="⚠️")
+            if diag.get("suspensos", 0) > 0:
+                st.toast(f"🗑️ {diag['suspensos']} ordens suspensas removidas.", icon="ℹ️")
+            if not diag.get("col_status_encontrada", False):
+                st.warning("⚠️ Coluna 'Status da O.S 1' não encontrada. Tudo classificado como Pendente.")
+
             st.rerun()
         return
 
-    df_full = st.session_state["df_memoria"].copy()
+    # ── Dados em memória (sem ambiguidade de truth value) ──
+    df_mem = st.session_state["df_memoria"]
+    df_full = df_mem.copy() if isinstance(df_mem, pd.DataFrame) else pd.DataFrame()
 
-    col_status = Utils.buscar_coluna(df_full, ["STATUS DA O.S 1"])
-    if not col_status:
-        st.error("⚠️ Coluna 'Status da O.S 1' não encontrada!")
-        st.stop()
-    df_full["Status Contrato"] = Utils.classificar_status(df_full[col_status])
+    if df_full.empty:
+        st.error("Base carregada está vazia. Envie um novo arquivo.")
+        st.session_state["df_memoria"] = None
+        return
 
-    col_cod_baixa = Utils.buscar_coluna(
-        df_full, ["CÓD DE BAIXA 1", "COD DE BAIXA 1", "CÓDIGO DE BAIXA 1"]
-    )
+    # Garante que Status Contrato existe (fallback de segurança)
+    if "Status Contrato" not in df_full.columns:
+        col_status = Utils.buscar_coluna(df_full, ["STATUS DA O.S 1", "STATUS OS 1"])
+        if col_status:
+            df_full["Status Contrato"] = Utils.classificar_status(df_full[col_status])
+        else:
+            df_full["Status Contrato"] = "Pendente"
 
     # ── Sidebar Filtros ───────────────────────────────
     with st.sidebar:
@@ -643,12 +649,12 @@ def main():
 
         st.divider()
         st.subheader("🔮 Probabilidade de Quebra")
-        p_ot   = st.slider("Otimista (%)",   0, 100, 10, 5) / 100.0
-        p_base = st.slider("Base (%)",        0, 100, 30, 5) / 100.0
+        p_ot = st.slider("Otimista (%)", 0, 100, 10, 5) / 100.0
+        p_base = st.slider("Base (%)", 0, 100, 30, 5) / 100.0
         p_pess = st.slider("Pessimista (%)", 0, 100, 60, 5) / 100.0
         st.divider()
         min_aloc = st.number_input("Mín. OS (Rankings)", min_value=1, value=5)
-        top_n    = st.number_input("Visualizar Top N",    min_value=1, value=10)
+        top_n = st.number_input("Visualizar Top N", min_value=1, value=10)
 
     if df.empty:
         st.warning("Nenhum dado para os filtros selecionados.")
@@ -659,17 +665,17 @@ def main():
 
     # ── KPIs ──────────────────────────────────────────
     cen = {
-        "Otimista":   Motor.projetar(df, p_ot),
-        "Base":       Motor.projetar(df, p_base),
+        "Otimista": Motor.projetar(df, p_ot),
+        "Base": Motor.projetar(df, p_base),
         "Pessimista": Motor.projetar(df, p_pess),
     }
     m = cen["Base"]
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
-    render_kpi(k1, "Alocado",      f"{int(m['alocado']):,}",   tema="azul")
-    render_kpi(k2, "Executadas",   f"{int(m['exec']):,}",      tema="verde")
-    render_kpi(k3, "Não Exec",     f"{int(m['naoexec']):,}",   tema="laranja")
-    render_kpi(k4, "Pendentes",    f"{int(m['pend']):,}",      tema="cinza")
+    render_kpi(k1, "Alocado", f"{int(m['alocado']):,}", tema="azul")
+    render_kpi(k2, "Executadas", f"{int(m['exec']):,}", tema="verde")
+    render_kpi(k3, "Não Exec", f"{int(m['naoexec']):,}", tema="laranja")
+    render_kpi(k4, "Pendentes", f"{int(m['pend']):,}", tema="cinza")
     render_kpi(k5, "Quebra Atual", f"{m['quebra_atual']:.2%}", tema="cinza")
     render_kpi(
         k6, "Proj. Base", f"{m['fechamento_proj']:.2%}",
@@ -693,7 +699,7 @@ def main():
                 (o1, "Otimista", "cinza"), (o2, "Base", "roxo"), (o3, "Pessimista", "cinza")
             ]:
                 proj = cen[nome]
-                cor  = "vermelho" if proj["fechamento_proj"] > Config.SLA_QUEBRA_MAXIMA else tema_d
+                cor = "vermelho" if proj["fechamento_proj"] > Config.SLA_QUEBRA_MAXIMA else tema_d
                 render_kpi(col_ui, nome, f"{proj['fechamento_proj']:.2%}",
                            sub=f"Vol: {int(proj['naoexec_proj']):,}", tema=cor)
 
@@ -712,7 +718,7 @@ def main():
 
         with c_graf:
             df_plot = pd.DataFrame({
-                "Cenário":   ["Otimista", "Base", "Pessimista"],
+                "Cenário": ["Otimista", "Base", "Pessimista"],
                 "Fechamento": [cen[s]["fechamento_proj"] for s in ["Otimista", "Base", "Pessimista"]],
             })
             fig = px.bar(df_plot, x="Cenário", y="Fechamento", color="Fechamento",
@@ -728,9 +734,9 @@ def main():
         t_mon, t_tec = st.tabs(["👔 Monitores", "👤 Técnicos"])
 
         fmt_rank: Dict[str, Any] = {
-            "Quebra Atual":          "{:.2%}",
-            "Fechamento Otimista":   "{:.2%}",
-            "Fechamento Base":       "{:.2%}",
+            "Quebra Atual": "{:.2%}",
+            "Fechamento Otimista": "{:.2%}",
+            "Fechamento Base": "{:.2%}",
             "Fechamento Pessimista": "{:.2%}",
         }
 
@@ -770,6 +776,13 @@ def main():
 
     with aba_causa:
         render_section("🔍 Análise de Causa Raiz")
+
+        # Busca específica por coluna de código de baixa
+        col_cod_baixa = Utils.buscar_coluna(
+            df_full,
+            ["CÓD DE BAIXA 1", "COD DE BAIXA 1", "CÓDIGO DE BAIXA 1", "COD BAIXA 1"],
+        )
+
         ca1, ca2 = st.columns([1, 2])
 
         with ca1:
