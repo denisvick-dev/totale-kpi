@@ -503,7 +503,7 @@ class DataLoader:
         flag_gpon     = hab_upper.str.contains(r"PON\(1/100\)", regex=True, na=False)
         flag_nd       = tipo_upper.str.contains("ADESAO", na=False)
         flag_migracao = (tipo_upper.str.strip() == "24 - MUDANCA DE PACOTE") & flag_gpon
-        flag_pme      = hab_upper.str.contains("PME", na=False) & flag_nd
+        flag_pme      = hab_upper.str.contains("PME", na=False)
 
         # ── np.select com default explícito como str ──────────────────
         df["TIPO_SERVICO"] = pd.Series(

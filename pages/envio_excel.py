@@ -74,10 +74,13 @@ class ProcessadorDeDados:
         tv_is_empty = pd.Series(tv_final).isin(vazios)
         int_is_empty = internet_tratada.isin(vazios)
         
+        # Garanta que tudo seja string e remova NaNs indesejados
+        tv_s = pd.Series(tv_final).fillna("").astype(str)
+        int_s = internet_tratada.fillna("").astype(str)
         nome_final = np.where(
-            ~tv_is_empty & ~int_is_empty, tv_final + " & " + internet_tratada,
-            np.where(~tv_is_empty, tv_final,
-            np.where(~int_is_empty, internet_tratada, "Sem Tipo"))
+            (tv_s != "") & (int_s != ""), tv_s + " & " + int_s,
+            np.where(tv_s != "", tv_s,
+            np.where(int_s != "", int_s, "Sem Tipo"))
         )
         
         df["PLANO TV"] = tv_final
