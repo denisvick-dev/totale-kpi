@@ -10,6 +10,17 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from reportlab.platypus import Table, TableStyle
+from reportlab.lib.utils import ImageReader
+from PIL import Image
+import matplotlib.pyplot as plt
+import tempfile
+
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from streamlit_gsheets import GSheetsConnection
@@ -1884,7 +1895,126 @@ def render_aba_segmento(
                 f"plano_acao_{tipo.lower().replace(' ', '_')}.xlsx",
                 key=f"dl_plano_{tipo}",
             )
+            
+def gerar_pdf_corporativo(df: pd.DataFrame, p_base: float, logo_path="images/Logo-Totale.png") -> bytes:
 
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    # ================= CAPA =================
+    try:
+        logo = ImageReader(logo_path)
+        c.drawImage(logo, 30, height - 120, width=120, preserveAspectRatio=True)
+    except:
+        pass
+
+    c.setFont("Helvetica-Bold", 22)
+    c.drawString(30, height - 160, "Relatório Executivo")
+    c.setFont("Helvetica", 14)
+    c.drawString(30, height - 185, "Gestão de Quebra de Agenda")
+
+    c.setStrokeColor(colors.HexColor("#0F172A"))
+    c.setLineWidth(2)
+    c.line(30, height - 195, width - 30, height - 195)
+
+    c.showPage()
+
+    # ================= KPIs =================
+    m = Motor.projetar(df, p_base)
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(30, height - 50, "Resumo Geral")
+
+    def semaforo_color(valor):
+        if valor <= 0.20:
+            return colors.green
+        elif valor <= 0.25:
+            return colors.orange
+        return colors.red
+
+    dados = [
+        ["Indicador", "Valor"],
+        ["Total Alocado", int(m["alocado"])],
+        ["Executadas", int(m["exec"])],
+        ["Não Executadas", int(m["naoexec"])],
+        ["Pendentes", int(m["pend"])],
+        ["Quebra Atual", f"{m['quebra_atual']:.2%}"],
+        ["Projeção Base", f"{m['fechamento_proj']:.2%}"],
+    ]
+
+    table = Table(dados, colWidths=[220, 150])
+
+    estilo = TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0F172A")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+    ])
+
+    # Cor condicional na quebra
+    estilo.add('TEXTCOLOR', (1,5), (1,5), semaforo_color(m["quebra_atual"]))
+    estilo.add('TEXTCOLOR', (1,6), (1,6), semaforo_color(m["fechamento_proj"]))
+
+    table.setStyle(estilo)
+
+    table.wrapOn(c, width, height)
+    table.drawOn(c, 30, height - 300)
+
+    # Indicador Semáforo Visual
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(30, height - 330, "Indicador Geral:")
+
+    cor = semaforo_color(m["fechamento_proj"])
+    c.setFillColor(cor)
+    c.circle(200, height - 335, 10, fill=1)
+
+    c.setFillColor(colors.black)
+
+    c.showPage()
+
+    # ================= GRÁFICO =================
+    fig = plt.figure(figsize=(6,4))
+    labels = ["Executadas", "Não Executadas", "Pendentes"]
+    values = [m["exec"], m["naoexec"], m["pend"]]
+
+    plt.bar(labels, values)
+    plt.title("Distribuição de OS")
+    plt.tight_layout()
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    plt.savefig(tmp.name)
+    plt.close(fig)
+
+    c.drawImage(tmp.name, 40, height - 350, width=500, preserveAspectRatio=True)
+
+    c.showPage()
+
+    # ================= BACKOFFICE =================
+    df_back = df[df["Status Contrato"] == "Não Executada"]
+
+    if not df_back.empty:
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(30, height - 50, "Backoffice - Top Técnicos")
+
+        resumo = (
+            df_back.groupby("TÉCNICO")["TOTAL DE TAREFAS"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+        )
+
+        y = height - 80
+        c.setFont("Helvetica", 11)
+
+        for tecnico, valor in resumo.items():
+            c.drawString(40, y, f"{tecnico}: {int(valor)} OS")
+            y -= 15
+
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # ====================================================
 # 9. APLICAÇÃO PRINCIPAL
@@ -2121,6 +2251,16 @@ def main():
             )
             st.plotly_chart(
                 fig, use_container_width=True, config={"displayModeBar": False}
+            )
+            
+            st.markdown("---")
+            pdf_executivo = gerar_pdf_corporativo(df, p_base)
+
+            st.download_button(
+                "📥 Exportar Relatório PDF",
+                pdf_executivo,
+                "relatorio_exec_quebra.pdf",
+                mime="application/pdf"
             )
 
     # ── ABA: DESEMPENHO ───────────────────────────────────────────────

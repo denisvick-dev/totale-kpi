@@ -21,3 +21,5 @@ pydeck
 pyarrow
 pillow
 matplotlib
+reportlab
+streamlit-gsheets
