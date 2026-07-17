@@ -397,7 +397,9 @@ class ProcessamentoDados:
         df: pd.DataFrame, dias_brutos: int, dias_seguros: int, dias_passados: int
     ) -> tuple:
         base_ranking = (
-            df.groupby(["CódAuxEquipe", "Nome Equipe", "Supervisor", "Projeto"])["Pontos"]
+            df.groupby(["CódAuxEquipe", "Nome Equipe", "Supervisor", "Projeto"])[
+                "Pontos"
+            ]
             .sum()
             .reset_index()
             .sort_values("Pontos", ascending=False)

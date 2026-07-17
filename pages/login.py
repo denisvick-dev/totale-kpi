@@ -137,8 +137,7 @@ def area_autenticacao():
             if botao_cadastrar:
                 # Validações básicas de segurança antes de inserir no banco
                 if not novo_usuario or not nova_senha:
-                    st.warning(
-                        "Preencha todos os campos para efetuar o cadastro.")
+                    st.warning("Preencha todos os campos para efetuar o cadastro.")
                 elif len(nova_senha) < 6:
                     st.error("A senha deve ter pelo menos 6 caracteres.")
                 elif nova_senha != confirmar_senha:

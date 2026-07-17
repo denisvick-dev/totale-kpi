@@ -135,8 +135,9 @@ st.html("""
 st.set_page_config(
     page_title="Painéis de Produção TOTALE",
     page_icon="assets/images/icons/totale.ico",
-    layout="wide"
+    layout="wide",
 )
+
 
 def main():
     # Logotipo
@@ -144,13 +145,19 @@ def main():
 
     # Definição das páginas (sem o section)
     home_page = st.Page("pages/home.py", title="Home", icon="🏠", default=True)
-    envio_excel = st.Page("pages/envio_excel.py", title="Atualização de Dados", icon="🔁")
+    envio_excel = st.Page(
+        "pages/envio_excel.py", title="Atualização de Dados", icon="🔁"
+    )
     ranking_pontos = st.Page("pages/pontos.py", title="Ranking de Pontos", icon="📈")
     qtde_os = st.Page("pages/qtde_os.py", title="Quantidade de O.S.", icon="📊")
     consultivo = st.Page("pages/consultivo.py", title="Consultivos", icon="📋")
-    gestao_ativos = st.Page("pages/gestao_ativos.py", title="Gestão de Ativos", icon="👷")
+    gestao_ativos = st.Page(
+        "pages/gestao_ativos.py", title="Gestão de Ativos", icon="👷"
+    )
     visao_tec_prod = st.Page("pages/visao_tecnico_prod.py", title="Produção", icon="🛠️")
-    visao_tec_cons = st.Page("pages/visao_tecnico_cons.py", title="Consultivo", icon="🗣️")
+    visao_tec_cons = st.Page(
+        "pages/visao_tecnico_cons.py", title="Consultivo", icon="🗣️"
+    )
     rota_inicial = st.Page("pages/rota_inicial.py", title="Rota Inicial", icon="🗺️")
     quebra = st.Page("pages/quebra.py", title="Quebra de Agenda", icon="📉")
     volumetria = st.Page("pages/volumetria.py", title="Volumetria", icon="📊")
@@ -158,15 +165,21 @@ def main():
     # Criando o Dicionário para agrupar as seções
     paginas_agrupadas = {
         "MENU PRINCIPAL": [home_page, envio_excel],
-        "PAINÉIS DE PROD. E CONS.": [ranking_pontos, qtde_os, consultivo, gestao_ativos],
+        "PAINÉIS DE PROD. E CONS.": [
+            ranking_pontos,
+            qtde_os,
+            consultivo,
+            gestao_ativos,
+        ],
         "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons],
-        "DISPAROS DIÁRIOS": [rota_inicial, quebra, volumetria]
+        "DISPAROS DIÁRIOS": [rota_inicial, quebra, volumetria],
     }
 
     # Passando o dicionário para a navegação
     pg = st.navigation(paginas_agrupadas)
 
     pg.run()
+
 
 if __name__ == "__main__":
     main()

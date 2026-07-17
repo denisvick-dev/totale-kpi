@@ -29,16 +29,16 @@ class Config:
     META_EXECUCAO = 0.80
     META_EXECUTADAS_TECNICO = 7
 
-    COL_STATUS  = "STATUS CONTRATO"
-    COL_TOTAL   = "TOTAL DE TAREFAS"
+    COL_STATUS = "STATUS CONTRATO"
+    COL_TOTAL = "TOTAL DE TAREFAS"
     COL_TECNICO = "TÉCNICO"
     COL_MONITOR = "MONITOR"
-    COL_REGIAO  = "REGIÃO"
+    COL_REGIAO = "REGIÃO"
 
     CORES_STATUS = {
-        "Executada":     "#10B981",
+        "Executada": "#10B981",
         "Não Executada": "#EF4444",
-        "Pendente":      "#F59E0B",
+        "Pendente": "#F59E0B",
     }
 
     STATUS_ORDEM = ["Executada", "Não Executada", "Pendente"]
@@ -52,43 +52,82 @@ class Config:
 # TEMAS DE CARDS
 # ==========================================================
 TEMAS_CARD: Dict[str, Dict[str, str]] = {
-    "amarelo": {"fundo": "#FEF9C3", "texto": "#854D0E", "borda": "#EAB308", "titulo": "#A16207"},
-    "azul":    {"fundo": "#F0F9FF", "texto": "#0369A1", "borda": "#0EA5E9", "titulo": "#075985"},
-    "verde":   {"fundo": "#F0FDF4", "texto": "#15803D", "borda": "#22C55E", "titulo": "#166534"},
-    "roxo":    {"fundo": "#FAF5FF", "texto": "#7E22CE", "borda": "#A855F7", "titulo": "#6B21A8"},
-    "cinza":   {"fundo": "#F8FAFC", "texto": "#334155", "borda": "#94A3B8", "titulo": "#64748B"},
-    "escuro":  {"fundo": "#1E293B", "texto": "#FFFFFF", "borda": "#475569", "titulo": "#E2E8F0"},
-    "vermelho":{"fundo": "#FEF2F2", "texto": "#B91C1C", "borda": "#EF4444", "titulo": "#991B1B"},
+    "amarelo": {
+        "fundo": "#FEF9C3",
+        "texto": "#854D0E",
+        "borda": "#EAB308",
+        "titulo": "#A16207",
+    },
+    "azul": {
+        "fundo": "#F0F9FF",
+        "texto": "#0369A1",
+        "borda": "#0EA5E9",
+        "titulo": "#075985",
+    },
+    "verde": {
+        "fundo": "#F0FDF4",
+        "texto": "#15803D",
+        "borda": "#22C55E",
+        "titulo": "#166534",
+    },
+    "roxo": {
+        "fundo": "#FAF5FF",
+        "texto": "#7E22CE",
+        "borda": "#A855F7",
+        "titulo": "#6B21A8",
+    },
+    "cinza": {
+        "fundo": "#F8FAFC",
+        "texto": "#334155",
+        "borda": "#94A3B8",
+        "titulo": "#64748B",
+    },
+    "escuro": {
+        "fundo": "#1E293B",
+        "texto": "#FFFFFF",
+        "borda": "#475569",
+        "titulo": "#E2E8F0",
+    },
+    "vermelho": {
+        "fundo": "#FEF2F2",
+        "texto": "#B91C1C",
+        "borda": "#EF4444",
+        "titulo": "#991B1B",
+    },
 }
 
 CORES_REGIAO: Dict[str, Dict[str, str]] = {
-    "LESTE":  {"bg": "#DBEAFE", "text": "#1E40AF", "border": "#3B82F6"},
-    "GRU":    {"bg": "#D1FAE5", "text": "#065F46", "border": "#10B981"},
-    "ABCDM":  {"bg": "#EDE9FE", "text": "#5B21B6", "border": "#8B5CF6"},
+    "LESTE": {"bg": "#DBEAFE", "text": "#1E40AF", "border": "#3B82F6"},
+    "GRU": {"bg": "#D1FAE5", "text": "#065F46", "border": "#10B981"},
+    "ABCDM": {"bg": "#EDE9FE", "text": "#5B21B6", "border": "#8B5CF6"},
     "OUTRAS": {"bg": "#F1F5F9", "text": "#475569", "border": "#94A3B8"},
 }
 
 # Mapeamento de nomes internos → títulos amigáveis para exibição
 RENOMEAR_COLUNAS: Dict[str, str] = {
-    "TÉCNICO":        "Técnico",
-    "MONITOR":        "Monitor",
-    "REGIÃO":         "Região",
-    "STATUS CONTRATO":"Status",
-    "TOTAL DE TAREFAS":"Total de O.S.",
-    "Executada":      "Executadas",
-    "Não Executada":  "Não Exec.",
-    "Pendente":       "Pendentes",
-    "Baixadas":       "Baixadas",
-    "Total Alocado":  "Total Alocado",
-    "Taxa Execução":  "Taxa Exec.",
-    "Taxa Quebra":    "Taxa Quebra",
-    "Projeção":       "Projeção",
+    "TÉCNICO": "Técnico",
+    "MONITOR": "Monitor",
+    "REGIÃO": "Região",
+    "STATUS CONTRATO": "Status",
+    "TOTAL DE TAREFAS": "Total de O.S.",
+    "Executada": "Executadas",
+    "Não Executada": "Não Exec.",
+    "Pendente": "Pendentes",
+    "Baixadas": "Baixadas",
+    "Total Alocado": "Total Alocado",
+    "Taxa Execução": "Taxa Exec.",
+    "Taxa Quebra": "Taxa Quebra",
+    "Projeção": "Projeção",
 }
 
 # Colunas que devem ser convertidas para inteiro antes de exibir
 COLUNAS_INTEIRAS = [
-    "Executada", "Não Executada", "Pendente",
-    "Baixadas", "Total Alocado", "Projeção",
+    "Executada",
+    "Não Executada",
+    "Pendente",
+    "Baixadas",
+    "Total Alocado",
+    "Projeção",
 ]
 
 
@@ -205,24 +244,26 @@ class DataLoader:
                 return pd.DataFrame()
 
             col_login = Utils.buscar_coluna(raw, ["LOGIN", "MATRÍCULA", "ID"])
-            col_tec   = Utils.buscar_coluna(raw, ["TÉCNICO", "NOME"])
-            col_mon   = Utils.buscar_coluna(raw, ["MONITOR", "GESTOR"])
+            col_tec = Utils.buscar_coluna(raw, ["TÉCNICO", "NOME"])
+            col_mon = Utils.buscar_coluna(raw, ["MONITOR", "GESTOR"])
 
             if not col_login:
                 return pd.DataFrame()
 
-            df_gs = pd.DataFrame({
-                "__LOGIN_KEY": Utils.normalizar_login(raw[col_login]),
-                "__TEC_GS":   raw[col_tec] if col_tec else "",
-                "__MON_GS":   raw[col_mon] if col_mon else "",
-            })
+            df_gs = pd.DataFrame(
+                {
+                    "__LOGIN_KEY": Utils.normalizar_login(raw[col_login]),
+                    "__TEC_GS": raw[col_tec] if col_tec else "",
+                    "__MON_GS": raw[col_mon] if col_mon else "",
+                }
+            )
             return df_gs.drop_duplicates("__LOGIN_KEY")
         except Exception:
             return pd.DataFrame()
 
     @staticmethod
     def preparar_base(df: pd.DataFrame, df_gs: pd.DataFrame) -> pd.DataFrame:
-        df   = df.copy()
+        df = df.copy()
         diag = {"Inicial": len(df)}
 
         # 1. Filtro de Contrato
@@ -231,7 +272,7 @@ class DataLoader:
         )
         if col_con:
             mascara_valida = Utils.contrato_valido(df[col_con])
-            qtd_removidos  = (~mascara_valida).sum()
+            qtd_removidos = (~mascara_valida).sum()
             df = df[mascara_valida].copy()
             diag["Removidos por contrato vazio"] = int(qtd_removidos)
             if qtd_removidos > 0:
@@ -248,7 +289,9 @@ class DataLoader:
         # 2. Filtro de Atividades Suspensas
         col_atv = Utils.buscar_coluna(df, ["STATUS DA ATIVIDADE"])
         if col_atv:
-            suspensos = Utils.normalizar_chave(df[col_atv]).str.contains("SUSP", na=False)
+            suspensos = Utils.normalizar_chave(df[col_atv]).str.contains(
+                "SUSP", na=False
+            )
             df = df[~suspensos].copy()
 
         # 3. Status e Total
@@ -300,14 +343,28 @@ class DataLoader:
         df[Config.COL_REGIAO] = np.select(
             [
                 cidade.isin(["SAO PAULO"]),
-                cidade.isin([
-                    "GUARULHOS", "ARUJA", "MOGI DAS CRUZES", "SUZANO",
-                    "ITAQUAQUECETUBA", "FERRAZ DE VASCONCELOS", "POA",
-                ]),
-                cidade.isin([
-                    "SANTO ANDRE", "SAO BERNARDO DO CAMPO", "SAO CAETANO DO SUL",
-                    "DIADEMA", "MAUA", "RIBEIRAO PIRES", "RIO GRANDE DA SERRA",
-                ]),
+                cidade.isin(
+                    [
+                        "GUARULHOS",
+                        "ARUJA",
+                        "MOGI DAS CRUZES",
+                        "SUZANO",
+                        "ITAQUAQUECETUBA",
+                        "FERRAZ DE VASCONCELOS",
+                        "POA",
+                    ]
+                ),
+                cidade.isin(
+                    [
+                        "SANTO ANDRE",
+                        "SAO BERNARDO DO CAMPO",
+                        "SAO CAETANO DO SUL",
+                        "DIADEMA",
+                        "MAUA",
+                        "RIBEIRAO PIRES",
+                        "RIO GRANDE DA SERRA",
+                    ]
+                ),
             ],
             ["LESTE", "GRU", "ABCDM"],
             default="OUTRAS",
@@ -335,13 +392,13 @@ def calcular_volumetria(df: pd.DataFrame, grupos: List[str]) -> pd.DataFrame:
     for s in Config.STATUS_ORDEM:
         tabela[s] = tabela[s].astype(int)
 
-    tabela["Baixadas"]      = tabela["Executada"] + tabela["Não Executada"]
+    tabela["Baixadas"] = tabela["Executada"] + tabela["Não Executada"]
     tabela["Total Alocado"] = tabela["Baixadas"] + tabela["Pendente"]
     tabela["Taxa Execução"] = np.where(
         tabela["Baixadas"] > 0, tabela["Executada"] / tabela["Baixadas"], 0.0
     )
-    tabela["Taxa Quebra"]   = 1.0 - tabela["Taxa Execução"]
-    tabela["Projeção"]      = (
+    tabela["Taxa Quebra"] = 1.0 - tabela["Taxa Execução"]
+    tabela["Projeção"] = (
         tabela["Executada"] + (tabela["Taxa Execução"] * tabela["Pendente"])
     ).astype(int)
 
@@ -366,7 +423,8 @@ def gerar_excel(df: pd.DataFrame, nome_aba: str) -> bytes:
 # INTERFACE — ESTILOS CSS
 # ==========================================================
 def aplicar_estilo():
-    st.markdown("""
+    st.markdown(
+        """
         <style>
             .hero {
                 background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
@@ -404,7 +462,9 @@ def aplicar_estilo():
             .section-header { display: flex; align-items: center; gap: 0.6rem; margin: 1.5rem 0 0.8rem; padding-bottom: 0.4rem; border-bottom: 2px solid #E2E8F0; }
             .section-header h3 { margin: 0; font-size: 1.1rem; color: #0F172A; }
         </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 # ==========================================================
@@ -419,24 +479,30 @@ def render_resultado_base(regioes: List[str], total: int):
             f'style="background:{c["bg"]};color:{c["text"]};border-color:{c["border"]}">'
             f"{reg}</span>"
         )
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div class="resultado-base">
             <span class="resultado-base-label">📋 Resultado da Base:</span>
             {badges}
             <span class="resultado-base-count">{total:,} registros</span>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_kpi(col, label: str, value: str, sub: str, tema: str = "azul"):
     t = TEMAS_CARD.get(tema, TEMAS_CARD["azul"])
-    col.markdown(f"""
+    col.markdown(
+        f"""
         <div class="kpi-card" style="background:{t['fundo']};border-left-color:{t['borda']};">
             <div class="kpi-lab" style="color:{t['titulo']}">{label}</div>
             <div class="kpi-val" style="color:{t['texto']}">{value}</div>
             <div class="kpi-sub" style="color:{t['titulo']}">{sub}</div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_section(titulo: str):
@@ -460,7 +526,8 @@ def render_dataframe(
     height: int | Literal["auto", "stretch", "content"] = "auto",
 ):
     badge_text = badge or f"{len(df)} registros"
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div class="styled-table-wrapper">
             <div class="styled-table-title">
                 <span>{icone}</span>
@@ -468,13 +535,15 @@ def render_dataframe(
                 <span class="styled-table-badge">{badge_text}</span>
             </div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     df_display = df.copy()
 
     # ── 1. Resolver renomeação segura (sem duplicatas) ────────────────
     mapa_seguro = Utils.resolver_renomeacao(df_display, RENOMEAR_COLUNAS)
-    df_display  = df_display.rename(columns=mapa_seguro)
+    df_display = df_display.rename(columns=mapa_seguro)
 
     # ── 2. Atualizar referências de fmt e color_col pós-renomeação ────
     if fmt:
@@ -530,19 +599,32 @@ def render_dataframe(
         styler = styler.map(_cor_exec, subset=pd.Index([col_exec_display]))
 
     # ── 7. Header estilizado ──────────────────────────────────────────
-    styler = styler.set_table_styles([
-        {"selector": "th", "props": [
-            ("background-color", "#0F172A"), ("color", "#FFFFFF"),
-            ("font-size", "0.78rem"), ("font-weight", "700"),
-            ("text-transform", "uppercase"), ("letter-spacing", "0.03em"),
-            ("padding", "0.6rem 0.8rem"), ("border", "none"),
-        ]},
-        {"selector": "td", "props": [
-            ("font-size", "0.82rem"), ("padding", "0.5rem 0.8rem"),
-            ("border-bottom", "1px solid #F1F5F9"),
-        ]},
-        {"selector": "tr:hover td", "props": [("background-color", "#F8FAFC")]},
-    ])
+    styler = styler.set_table_styles(
+        [
+            {
+                "selector": "th",
+                "props": [
+                    ("background-color", "#0F172A"),
+                    ("color", "#FFFFFF"),
+                    ("font-size", "0.78rem"),
+                    ("font-weight", "700"),
+                    ("text-transform", "uppercase"),
+                    ("letter-spacing", "0.03em"),
+                    ("padding", "0.6rem 0.8rem"),
+                    ("border", "none"),
+                ],
+            },
+            {
+                "selector": "td",
+                "props": [
+                    ("font-size", "0.82rem"),
+                    ("padding", "0.5rem 0.8rem"),
+                    ("border-bottom", "1px solid #F1F5F9"),
+                ],
+            },
+            {"selector": "tr:hover td", "props": [("background-color", "#F8FAFC")]},
+        ]
+    )
 
     st.dataframe(styler, use_container_width=True, hide_index=True, height=height)
 
@@ -552,13 +634,21 @@ def render_dataframe(
 # ==========================================================
 def plot_status_pie(df: pd.DataFrame):
     res = df.groupby(Config.COL_STATUS)[Config.COL_TOTAL].sum()
-    fig = go.Figure(data=[go.Pie(
-        labels=res.index, values=res.values, hole=0.5,
-        marker=dict(colors=[Config.CORES_STATUS.get(s) for s in res.index]),
-        textinfo="label+percent", textfont_size=13,
-    )])
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=res.index,
+                values=res.values,
+                hole=0.5,
+                marker=dict(colors=[Config.CORES_STATUS.get(s) for s in res.index]),
+                textinfo="label+percent",
+                textfont_size=13,
+            )
+        ]
+    )
     fig.update_layout(
-        height=370, margin=dict(t=40, b=10, l=10, r=10),
+        height=370,
+        margin=dict(t=40, b=10, l=10, r=10),
         title=dict(text="Distribuição de Status", font=dict(size=15)),
         showlegend=False,
     )
@@ -568,13 +658,21 @@ def plot_status_pie(df: pd.DataFrame):
 def plot_ranking_monitor(df: pd.DataFrame):
     tabela = calcular_volumetria(df, [Config.COL_MONITOR]).nlargest(15, "Total Alocado")
     fig = px.bar(
-        tabela, x="Taxa Execução", y=Config.COL_MONITOR, orientation="h",
-        color="Taxa Execução", color_continuous_scale="RdYlGn", range_color=[0.4, 0.9],
+        tabela,
+        x="Taxa Execução",
+        y=Config.COL_MONITOR,
+        orientation="h",
+        color="Taxa Execução",
+        color_continuous_scale="RdYlGn",
+        range_color=[0.4, 0.9],
         text=tabela["Taxa Execução"].apply(lambda v: f"{v:.0%}"),
     )
     fig.add_vline(
-        x=Config.META_EXECUCAO, line_dash="dash", line_color="#0F172A",
-        annotation_text=f"Meta {Config.META_EXECUCAO:.0%}", annotation_position="top",
+        x=Config.META_EXECUCAO,
+        line_dash="dash",
+        line_color="#0F172A",
+        annotation_text=f"Meta {Config.META_EXECUCAO:.0%}",
+        annotation_position="top",
     )
     fig.update_traces(textposition="outside")
     fig.update_layout(
@@ -614,7 +712,9 @@ def main():
         if st.session_state.base_data is not None:
             diag = st.session_state.base_data.attrs.get("diagnostico", {})
             st.write(f"📥 **Entrada:** {diag.get('Inicial', 0)}")
-            st.write(f"🗑️ **Contratos vazios:** {diag.get('Removidos por contrato vazio', 0)}")
+            st.write(
+                f"🗑️ **Contratos vazios:** {diag.get('Removidos por contrato vazio', 0)}"
+            )
             st.write(f"📈 **Processadas:** {diag.get('Final', 0)}")
 
     # ── Upload ────────────────────────────────────────────────────────
@@ -626,7 +726,7 @@ def main():
         if u_file:
             with st.spinner("Processando..."):
                 df_raw = DataLoader.ler_arquivo(u_file.getvalue(), u_file.name)
-                df_gs  = DataLoader.buscar_hierarquia_gsheets()
+                df_gs = DataLoader.buscar_hierarquia_gsheets()
                 st.session_state.base_data = DataLoader.preparar_base(df_raw, df_gs)
                 st.rerun()
         return
@@ -636,9 +736,9 @@ def main():
     # ── Filtros ───────────────────────────────────────────────────────
     with st.sidebar:
         st.header("🎯 Filtros")
-        mons     = sorted(df_full[Config.COL_MONITOR].unique())
+        mons = sorted(df_full[Config.COL_MONITOR].unique())
         sel_mons = st.multiselect("Monitor", mons, default=mons)
-        df       = df_full[df_full[Config.COL_MONITOR].isin(sel_mons)]
+        df = df_full[df_full[Config.COL_MONITOR].isin(sel_mons)]
 
     if df.empty:
         st.warning("Nenhum dado selecionado nos filtros.")
@@ -648,34 +748,43 @@ def main():
     render_resultado_base(sorted(df[Config.COL_REGIAO].unique()), len(df))
 
     # ── KPIs ──────────────────────────────────────────────────────────
-    k_tot  = int(df[Config.COL_TOTAL].sum())
-    k_exe  = int(df[df[Config.COL_STATUS] == "Executada"][Config.COL_TOTAL].sum())
-    k_nex  = int(df[df[Config.COL_STATUS] == "Não Executada"][Config.COL_TOTAL].sum())
-    k_pen  = int(df[df[Config.COL_STATUS] == "Pendente"][Config.COL_TOTAL].sum())
-    k_bai  = k_exe + k_nex
-    k_tx   = k_exe / k_bai if k_bai > 0 else 0
+    k_tot = int(df[Config.COL_TOTAL].sum())
+    k_exe = int(df[df[Config.COL_STATUS] == "Executada"][Config.COL_TOTAL].sum())
+    k_nex = int(df[df[Config.COL_STATUS] == "Não Executada"][Config.COL_TOTAL].sum())
+    k_pen = int(df[df[Config.COL_STATUS] == "Pendente"][Config.COL_TOTAL].sum())
+    k_bai = k_exe + k_nex
+    k_tx = k_exe / k_bai if k_bai > 0 else 0
     k_proj = int(k_exe + (k_tx * k_pen))
 
     c1, c2, c3, c4 = st.columns(4)
-    render_kpi(c1, "Total Alocado",  f"{k_tot:,}", f"{k_pen:,} pendentes",        tema="azul")
-    render_kpi(c2, "Executadas",     f"{k_exe:,}", f"Taxa: {k_tx:.1%}",            tema="verde")
-    render_kpi(c3, "Projeção Final", f"{k_proj:,}", "Baseado na taxa atual",       tema="escuro")
-    render_kpi(c4, "Meta",           f"{Config.META_EXECUCAO:.0%}", "Referência",  tema="amarelo")
+    render_kpi(c1, "Total Alocado", f"{k_tot:,}", f"{k_pen:,} pendentes", tema="azul")
+    render_kpi(c2, "Executadas", f"{k_exe:,}", f"Taxa: {k_tx:.1%}", tema="verde")
+    render_kpi(
+        c3, "Projeção Final", f"{k_proj:,}", "Baseado na taxa atual", tema="escuro"
+    )
+    render_kpi(c4, "Meta", f"{Config.META_EXECUCAO:.0%}", "Referência", tema="amarelo")
 
     st.markdown("")
 
     s1, s2, s3 = st.columns(3)
-    render_kpi(s1, "Não Executadas", f"{k_nex:,}", f"Quebra: {1 - k_tx:.1%}",     tema="vermelho")
-    render_kpi(s2, "Baixadas",       f"{k_bai:,}", "Exec + Não Exec",              tema="roxo")
-    render_kpi(s3, "Pendentes",      f"{k_pen:,}",
-               f"{k_pen / k_tot:.1%} do total" if k_tot else "0%",                 tema="cinza")
+    render_kpi(
+        s1, "Não Executadas", f"{k_nex:,}", f"Quebra: {1 - k_tx:.1%}", tema="vermelho"
+    )
+    render_kpi(s2, "Baixadas", f"{k_bai:,}", "Exec + Não Exec", tema="roxo")
+    render_kpi(
+        s3,
+        "Pendentes",
+        f"{k_pen:,}",
+        f"{k_pen / k_tot:.1%} do total" if k_tot else "0%",
+        tema="cinza",
+    )
 
     st.markdown("")
 
     # ── Gráficos ──────────────────────────────────────────────────────
     render_section("📈 Visão Geral")
     g1, g2 = st.columns([1, 2])
-    g1.plotly_chart(plot_status_pie(df),      use_container_width=True)
+    g1.plotly_chart(plot_status_pie(df), use_container_width=True)
     g2.plotly_chart(plot_ranking_monitor(df), use_container_width=True)
 
     # ── Tabelas ───────────────────────────────────────────────────────
@@ -683,8 +792,8 @@ def main():
 
     fmt_padrao: Dict[str, Any] = {
         "Taxa Execução": "{:.1%}",
-        "Taxa Quebra":   "{:.1%}",
-        "Projeção":      "{:.0f}",
+        "Taxa Quebra": "{:.1%}",
+        "Projeção": "{:.0f}",
     }
 
     with t1:
@@ -705,7 +814,9 @@ def main():
         )
 
     with t2:
-        mon_detalhe = st.selectbox("Selecione o Monitor para Detalhar Técnicos", sel_mons)
+        mon_detalhe = st.selectbox(
+            "Selecione o Monitor para Detalhar Técnicos", sel_mons
+        )
         tab_tec = calcular_volumetria(
             df[df[Config.COL_MONITOR] == mon_detalhe], [Config.COL_TECNICO]
         )

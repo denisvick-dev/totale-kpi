@@ -561,7 +561,9 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
 
     df["Check_GPON"] = hab.str.contains(r"PON\(1/100\)", regex=True, na=False)
     df["Check_ND"] = tipo.str.contains("ADESAO", na=False)
-    df["Check_Migracao"] = (tipo.str.strip() == "24 - MUDANCA DE PACOTE") & df["Check_GPON"]
+    df["Check_Migracao"] = (tipo.str.strip() == "24 - MUDANCA DE PACOTE") & df[
+        "Check_GPON"
+    ]
     df["Check_Streaming"] = hab.str.contains("TV VAS(1/100)", na=False)
     df["Check_Ponto_Ultra"] = hab.str.contains("NETLAR", na=False)
     df["Check_4K"] = prod.str.contains("4K", na=False)
@@ -592,14 +594,28 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     df["REGIÃO"] = np.select(
         [
             cidade.isin(["SAO PAULO"]),
-            cidade.isin([
-                "GUARULHOS", "ARUJA", "MOGI DAS CRUZES", "SUZANO",
-                "ITAQUAQUECETUBA", "FERRAZ DE VASCONCELOS", "POA",
-            ]),
-            cidade.isin([
-                "SANTO ANDRE", "SAO BERNARDO DO CAMPO", "SAO CAETANO DO SUL",
-                "DIADEMA", "MAUA", "RIBEIRAO PIRES", "RIO GRANDE DA SERRA",
-            ]),
+            cidade.isin(
+                [
+                    "GUARULHOS",
+                    "ARUJA",
+                    "MOGI DAS CRUZES",
+                    "SUZANO",
+                    "ITAQUAQUECETUBA",
+                    "FERRAZ DE VASCONCELOS",
+                    "POA",
+                ]
+            ),
+            cidade.isin(
+                [
+                    "SANTO ANDRE",
+                    "SAO BERNARDO DO CAMPO",
+                    "SAO CAETANO DO SUL",
+                    "DIADEMA",
+                    "MAUA",
+                    "RIBEIRAO PIRES",
+                    "RIO GRANDE DA SERRA",
+                ]
+            ),
         ],
         ["LESTE", "GRU", "ABCDM"],
         default="OUTRAS",
@@ -608,6 +624,7 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     # ✅ Contagem transportada via attrs (seguro no cache)
     df.attrs["diagnostico"] = {"contrato_vazio": removidos}
     return df
+
 
 # ====================================================
 # 6. APLICAÇÃO PRINCIPAL
@@ -653,7 +670,7 @@ def main():
 
             st.rerun()
         return
-    
+
     df_master = st.session_state["df_master"].copy()
 
     # ── Sidebar Filtros ───────────────────────────────

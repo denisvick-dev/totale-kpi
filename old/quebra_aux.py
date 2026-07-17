@@ -15,7 +15,6 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from streamlit_gsheets import GSheetsConnection
 
-
 # ==========================================================
 # CONFIGURAÇÃO
 # ==========================================================
@@ -251,9 +250,7 @@ def buscar_coluna(df: pd.DataFrame, aliases: List[str]) -> Optional[str]:
 def limpar_texto(serie: pd.Series) -> pd.Series:
     resultado = serie.astype("string").fillna("").str.strip()
 
-    invalidos = resultado.str.upper().isin(
-        ["NAN", "NONE", "<NA>", "NULO", "NULL"]
-    )
+    invalidos = resultado.str.upper().isin(["NAN", "NONE", "<NA>", "NULO", "NULL"])
 
     return resultado.mask(invalidos, "")
 
@@ -261,17 +258,11 @@ def limpar_texto(serie: pd.Series) -> pd.Series:
 def normalizar_chave(serie: pd.Series) -> pd.Series:
     texto = limpar_texto(serie)
 
-    return texto.map(
-        lambda x: remover_acentos(x).upper() if x else ""
-    )
+    return texto.map(lambda x: remover_acentos(x).upper() if x else "")
 
 
 def normalizar_login(serie: pd.Series) -> pd.Series:
-    return (
-        normalizar_chave(serie)
-        .str.replace(r"\.0$", "", regex=True)
-        .str.strip()
-    )
+    return normalizar_chave(serie).str.replace(r"\.0$", "", regex=True).str.strip()
 
 
 def combinar_textos(
@@ -297,10 +288,7 @@ def classificar_status(status_os: pd.Series) -> pd.Series:
         na=False,
     )
 
-    executada = (
-        status.str.contains(r"EXECUT", regex=True, na=False)
-        & ~nao_executada
-    )
+    executada = status.str.contains(r"EXECUT", regex=True, na=False) & ~nao_executada
 
     return pd.Series(
         np.select(
@@ -316,12 +304,7 @@ def formatar_numero(valor: float) -> str:
     if pd.isna(valor):
         return "—"
 
-    return (
-        f"{float(valor):,.0f}"
-        .replace(",", "X")
-        .replace(".", ",")
-        .replace("X", ".")
-    )
+    return f"{float(valor):,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def formatar_percentual(valor: float) -> str:
@@ -411,18 +394,12 @@ def carregar_hierarquia_gsheets() -> Tuple[pd.DataFrame, Optional[str]]:
         hierarquia = pd.DataFrame(
             {
                 "__LOGIN_BASE": normalizar_login(raw[col_login]),
-                "__TECNICO_GS": (
-                    raw[col_tecnico] if col_tecnico else serie_vazia
-                ),
-                "__MONITOR_GS": (
-                    raw[col_monitor] if col_monitor else serie_vazia
-                ),
+                "__TECNICO_GS": (raw[col_tecnico] if col_tecnico else serie_vazia),
+                "__MONITOR_GS": (raw[col_monitor] if col_monitor else serie_vazia),
             }
         )
 
-        hierarquia = hierarquia[
-            hierarquia["__LOGIN_BASE"].ne("")
-        ].drop_duplicates(
+        hierarquia = hierarquia[hierarquia["__LOGIN_BASE"].ne("")].drop_duplicates(
             subset="__LOGIN_BASE",
             keep="last",
         )
@@ -465,17 +442,11 @@ def preparar_base(
         antes = len(df)
 
         contrato = limpar_texto(df[col_contrato])
-        validos = (
-            contrato.notna()
-            & contrato.ne("")
-            & contrato.ne("0")
-        )
+        validos = contrato.notna() & contrato.ne("") & contrato.ne("0")
 
         df = df[validos].copy()
 
-        diagnostico["linhas removidas por contrato inválido"] = (
-            antes - len(df)
-        )
+        diagnostico["linhas removidas por contrato inválido"] = antes - len(df)
 
     if df.empty:
         df.attrs["diagnostico"] = diagnostico
@@ -495,9 +466,7 @@ def preparar_base(
     )
 
     if not col_status:
-        raise ValueError(
-            "A coluna 'Status da O.S 1' não foi encontrada na base."
-        )
+        raise ValueError("A coluna 'Status da O.S 1' não foi encontrada na base.")
 
     df[COL_STATUS] = classificar_status(df[col_status])
 
@@ -538,11 +507,7 @@ def preparar_base(
         ],
     )
 
-    if (
-        col_login
-        and df_hierarquia is not None
-        and not df_hierarquia.empty
-    ):
+    if col_login and df_hierarquia is not None and not df_hierarquia.empty:
         df["__LOGIN_BASE"] = normalizar_login(df[col_login])
 
         df = df.merge(
@@ -572,29 +537,13 @@ def preparar_base(
         ],
     )
 
-    tecnico_base = (
-        df[col_tecnico_base]
-        if col_tecnico_base
-        else serie_vazia
-    )
+    tecnico_base = df[col_tecnico_base] if col_tecnico_base else serie_vazia
 
-    monitor_base = (
-        df[col_monitor_base]
-        if col_monitor_base
-        else serie_vazia
-    )
+    monitor_base = df[col_monitor_base] if col_monitor_base else serie_vazia
 
-    tecnico_gs = (
-        df["__TECNICO_GS"]
-        if "__TECNICO_GS" in df.columns
-        else serie_vazia
-    )
+    tecnico_gs = df["__TECNICO_GS"] if "__TECNICO_GS" in df.columns else serie_vazia
 
-    monitor_gs = (
-        df["__MONITOR_GS"]
-        if "__MONITOR_GS" in df.columns
-        else serie_vazia
-    )
+    monitor_gs = df["__MONITOR_GS"] if "__MONITOR_GS" in df.columns else serie_vazia
 
     df[COL_TECNICO] = combinar_textos(
         tecnico_gs,
@@ -706,11 +655,7 @@ def calcular_kpis(df: pd.DataFrame) -> Dict[str, float]:
     baixadas = executadas + nao_executadas
     total = baixadas + pendentes
 
-    taxa_execucao = (
-        executadas / baixadas
-        if baixadas > 0
-        else 0
-    )
+    taxa_execucao = executadas / baixadas if baixadas > 0 else 0
 
     return {
         "total": float(total),
@@ -720,9 +665,7 @@ def calcular_kpis(df: pd.DataFrame) -> Dict[str, float]:
         "baixadas": float(baixadas),
         "taxa_execucao": float(taxa_execucao),
         "taxa_quebra": float(1 - taxa_execucao),
-        "projecao": float(
-            executadas + (taxa_execucao * pendentes)
-        ),
+        "projecao": float(executadas + (taxa_execucao * pendentes)),
     }
 
 
@@ -753,15 +696,9 @@ def calcular_volumetria(
         if status not in tabela.columns:
             tabela[status] = 0
 
-    tabela["Baixadas"] = (
-        tabela["Executada"]
-        + tabela["Não Executada"]
-    )
+    tabela["Baixadas"] = tabela["Executada"] + tabela["Não Executada"]
 
-    tabela["Total Alocado"] = (
-        tabela["Baixadas"]
-        + tabela["Pendente"]
-    )
+    tabela["Total Alocado"] = tabela["Baixadas"] + tabela["Pendente"]
 
     tabela["Taxa Execução"] = np.where(
         tabela["Baixadas"] > 0,
@@ -771,12 +708,8 @@ def calcular_volumetria(
 
     tabela["Taxa Quebra"] = 1 - tabela["Taxa Execução"]
 
-    tabela["Projeção"] = (
-        tabela["Executada"]
-        + (
-            tabela["Taxa Execução"]
-            * tabela["Pendente"]
-        )
+    tabela["Projeção"] = tabela["Executada"] + (
+        tabela["Taxa Execução"] * tabela["Pendente"]
     )
 
     ordem_colunas = grupos + [
@@ -855,14 +788,9 @@ def gerar_excel(df: pd.DataFrame, nome_aba: str) -> bytes:
         for indice, coluna in enumerate(df.columns, start=1):
             letra = get_column_letter(indice)
 
-            valores = (
-                [str(coluna)]
-                + df[coluna]
-                .head(300)
-                .fillna("")
-                .astype(str)
-                .tolist()
-            )
+            valores = [str(coluna)] + df[coluna].head(300).fillna("").astype(
+                str
+            ).tolist()
 
             largura = min(
                 max(max(len(valor) for valor in valores) + 2, 12),
@@ -883,7 +811,7 @@ def gerar_excel(df: pd.DataFrame, nome_aba: str) -> bytes:
                     worksheet.cell(
                         row=linha,
                         column=indice,
-                    ).number_format = '#,##0'
+                    ).number_format = "#,##0"
 
     return output.getvalue()
 
@@ -911,21 +839,13 @@ def renderizar_card(
 
 
 def estilo_projecao(_valor) -> str:
-    return (
-        "background-color:#0F172A;"
-        "color:#FFFFFF;"
-        "font-weight:700;"
-    )
+    return "background-color:#0F172A;" "color:#FFFFFF;" "font-weight:700;"
 
 
 def estilo_meta_executadas(valor) -> str:
     try:
         if float(valor) >= META_EXECUTADAS_TECNICO:
-            return (
-                "background-color:#DCFCE7;"
-                "color:#166534;"
-                "font-weight:700;"
-            )
+            return "background-color:#DCFCE7;" "color:#166534;" "font-weight:700;"
     except Exception:
         pass
 
@@ -962,10 +882,10 @@ def aplicar_estilo_tabela(
                 subset=["Projeção"],
             )
     else:
-            styler = styler.map(
-                estilo_projecao,
-                subset=["Projeção"],
-            )
+        styler = styler.map(
+            estilo_projecao,
+            subset=["Projeção"],
+        )
 
     if destacar_meta_tecnico and "Executada" in tabela.columns:
         if hasattr(styler, "map"):
@@ -1011,10 +931,7 @@ def renderizar_tabela(
         label="📥 Baixar Excel",
         data=gerar_excel(tabela, aba_excel),
         file_name=arquivo,
-        mime=(
-            "application/vnd.openxmlformats-officedocument."
-            "spreadsheetml.sheet"
-        ),
+        mime=("application/vnd.openxmlformats-officedocument." "spreadsheetml.sheet"),
         use_container_width=True,
         key=chave_download,
     )
@@ -1044,27 +961,17 @@ def aplicar_layout_grafico(
         legend=dict(
             orientation="h",
             yanchor="top",
-            y=-0.25,   # 🔥 coloca abaixo do gráfico
+            y=-0.25,  # 🔥 coloca abaixo do gráfico
             xanchor="center",
-            x=0.5
+            x=0.5,
         ),
         xaxis_title=None,
-        yaxis_title=None
+        yaxis_title=None,
     )
 
-    figura.update_xaxes(
-        showline=False,
-        zeroline=False,
-        gridcolor="#E2E8F0",
-        title=None
-    )
+    figura.update_xaxes(showline=False, zeroline=False, gridcolor="#E2E8F0", title=None)
 
-    figura.update_yaxes(
-        showline=False,
-        zeroline=False,
-        gridcolor="#E2E8F0",
-        title=None
-    )
+    figura.update_yaxes(showline=False, zeroline=False, gridcolor="#E2E8F0", title=None)
 
     return figura
 
@@ -1087,12 +994,7 @@ def grafico_status(kpis: Dict[str, float]) -> go.Figure:
                 labels=dados["Status"],
                 values=dados["Volume"],
                 hole=0.68,
-                marker={
-                    "colors": [
-                        CORES_STATUS[status]
-                        for status in STATUS_ORDEM
-                    ]
-                },
+                marker={"colors": [CORES_STATUS[status] for status in STATUS_ORDEM]},
                 textinfo="percent",
                 textfont={"size": 12},
                 hovertemplate=(
@@ -1164,9 +1066,7 @@ def grafico_regioes(df: pd.DataFrame) -> go.Figure:
 
     figura.update_traces(
         hovertemplate=(
-            "<b>%{x}</b><br>"
-            "%{fullData.name}: %{y:,.0f}"
-            "<extra></extra>"
+            "<b>%{x}</b><br>" "%{fullData.name}: %{y:,.0f}" "<extra></extra>"
         )
     )
 
@@ -1204,9 +1104,7 @@ def grafico_ranking_monitores(
             "#10B981",
         ],
         range_color=[0, 1],
-        text=ranking["Taxa Execução"].apply(
-            formatar_percentual
-        ),
+        text=ranking["Taxa Execução"].apply(formatar_percentual),
         custom_data=[
             "Executada",
             "Não Executada",
@@ -1238,9 +1136,7 @@ def grafico_ranking_monitores(
         line_width=2,
         line_dash="dash",
         line_color="#0F172A",
-        annotation_text=(
-            f"Meta {formatar_percentual(META_EXECUCAO)}"
-        ),
+        annotation_text=(f"Meta {formatar_percentual(META_EXECUCAO)}"),
         annotation_position="top",
     )
 
@@ -1374,9 +1270,7 @@ def grafico_tecnicos(
         line_width=2,
         line_dash="dash",
         line_color="#0F172A",
-        annotation_text=(
-            f"Meta: {META_EXECUTADAS_TECNICO} executadas"
-        ),
+        annotation_text=(f"Meta: {META_EXECUTADAS_TECNICO} executadas"),
         annotation_position="top",
     )
 
@@ -1468,17 +1362,13 @@ def main() -> None:
 
         if arquivo:
             try:
-                with st.spinner(
-                    "Processando base e atualizando hierarquia..."
-                ):
+                with st.spinner("Processando base e atualizando hierarquia..."):
                     df_base = ler_arquivo(
                         arquivo.getvalue(),
                         arquivo.name,
                     )
 
-                    df_hierarquia, aviso_hierarquia = (
-                        carregar_hierarquia_gsheets()
-                    )
+                    df_hierarquia, aviso_hierarquia = carregar_hierarquia_gsheets()
 
                     df_processado = preparar_base(
                         df_base,
@@ -1492,23 +1382,17 @@ def main() -> None:
                 st.rerun()
 
             except Exception as erro:
-                st.error(
-                    f"Não foi possível processar a base: {erro}"
-                )
+                st.error(f"Não foi possível processar a base: {erro}")
 
         return
 
     df_full = st.session_state.df_processado
 
     if df_full is None or df_full.empty:
-        st.warning(
-            "A base ficou vazia após as validações de contrato."
-        )
+        st.warning("A base ficou vazia após as validações de contrato.")
         return
 
-    aviso_hierarquia = st.session_state.get(
-        "aviso_hierarquia"
-    )
+    aviso_hierarquia = st.session_state.get("aviso_hierarquia")
 
     if aviso_hierarquia:
         st.warning(
@@ -1534,9 +1418,7 @@ def main() -> None:
             else:
                 valor_exibicao = valor
 
-            st.write(
-                f"**{chave.title()}**: {valor_exibicao}"
-            )
+            st.write(f"**{chave.title()}**: {valor_exibicao}")
 
     # ------------------------------------------------------
     # FILTRO DE MONITOR
@@ -1544,13 +1426,7 @@ def main() -> None:
     with st.sidebar:
         st.markdown("### 🎯 Filtros")
 
-        monitores = sorted(
-            df_full[COL_MONITOR]
-            .dropna()
-            .astype(str)
-            .unique()
-            .tolist()
-        )
+        monitores = sorted(df_full[COL_MONITOR].dropna().astype(str).unique().tolist())
 
         monitores_selecionados = st.multiselect(
             "Monitor",
@@ -1563,41 +1439,27 @@ def main() -> None:
             "mas não possui filtro interativo."
         )
 
-    df = df_full[
-        df_full[COL_MONITOR].isin(monitores_selecionados)
-    ].copy()
+    df = df_full[df_full[COL_MONITOR].isin(monitores_selecionados)].copy()
 
     if df.empty:
-        st.warning(
-            "Nenhum dado encontrado para os filtros selecionados."
-        )
+        st.warning("Nenhum dado encontrado para os filtros selecionados.")
         return
 
     # ------------------------------------------------------
     # CONTEXTO
     # ------------------------------------------------------
-    regioes = sorted(
-        df_full[COL_REGIAO]
-        .dropna()
-        .astype(str)
-        .unique()
-        .tolist()
-    )
+    regioes = sorted(df_full[COL_REGIAO].dropna().astype(str).unique().tolist())
 
     texto_regioes = ", ".join(regioes)
 
     if len(monitores_selecionados) < len(monitores):
-        monitores_titulo = ", ".join(
-            monitores_selecionados[:3]
-        )
+        monitores_titulo = ", ".join(monitores_selecionados[:3])
 
         if len(monitores_selecionados) > 3:
             restantes = len(monitores_selecionados) - 3
             monitores_titulo += f" e mais {restantes}"
 
-        titulo_contexto = (
-            f"Análise dos monitores: {monitores_titulo}"
-        )
+        titulo_contexto = f"Análise dos monitores: {monitores_titulo}"
     else:
         titulo_contexto = "Visão Geral Consolidada"
 
@@ -1667,8 +1529,7 @@ def main() -> None:
     )
 
     st.caption(
-        f"Meta de referência de execução: "
-        f"{formatar_percentual(META_EXECUCAO)}."
+        f"Meta de referência de execução: " f"{formatar_percentual(META_EXECUCAO)}."
     )
 
     st.divider()
@@ -1713,23 +1574,15 @@ def main() -> None:
     # ------------------------------------------------------
     with aba_tecnico:
         monitores_tecnico = sorted(
-            df[COL_MONITOR]
-            .dropna()
-            .astype(str)
-            .unique()
-            .tolist()
+            df[COL_MONITOR].dropna().astype(str).unique().tolist()
         )
 
         if not monitores_tecnico:
-            st.info(
-                "Não há monitores disponíveis nos filtros atuais."
-            )
+            st.info("Não há monitores disponíveis nos filtros atuais.")
         else:
             if (
-                "monitor_tecnico"
-                in st.session_state
-                and st.session_state.monitor_tecnico
-                not in monitores_tecnico
+                "monitor_tecnico" in st.session_state
+                and st.session_state.monitor_tecnico not in monitores_tecnico
             ):
                 del st.session_state.monitor_tecnico
 
@@ -1739,9 +1592,7 @@ def main() -> None:
                 key="monitor_tecnico",
             )
 
-            df_monitor = df[
-                df[COL_MONITOR] == monitor_selecionado
-            ].copy()
+            df_monitor = df[df[COL_MONITOR] == monitor_selecionado].copy()
 
             df_tecnicos = calcular_volumetria(
                 df_monitor,
@@ -1749,16 +1600,13 @@ def main() -> None:
             )
 
             if not df_tecnicos.empty:
-                df_tecnicos = (
-                    df_tecnicos.sort_values(
-                        by=[
-                            "Executada",
-                            "Total Alocado",
-                        ],
-                        ascending=[False, False],
-                    )
-                    .reset_index(drop=True)
-                )
+                df_tecnicos = df_tecnicos.sort_values(
+                    by=[
+                        "Executada",
+                        "Total Alocado",
+                    ],
+                    ascending=[False, False],
+                ).reset_index(drop=True)
 
                 st.plotly_chart(
                     grafico_tecnicos(df_tecnicos),
@@ -1768,13 +1616,9 @@ def main() -> None:
 
             renderizar_tabela(
                 tabela=df_tecnicos,
-                titulo=(
-                    f"Desempenho Técnico — "
-                    f"{monitor_selecionado}"
-                ),
+                titulo=(f"Desempenho Técnico — " f"{monitor_selecionado}"),
                 arquivo=(
-                    f"desempenho_tecnicos_"
-                    f"{str(monitor_selecionado).strip()}.xlsx"
+                    f"desempenho_tecnicos_" f"{str(monitor_selecionado).strip()}.xlsx"
                 ),
                 aba_excel="Por Tecnico",
                 chave_download="download_tecnicos",
@@ -1787,10 +1631,7 @@ def main() -> None:
     with aba_base:
         st.subheader("Base Completa Filtrada")
 
-        st.caption(
-            f"Linhas disponíveis após filtros: "
-            f"{formatar_numero(len(df))}"
-        )
+        st.caption(f"Linhas disponíveis após filtros: " f"{formatar_numero(len(df))}")
 
         st.dataframe(
             df,
@@ -1803,8 +1644,7 @@ def main() -> None:
             data=gerar_excel(df, "Base Filtrada"),
             file_name="base_filtrada.xlsx",
             mime=(
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
+                "application/vnd.openxmlformats-officedocument." "spreadsheetml.sheet"
             ),
             use_container_width=True,
             key="download_base_completa",
