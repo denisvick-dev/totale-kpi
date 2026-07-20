@@ -14,6 +14,23 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from streamlit_gsheets import GSheetsConnection
 
+from datetime import datetime
+from html import escape
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import (
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
 # ====================================================
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ====================================================
@@ -869,8 +886,8 @@ class DataLoader:
             if col_hab
             else pd.Series("", index=df.index, dtype=str)
         )
-        
-                # ── Flags individuais ─────────────────────────────────────────────────────
+
+        # ── Flags individuais ─────────────────────────────────────────────────────
 
         # GPON: habilidade contém "PON(1/100)" ou variações
         flag_gpon = hab_upper.str.contains(r"PON", regex=True, na=False)
@@ -896,10 +913,10 @@ class DataLoader:
         df["TIPO_SERVICO"] = pd.Series(
             np.select(
                 condlist=[
-                    flag_pme,       # PME = ND + habilidade PME
+                    flag_pme,  # PME = ND + habilidade PME
                     flag_migracao,  # Migração de pacote com GPON
-                    flag_gpon,      # GPON residencial
-                    flag_nd,        # Novos Domicílios residencial (sem PME)
+                    flag_gpon,  # GPON residencial
+                    flag_nd,  # Novos Domicílios residencial (sem PME)
                 ],
                 choicelist=[
                     "PME",
@@ -932,29 +949,35 @@ class DataLoader:
                 )
 
             st.caption("🔎 Flags por linha (amostra 20)")
-            df_debug = pd.DataFrame({
-                "TIPO_ORIG":   df[col_tipo].fillna("") if col_tipo else "",
-                "HAB_ORIG":    df[col_hab].fillna("")  if col_hab  else "",
-                "tipo_upper":  tipo_upper,
-                "hab_upper":   hab_upper,
-                "flag_nd":     flag_nd,
-                "flag_pme":    flag_pme,
-                "flag_gpon":   flag_gpon,
-                "flag_migracao": flag_migracao,
-                "TIPO_SERVICO": df["TIPO_SERVICO"],
-            })
+            df_debug = pd.DataFrame(
+                {
+                    "TIPO_ORIG": df[col_tipo].fillna("") if col_tipo else "",
+                    "HAB_ORIG": df[col_hab].fillna("") if col_hab else "",
+                    "tipo_upper": tipo_upper,
+                    "hab_upper": hab_upper,
+                    "flag_nd": flag_nd,
+                    "flag_pme": flag_pme,
+                    "flag_gpon": flag_gpon,
+                    "flag_migracao": flag_migracao,
+                    "TIPO_SERVICO": df["TIPO_SERVICO"],
+                }
+            )
             st.dataframe(df_debug.head(20), use_container_width=True)
 
             st.caption("📊 Contagem por TIPO_SERVICO")
             st.dataframe(
-                df["TIPO_SERVICO"].value_counts().reset_index()
+                df["TIPO_SERVICO"]
+                .value_counts()
+                .reset_index()
                 .rename(columns={"index": "Tipo", "TIPO_SERVICO": "Qtd"}),
                 use_container_width=True,
             )
-            
+
             # Mostra amostra de PME se existir
             if (df["TIPO_SERVICO"] == "PME").any():
-                st.success(f"✅ Encontrados {(df['TIPO_SERVICO'] == 'PME').sum()} registros PME")
+                st.success(
+                    f"✅ Encontrados {(df['TIPO_SERVICO'] == 'PME').sum()} registros PME"
+                )
                 df_pme_sample = df[df["TIPO_SERVICO"] == "PME"][
                     [col_tipo or "TIPO", col_hab or "HABILIDADE", "TIPO_SERVICO"]
                 ].head(5)
@@ -963,7 +986,9 @@ class DataLoader:
             else:
                 st.warning("❌ Nenhum registro classificado como PME encontrado")
                 if flag_nd.sum() > 0:
-                    st.info(f"→ Existem {flag_nd.sum()} registros com flag_nd=True (ADESAO)")
+                    st.info(
+                        f"→ Existem {flag_nd.sum()} registros com flag_nd=True (ADESAO)"
+                    )
                     st.info(f"→ Desses, {flag_pme.sum()} também têm habilidade PME")
 
         # ── Colunas brutas para análise detalhada ──────────────────────
@@ -1212,6 +1237,719 @@ class Motor:
         return Motor.tabela_cenarios(
             df_seg, "TÉCNICO", 0.1, p_base, 0.6, min_aloc
         ).head(top_n)
+
+
+# ====================================================
+# PDF EXECUTIVO
+# ====================================================
+class RelatorioPDF:
+    """Geração de relatório executivo em PDF."""
+
+    @staticmethod
+    def _formatar_valor(valor: Any, coluna: str = "") -> str:
+        if pd.isna(valor):
+            return "-"
+
+        coluna_upper = str(coluna).upper()
+
+        if isinstance(valor, (float, np.floating)):
+            if any(
+                termo in coluna_upper
+                for termo in [
+                    "QUEBRA",
+                    "FECHAMENTO",
+                    "PERCENTUAL",
+                    "%",
+                    "FOLGA_PCT",
+                ]
+            ):
+                return f"{valor:.2%}"
+
+            if float(valor).is_integer():
+                return f"{int(valor):,}".replace(",", ".")
+
+            return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        if isinstance(valor, (int, np.integer)):
+            return f"{valor:,}".replace(",", ".")
+
+        return str(valor)
+
+    @staticmethod
+    def _tabela_pdf(
+        df: pd.DataFrame,
+        colunas: Optional[List[str]] = None,
+        limite: Optional[int] = None,
+        larguras: Optional[List[float]] = None,
+    ) -> Table:
+        """Converte DataFrame em tabela compatível com ReportLab."""
+
+        if df is None or df.empty:
+            return Table([["Sem dados disponíveis"]])
+
+        base = df.copy()
+
+        if colunas:
+            colunas_validas = [c for c in colunas if c in base.columns]
+            base = base[colunas_validas]
+
+        if limite:
+            base = base.head(limite)
+
+        dados = [list(base.columns)]
+
+        for _, linha in base.iterrows():
+            dados.append(
+                [RelatorioPDF._formatar_valor(linha[col], col) for col in base.columns]
+            )
+
+        if larguras is None:
+            qtd_colunas = max(len(base.columns), 1)
+            largura_total = 26.5 * cm
+            larguras = [largura_total / qtd_colunas] * qtd_colunas
+        else:
+            larguras = [w * cm for w in larguras]
+
+        tabela = Table(
+            dados,
+            colWidths=larguras,
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        tabela.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 7),
+                    ("FONTSIZE", (0, 1), (-1, -1), 6.5),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#CBD5E1")),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.white,
+                            colors.HexColor("#F8FAFC"),
+                        ],
+                    ),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+
+        return tabela
+
+    @staticmethod
+    def _titulo(texto: str, styles) -> Paragraph:
+        return Paragraph(escape(texto), styles["Heading2"])
+
+    @staticmethod
+    def _subtitulo(texto: str, styles) -> Paragraph:
+        return Paragraph(escape(texto), styles["Heading3"])
+
+    @staticmethod
+    def _rodape(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor("#64748B"))
+
+        texto_esquerda = "Gestão de Quebra de Agenda"
+        texto_direita = f"Página {doc.page}"
+
+        canvas.drawString(1.2 * cm, 0.7 * cm, texto_esquerda)
+        canvas.drawRightString(28.5 * cm, 0.7 * cm, texto_direita)
+
+        canvas.restoreState()
+
+    @staticmethod
+    def gerar(
+        df: pd.DataFrame,
+        p_ot: float,
+        p_base: float,
+        p_pess: float,
+        sla_pme: float,
+        sla_mig: float,
+        min_aloc: float,
+        top_n: int,
+        incluir_base_detalhada: bool = False,
+    ) -> bytes:
+        """Gera o PDF executivo e devolve os bytes para download."""
+
+        buffer = BytesIO()
+
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=1.0 * cm,
+            leftMargin=1.0 * cm,
+            topMargin=1.0 * cm,
+            bottomMargin=1.2 * cm,
+        )
+
+        styles = getSampleStyleSheet()
+
+        styles.add(
+            ParagraphStyle(
+                name="TituloExecutivo",
+                parent=styles["Title"],
+                fontName="Helvetica-Bold",
+                fontSize=22,
+                leading=26,
+                textColor=colors.HexColor("#0F172A"),
+                alignment=TA_CENTER,
+                spaceAfter=6,
+            )
+        )
+
+        styles.add(
+            ParagraphStyle(
+                name="SubtituloExecutivo",
+                parent=styles["Normal"],
+                fontName="Helvetica",
+                fontSize=10,
+                leading=14,
+                textColor=colors.HexColor("#475569"),
+                alignment=TA_CENTER,
+                spaceAfter=18,
+            )
+        )
+
+        styles["Heading2"].fontName = "Helvetica-Bold"
+        styles["Heading2"].fontSize = 14
+        styles["Heading2"].leading = 18
+        styles["Heading2"].textColor = colors.HexColor("#1E3A5F")
+        styles["Heading2"].spaceBefore = 12
+        styles["Heading2"].spaceAfter = 8
+
+        styles["Heading3"].fontName = "Helvetica-Bold"
+        styles["Heading3"].fontSize = 10
+        styles["Heading3"].leading = 13
+        styles["Heading3"].textColor = colors.HexColor("#334155")
+        styles["Heading3"].spaceBefore = 10
+        styles["Heading3"].spaceAfter = 5
+
+        styles.add(
+            ParagraphStyle(
+                name="TextoPDF",
+                parent=styles["Normal"],
+                fontSize=8,
+                leading=11,
+                textColor=colors.HexColor("#334155"),
+                alignment=TA_LEFT,
+            )
+        )
+
+        elementos = []
+
+        # ==========================================================
+        # CAPA / RESUMO EXECUTIVO
+        # ==========================================================
+        data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+        elementos.append(
+            Paragraph(
+                "RELATÓRIO EXECUTIVO<br/>GESTÃO DE QUEBRA DE AGENDA",
+                styles["TituloExecutivo"],
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Base analisada: {len(df):,} registros | Gerado em: {data_geracao}",
+                styles["SubtituloExecutivo"],
+            )
+        )
+
+        m = Motor.projetar(df, p_base)
+        folga = Motor.folga_sla(df, Config.SLA_QUEBRA_MAXIMA)
+
+        resumo_global = pd.DataFrame(
+            [
+                {
+                    "Alocado": m["alocado"],
+                    "Executadas": m["exec"],
+                    "Não Executadas": m["naoexec"],
+                    "Pendentes": m["pend"],
+                    "Quebra Atual": m["quebra_atual"],
+                    "Projeção Base": m["fechamento_proj"],
+                    "Meta Geral": Config.SLA_QUEBRA_MAXIMA,
+                    "Folga SLA": folga["folga_ne_pendente"],
+                }
+            ]
+        )
+
+        elementos.append(RelatorioPDF._titulo("1. Resumo Executivo", styles))
+        elementos.append(
+            RelatorioPDF._tabela_pdf(
+                resumo_global,
+                larguras=[3.2, 3.2, 3.2, 3.0, 3.2, 3.4, 2.8, 3.0],
+            )
+        )
+        elementos.append(Spacer(1, 0.4 * cm))
+
+        status_geral = (
+            "FORA DO SLA"
+            if m["fechamento_proj"] > Config.SLA_QUEBRA_MAXIMA
+            else "DENTRO DO SLA"
+        )
+
+        texto_resumo = (
+            f"<b>Status projetado:</b> {status_geral}<br/>"
+            f"<b>Quebra atual:</b> {m['quebra_atual']:.2%}<br/>"
+            f"<b>Projeção cenário base:</b> {m['fechamento_proj']:.2%}<br/>"
+            f"<b>Meta global:</b> {Config.SLA_QUEBRA_MAXIMA:.2%}<br/>"
+            f"<b>Pendentes que precisam ser executadas para garantir a meta:</b> "
+            f"{int(np.ceil(folga['precisa_executar_pendente'])):,}"
+        )
+
+        elementos.append(Paragraph(texto_resumo, styles["TextoPDF"]))
+        elementos.append(Spacer(1, 0.4 * cm))
+
+        # ==========================================================
+        # CENÁRIOS
+        # ==========================================================
+        elementos.append(RelatorioPDF._titulo("2. Cenários de Fechamento", styles))
+
+        df_cenarios = pd.DataFrame(
+            [
+                {
+                    "Cenário": "Otimista",
+                    "Probabilidade de Quebra Pendentes": p_ot,
+                    "Fechamento Projetado": Motor.projetar(df, p_ot)["fechamento_proj"],
+                    "Não Executadas Projetadas": Motor.projetar(df, p_ot)[
+                        "naoexec_proj"
+                    ],
+                },
+                {
+                    "Cenário": "Base",
+                    "Probabilidade de Quebra Pendentes": p_base,
+                    "Fechamento Projetado": Motor.projetar(df, p_base)[
+                        "fechamento_proj"
+                    ],
+                    "Não Executadas Projetadas": Motor.projetar(df, p_base)[
+                        "naoexec_proj"
+                    ],
+                },
+                {
+                    "Cenário": "Pessimista",
+                    "Probabilidade de Quebra Pendentes": p_pess,
+                    "Fechamento Projetado": Motor.projetar(df, p_pess)[
+                        "fechamento_proj"
+                    ],
+                    "Não Executadas Projetadas": Motor.projetar(df, p_pess)[
+                        "naoexec_proj"
+                    ],
+                },
+            ]
+        )
+
+        elementos.append(
+            RelatorioPDF._tabela_pdf(
+                df_cenarios,
+                larguras=[6.0, 7.0, 7.0, 7.0],
+            )
+        )
+
+        # ==========================================================
+        # TIPOS DE SERVIÇO
+        # ==========================================================
+        elementos.append(
+            RelatorioPDF._titulo("3. Performance por Tipo de Serviço", styles)
+        )
+
+        linhas_tipo = []
+
+        for tipo in ["PME", "Migração", "GPON", "Novos Domicílios", "Outros"]:
+            df_tipo = df[df["TIPO_SERVICO"] == tipo].copy()
+
+            if df_tipo.empty:
+                continue
+
+            meta = Config.SLA_QUEBRA_MAXIMA
+
+            if tipo == "PME":
+                meta = sla_pme
+            elif tipo == "Migração":
+                meta = sla_mig
+
+            m_tipo = Motor.projetar(df_tipo, p_base)
+
+            linhas_tipo.append(
+                {
+                    "Tipo de Serviço": tipo,
+                    "Alocado": m_tipo["alocado"],
+                    "Executadas": m_tipo["exec"],
+                    "Não Executadas": m_tipo["naoexec"],
+                    "Pendentes": m_tipo["pend"],
+                    "Quebra Atual": m_tipo["quebra_atual"],
+                    "Proj. Base": m_tipo["fechamento_proj"],
+                    "Meta SLA": meta,
+                    "Status": (
+                        "Fora do SLA"
+                        if m_tipo["fechamento_proj"] > meta
+                        else "Dentro do SLA"
+                    ),
+                }
+            )
+
+        df_tipos_pdf = pd.DataFrame(linhas_tipo)
+
+        if not df_tipos_pdf.empty:
+            elementos.append(
+                RelatorioPDF._tabela_pdf(
+                    df_tipos_pdf,
+                    larguras=[4.0, 2.7, 2.7, 3.0, 2.7, 3.0, 3.0, 2.7, 3.2],
+                )
+            )
+
+        # ==========================================================
+        # PME
+        # ==========================================================
+        elementos.append(PageBreak())
+        elementos.append(RelatorioPDF._titulo("4. Análise Estratégica — PME", styles))
+
+        df_pme = df[df["TIPO_SERVICO"] == "PME"].copy()
+
+        if df_pme.empty:
+            elementos.append(
+                Paragraph(
+                    "Não foram encontrados registros PME nos filtros aplicados.",
+                    styles["TextoPDF"],
+                )
+            )
+        else:
+            m_pme = Motor.projetar(df_pme, p_base)
+            folga_pme = Motor.folga_sla(df_pme, sla_pme)
+
+            df_resumo_pme = pd.DataFrame(
+                [
+                    {
+                        "Alocado": m_pme["alocado"],
+                        "Executadas": m_pme["exec"],
+                        "Não Executadas": m_pme["naoexec"],
+                        "Pendentes": m_pme["pend"],
+                        "Quebra Atual": m_pme["quebra_atual"],
+                        "Proj. Base": m_pme["fechamento_proj"],
+                        "Meta PME": sla_pme,
+                        "Pendentes a Executar": folga_pme["precisa_executar_pendente"],
+                    }
+                ]
+            )
+
+            elementos.append(RelatorioPDF._subtitulo("Resumo PME", styles))
+            elementos.append(RelatorioPDF._tabela_pdf(df_resumo_pme))
+            elementos.append(Spacer(1, 0.3 * cm))
+
+            df_pme_tecnicos = Motor.tecnicos_criticos(
+                df_pme, "PME", p_base, float(min_aloc), int(top_n)
+            )
+
+            elementos.append(RelatorioPDF._subtitulo("Técnicos Críticos PME", styles))
+
+            if not df_pme_tecnicos.empty:
+                elementos.append(
+                    RelatorioPDF._tabela_pdf(
+                        df_pme_tecnicos,
+                        limite=int(top_n),
+                        larguras=[5.0, 2.5, 2.5, 2.8, 2.5, 3.0, 3.0, 3.0, 3.0],
+                    )
+                )
+            else:
+                elementos.append(
+                    Paragraph(
+                        "Sem dados suficientes para ranking PME.", styles["TextoPDF"]
+                    )
+                )
+
+            elementos.append(Spacer(1, 0.3 * cm))
+
+            df_pme_causa = Motor.causa_raiz_segmento(
+                df_pme, "PME", "_COL_BAIXA", top_n=8
+            )
+
+            elementos.append(
+                RelatorioPDF._subtitulo("Principais Motivos de Baixa PME", styles)
+            )
+
+            if not df_pme_causa.empty:
+                elementos.append(RelatorioPDF._tabela_pdf(df_pme_causa))
+            else:
+                elementos.append(
+                    Paragraph(
+                        "Motivos de baixa não identificados para PME.",
+                        styles["TextoPDF"],
+                    )
+                )
+
+        # ==========================================================
+        # MIGRAÇÃO
+        # ==========================================================
+        elementos.append(PageBreak())
+        elementos.append(
+            RelatorioPDF._titulo("5. Análise Estratégica — Migração", styles)
+        )
+
+        df_mig = df[df["TIPO_SERVICO"] == "Migração"].copy()
+
+        if df_mig.empty:
+            elementos.append(
+                Paragraph(
+                    "Não foram encontrados registros de Migração nos filtros aplicados.",
+                    styles["TextoPDF"],
+                )
+            )
+        else:
+            m_mig = Motor.projetar(df_mig, p_base)
+            folga_mig = Motor.folga_sla(df_mig, sla_mig)
+
+            df_resumo_mig = pd.DataFrame(
+                [
+                    {
+                        "Alocado": m_mig["alocado"],
+                        "Executadas": m_mig["exec"],
+                        "Não Executadas": m_mig["naoexec"],
+                        "Pendentes": m_mig["pend"],
+                        "Quebra Atual": m_mig["quebra_atual"],
+                        "Proj. Base": m_mig["fechamento_proj"],
+                        "Meta Migração": sla_mig,
+                        "Pendentes a Executar": folga_mig["precisa_executar_pendente"],
+                    }
+                ]
+            )
+
+            elementos.append(RelatorioPDF._subtitulo("Resumo Migração", styles))
+            elementos.append(RelatorioPDF._tabela_pdf(df_resumo_mig))
+            elementos.append(Spacer(1, 0.3 * cm))
+
+            df_mig_tecnicos = Motor.tecnicos_criticos(
+                df_mig, "Migração", p_base, float(min_aloc), int(top_n)
+            )
+
+            elementos.append(
+                RelatorioPDF._subtitulo("Técnicos Críticos Migração", styles)
+            )
+
+            if not df_mig_tecnicos.empty:
+                elementos.append(
+                    RelatorioPDF._tabela_pdf(
+                        df_mig_tecnicos,
+                        limite=int(top_n),
+                        larguras=[5.0, 2.5, 2.5, 2.8, 2.5, 3.0, 3.0, 3.0, 3.0],
+                    )
+                )
+            else:
+                elementos.append(
+                    Paragraph(
+                        "Sem dados suficientes para ranking de Migração.",
+                        styles["TextoPDF"],
+                    )
+                )
+
+            elementos.append(Spacer(1, 0.3 * cm))
+
+            df_mig_causa = Motor.causa_raiz_segmento(
+                df_mig, "Migração", "_COL_BAIXA", top_n=8
+            )
+
+            elementos.append(
+                RelatorioPDF._subtitulo("Principais Motivos de Baixa Migração", styles)
+            )
+
+            if not df_mig_causa.empty:
+                elementos.append(RelatorioPDF._tabela_pdf(df_mig_causa))
+            else:
+                elementos.append(
+                    Paragraph(
+                        "Motivos de baixa não identificados para Migração.",
+                        styles["TextoPDF"],
+                    )
+                )
+
+        # ==========================================================
+        # RANKING MONITORES E TÉCNICOS
+        # ==========================================================
+        elementos.append(PageBreak())
+        elementos.append(RelatorioPDF._titulo("6. Rankings Operacionais", styles))
+
+        df_monitores = Motor.tabela_cenarios(
+            df,
+            "MONITOR",
+            p_ot,
+            p_base,
+            p_pess,
+            float(min_aloc),
+        )
+
+        elementos.append(RelatorioPDF._subtitulo("Ranking de Monitores", styles))
+
+        if not df_monitores.empty:
+            elementos.append(
+                RelatorioPDF._tabela_pdf(
+                    df_monitores.head(int(top_n)),
+                    larguras=[5.0, 2.5, 2.5, 2.8, 2.5, 3.0, 3.0, 3.0, 3.0],
+                )
+            )
+        else:
+            elementos.append(
+                Paragraph("Sem dados para ranking de monitores.", styles["TextoPDF"])
+            )
+
+        elementos.append(Spacer(1, 0.5 * cm))
+
+        df_tecnicos = Motor.tabela_cenarios(
+            df,
+            "TÉCNICO",
+            p_ot,
+            p_base,
+            p_pess,
+            float(min_aloc),
+        )
+
+        elementos.append(RelatorioPDF._subtitulo("Ranking de Técnicos", styles))
+
+        if not df_tecnicos.empty:
+            elementos.append(
+                RelatorioPDF._tabela_pdf(
+                    df_tecnicos.head(int(top_n)),
+                    larguras=[5.0, 2.5, 2.5, 2.8, 2.5, 3.0, 3.0, 3.0, 3.0],
+                )
+            )
+        else:
+            elementos.append(
+                Paragraph("Sem dados para ranking de técnicos.", styles["TextoPDF"])
+            )
+
+        # ==========================================================
+        # REGIÕES
+        # ==========================================================
+        elementos.append(PageBreak())
+        elementos.append(RelatorioPDF._titulo("7. Performance Regional", styles))
+
+        df_regional = Motor.comparativo_regioes(df, "PME")
+        df_regional_mig = Motor.comparativo_regioes(df, "Migração")
+
+        elementos.append(RelatorioPDF._subtitulo("Regiões — PME", styles))
+
+        if not df_regional.empty:
+            elementos.append(RelatorioPDF._tabela_pdf(df_regional))
+        else:
+            elementos.append(
+                Paragraph("Sem dados regionais para PME.", styles["TextoPDF"])
+            )
+
+        elementos.append(Spacer(1, 0.4 * cm))
+        elementos.append(RelatorioPDF._subtitulo("Regiões — Migração", styles))
+
+        if not df_regional_mig.empty:
+            elementos.append(RelatorioPDF._tabela_pdf(df_regional_mig))
+        else:
+            elementos.append(
+                Paragraph("Sem dados regionais para Migração.", styles["TextoPDF"])
+            )
+
+        # ==========================================================
+        # CAUSAS GERAIS
+        # ==========================================================
+        elementos.append(PageBreak())
+        elementos.append(RelatorioPDF._titulo("8. Principais Causas de Quebra", styles))
+
+        if "_COL_BAIXA" in df.columns:
+            df_causas_gerais = (
+                df[df["Status Contrato"] == "Não Executada"]
+                .assign(
+                    Motivo=lambda x: x["_COL_BAIXA"]
+                    .fillna("SEM REGISTRO")
+                    .astype(str)
+                    .str.strip()
+                    .str.upper()
+                )
+                .groupby("Motivo")["TOTAL DE TAREFAS"]
+                .sum()
+                .nlargest(15)
+                .reset_index()
+                .rename(columns={"TOTAL DE TAREFAS": "Volume"})
+            )
+
+            total_causas = df_causas_gerais["Volume"].sum()
+
+            if total_causas > 0:
+                df_causas_gerais["% do Total"] = (
+                    df_causas_gerais["Volume"] / total_causas
+                )
+                df_causas_gerais["Acumulado"] = df_causas_gerais["% do Total"].cumsum()
+
+            elementos.append(RelatorioPDF._tabela_pdf(df_causas_gerais))
+        else:
+            elementos.append(
+                Paragraph(
+                    "A coluna de motivo/código de baixa não foi encontrada.",
+                    styles["TextoPDF"],
+                )
+            )
+
+        # ==========================================================
+        # BASE DETALHADA OPCIONAL
+        # ==========================================================
+        if incluir_base_detalhada:
+            elementos.append(PageBreak())
+            elementos.append(
+                RelatorioPDF._titulo("9. Apêndice — Base Detalhada Filtrada", styles)
+            )
+
+            colunas_preferidas = [
+                "LOGIN",
+                "TÉCNICO",
+                "MONITOR",
+                "REGIÃO",
+                "TIPO_SERVICO",
+                "Status Contrato",
+                "TOTAL DE TAREFAS",
+                "_COL_BAIXA",
+                "_DATA_AGENDA",
+            ]
+
+            colunas_existentes = [c for c in colunas_preferidas if c in df.columns]
+
+            df_detalhe = df[colunas_existentes].copy()
+
+            if "_COL_BAIXA" in df_detalhe.columns:
+                df_detalhe = df_detalhe.rename(columns={"_COL_BAIXA": "Motivo Baixa"})
+
+            if "_DATA_AGENDA" in df_detalhe.columns:
+                df_detalhe = df_detalhe.rename(columns={"_DATA_AGENDA": "Data Agenda"})
+
+            elementos.append(
+                Paragraph(
+                    f"Total de registros incluídos no apêndice: {len(df_detalhe):,}",
+                    styles["TextoPDF"],
+                )
+            )
+            elementos.append(Spacer(1, 0.3 * cm))
+
+            elementos.append(
+                RelatorioPDF._tabela_pdf(
+                    df_detalhe,
+                    larguras=[2.2] * len(df_detalhe.columns),
+                )
+            )
+
+        doc.build(
+            elementos,
+            onFirstPage=RelatorioPDF._rodape,
+            onLaterPages=RelatorioPDF._rodape,
+        )
+
+        buffer.seek(0)
+        return buffer.getvalue()
 
 
 # ====================================================
@@ -1991,6 +2729,41 @@ def main():
         st.divider()
         min_aloc = st.number_input("Mín. OS (Rankings)", min_value=1, value=5)
         top_n = st.number_input("Visualizar Top N", min_value=1, value=10)
+        
+        st.divider()
+        st.subheader("📄 Relatório Executivo")
+
+        incluir_base_pdf = st.checkbox(
+            "Incluir base detalhada no PDF",
+            value=False,
+            help="Pode gerar um arquivo grande caso existam muitos registros.",
+        )
+
+        if st.button("📄 Gerar PDF Executivo", use_container_width=True):
+            with st.spinner("Gerando relatório executivo em PDF..."):
+                st.session_state["pdf_executivo"] = RelatorioPDF.gerar(
+                    df=df,
+                    p_ot=p_ot,
+                    p_base=p_base,
+                    p_pess=p_pess,
+                    sla_pme=sla_pme,
+                    sla_mig=sla_mig,
+                    min_aloc=min_aloc,
+                    top_n=top_n,
+                    incluir_base_detalhada=incluir_base_pdf,
+                )
+
+        if st.session_state.get("pdf_executivo"):
+            st.download_button(
+                label="⬇️ Baixar PDF Executivo",
+                data=st.session_state["pdf_executivo"],
+                file_name=(
+                    f"relatorio_quebra_agenda_"
+                    f"{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+                ),
+                mime="application/pdf",
+                use_container_width=True,
+            )
 
     if df.empty:
         st.warning("Nenhum dado para os filtros selecionados.")
@@ -2243,8 +3016,9 @@ def main():
 
         if not df_back.empty:
             resumo_back = (
-                df_back
-                .groupby(["MONITOR", "TÉCNICO", "TIPO_SERVICO"])["TOTAL DE TAREFAS"]
+                df_back.groupby(["MONITOR", "TÉCNICO", "TIPO_SERVICO"])[
+                    "TOTAL DE TAREFAS"
+                ]
                 .sum()
                 .reset_index()
                 .sort_values("TOTAL DE TAREFAS", ascending=False)
@@ -2276,7 +3050,8 @@ def main():
             st.warning("Coluna de tipo não encontrada.")
         else:
             tipos_disponiveis = [
-                t for t in ["PME", "Novos Domicílios", "Migração", "GPON", "Outros"]
+                t
+                for t in ["PME", "Novos Domicílios", "Migração", "GPON", "Outros"]
                 if t in df["TIPO_SERVICO"].unique()
             ]
             st.markdown("")

@@ -1,5 +1,5 @@
 {
-    "editor.fontFamily": "Victor Mono",
+    "editor.fontFamily": "Fira Mono, 'monospace'",
     "editor.fontSize": 14,
     "editor.defaultFormatter": "shamanu4.django-intellisense",
     "editor.fontVariations": false
