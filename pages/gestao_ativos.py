@@ -17,12 +17,38 @@ st.set_page_config(
 )
 
 TEMAS_CARD = {
-    "azul": {"fundo": "#F0F9FF", "texto": "#0369A1", "borda": "#0EA5E9", "titulo": "#075985"},
-    "verde": {"fundo": "#F0FDF4", "texto": "#15803D", "borda": "#22C55E", "titulo": "#166534"},
-    "amarelo": {"fundo": "#FEF9C3", "texto": "#854D0E", "borda": "#EAB308", "titulo": "#A16207"},
-    "cinza": {"fundo": "#F8FAFC", "texto": "#334155", "borda": "#94A3B8", "titulo": "#64748B"},
-    "vermelho": {"fundo": "#FEF2F2", "texto": "#991B1B", "borda": "#EF4444", "titulo": "#7F1D1D"},
+    "azul": {
+        "fundo": "#F0F9FF",
+        "texto": "#0369A1",
+        "borda": "#0EA5E9",
+        "titulo": "#075985",
+    },
+    "verde": {
+        "fundo": "#F0FDF4",
+        "texto": "#15803D",
+        "borda": "#22C55E",
+        "titulo": "#166534",
+    },
+    "amarelo": {
+        "fundo": "#FEF9C3",
+        "texto": "#854D0E",
+        "borda": "#EAB308",
+        "titulo": "#A16207",
+    },
+    "cinza": {
+        "fundo": "#F8FAFC",
+        "texto": "#334155",
+        "borda": "#94A3B8",
+        "titulo": "#64748B",
+    },
+    "vermelho": {
+        "fundo": "#FEF2F2",
+        "texto": "#991B1B",
+        "borda": "#EF4444",
+        "titulo": "#7F1D1D",
+    },
 }
+
 
 def criar_card_metrica(titulo, valor, tema="azul"):
     cores = TEMAS_CARD.get(tema, TEMAS_CARD["azul"])
@@ -34,8 +60,17 @@ def criar_card_metrica(titulo, valor, tema="azul"):
     </div>
     """
 
+
 # Adicionado INATIVO (Soft Delete)
-LISTA_SITUACOES = ["ATIVO", "FÉRIAS", "INOPERANTE", "ETN", "DESLIGADO", "AFASTADO", "INATIVO"]
+LISTA_SITUACOES = [
+    "ATIVO",
+    "FÉRIAS",
+    "INOPERANTE",
+    "ETN",
+    "DESLIGADO",
+    "AFASTADO",
+    "INATIVO",
+]
 URL_ATIVOS = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
 
 
@@ -47,6 +82,7 @@ def gerar_log_auditoria(usuario: str, acao: str) -> str:
     agora = datetime.now().strftime("%d/%m/%Y %H:%M")
     return f"{agora} | {acao} por {usuario.upper()}"
 
+
 def atualizar_google_sheets(df_novo: pd.DataFrame, mensagem_sucesso: str):
     """Função única para salvar no Sheets, limpa cache e exibe Toast."""
     try:
@@ -54,7 +90,7 @@ def atualizar_google_sheets(df_novo: pd.DataFrame, mensagem_sucesso: str):
         conexao.update(spreadsheet=URL_ATIVOS, data=df_novo)
         carregar_planilha.clear()
         st.toast(mensagem_sucesso, icon="✅")
-        time.sleep(1) # Tempo mínimo para o Toast aparecer antes do reload
+        time.sleep(1)  # Tempo mínimo para o Toast aparecer antes do reload
         st.rerun()
     except Exception as erro:
         st.error(f"❌ Erro na nuvem: {erro}")
@@ -77,11 +113,17 @@ except:
     PWD_CORRETA = "admin"
 
 if not st.session_state.logado:
-    st.markdown("""<style>[data-testid="collapsedControl"] {display: none}</style>""", unsafe_allow_html=True)
+    st.markdown(
+        """<style>[data-testid="collapsedControl"] {display: none}</style>""",
+        unsafe_allow_html=True,
+    )
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.write("\n\n")
-        st.markdown("<h2 style='text-align: center;'>🔐 Acesso TOTALE</h2>", unsafe_allow_html=True)
+        st.markdown(
+            "<h2 style='text-align: center;'>🔐 Acesso TOTALE</h2>",
+            unsafe_allow_html=True,
+        )
         with st.form("form_login"):
             usuario = st.text_input("👤 Usuário:")
             senha = st.text_input("🔑 Senha:", type="password")
@@ -133,10 +175,16 @@ with st.spinner("Sincronizando com Google Sheets..."):
     df_ativos_bruto = carregar_planilha()
 
 if not df_ativos_bruto.empty:
-    lista_bases = ["Nova Base..."] + sorted(df_ativos_bruto["Base"].dropna().astype(str).unique().tolist())
-    lista_monitores = ["Novo Monitor..."] + sorted(df_ativos_bruto["Monitor"].dropna().astype(str).unique().tolist())
+    lista_bases = ["Nova Base..."] + sorted(
+        df_ativos_bruto["Base"].dropna().astype(str).unique().tolist()
+    )
+    lista_monitores = ["Novo Monitor..."] + sorted(
+        df_ativos_bruto["Monitor"].dropna().astype(str).unique().tolist()
+    )
 
-    aba_dashboard, aba_cadastro, aba_edicao = st.tabs(["📈 Dashboard & Relatórios", "➕ Novo / Lote", "✏️ Editar / Excluir"])
+    aba_dashboard, aba_cadastro, aba_edicao = st.tabs(
+        ["📈 Dashboard & Relatórios", "➕ Novo / Lote", "✏️ Editar / Excluir"]
+    )
 
     # ===========================================
     # ABA 1: DASHBOARD, GRÁFICOS E EXPORTAÇÃO
@@ -146,17 +194,23 @@ if not df_ativos_bruto.empty:
         df_filtrado = df_ativos_bruto[df_ativos_bruto["Situação"] != "INATIVO"].copy()
 
         st.sidebar.header("🎯 Filtros")
-        opcoes_base = ["Todas"] + sorted(df_filtrado["Base"].dropna().astype(str).unique())
+        opcoes_base = ["Todas"] + sorted(
+            df_filtrado["Base"].dropna().astype(str).unique()
+        )
         base_sel = st.sidebar.selectbox("Base:", opcoes_base)
         if base_sel != "Todas":
             df_filtrado = df_filtrado[df_filtrado["Base"] == base_sel]
 
-        opcoes_monitor = ["Todos"] + sorted(df_filtrado["Monitor"].dropna().astype(str).unique())
+        opcoes_monitor = ["Todos"] + sorted(
+            df_filtrado["Monitor"].dropna().astype(str).unique()
+        )
         monitor_sel = st.sidebar.selectbox("Monitor:", opcoes_monitor)
         if monitor_sel != "Todos":
             df_filtrado = df_filtrado[df_filtrado["Monitor"] == monitor_sel]
 
-        opcoes_situacao = ["Todas"] + sorted(df_filtrado["Situação"].dropna().astype(str).unique())
+        opcoes_situacao = ["Todas"] + sorted(
+            df_filtrado["Situação"].dropna().astype(str).unique()
+        )
         situacao_sel = st.sidebar.selectbox("Situação:", opcoes_situacao)
         if situacao_sel != "Todas":
             df_filtrado = df_filtrado[df_filtrado["Situação"] == situacao_sel]
@@ -166,41 +220,89 @@ if not df_ativos_bruto.empty:
         qtd_desligados = (df_filtrado["Situação"] == "DESLIGADO").sum()
 
         c1, c2, c3, c4 = st.columns(4)
-        with c1: st.markdown(criar_card_metrica("Total (Filtrado)", len(df_filtrado), "cinza"), unsafe_allow_html=True)
-        with c2: st.markdown(criar_card_metrica("Técnicos Ativos", qtd_ativos, "verde"), unsafe_allow_html=True)
-        with c3: st.markdown(criar_card_metrica("Bases Operadas", df_filtrado["Base"].nunique(), "azul"), unsafe_allow_html=True)
-        with c4: st.markdown(criar_card_metrica("Desligados", qtd_desligados, "vermelho"), unsafe_allow_html=True)
+        with c1:
+            st.markdown(
+                criar_card_metrica("Total (Filtrado)", len(df_filtrado), "cinza"),
+                unsafe_allow_html=True,
+            )
+        with c2:
+            st.markdown(
+                criar_card_metrica("Técnicos Ativos", qtd_ativos, "verde"),
+                unsafe_allow_html=True,
+            )
+        with c3:
+            st.markdown(
+                criar_card_metrica(
+                    "Bases Operadas", df_filtrado["Base"].nunique(), "azul"
+                ),
+                unsafe_allow_html=True,
+            )
+        with c4:
+            st.markdown(
+                criar_card_metrica("Desligados", qtd_desligados, "vermelho"),
+                unsafe_allow_html=True,
+            )
 
         # Gráficos Analíticos
         st.write("---")
         g1, g2 = st.columns([2, 1])
         with g1:
             st.markdown("**Volume de Técnicos por Base**")
-            df_graf_base = df_filtrado.groupby('Base').size().reset_index(name='Total').sort_values('Total', ascending=False)
-            fig_base = px.bar(df_graf_base, x='Base', y='Total', color='Total', color_continuous_scale="Blues", text_auto=True)
-            fig_base.update_layout(showlegend=False, plot_bgcolor="rgba(0,0,0,0)", margin=dict(t=0, b=0, l=0, r=0))
+            df_graf_base = (
+                df_filtrado.groupby("Base")
+                .size()
+                .reset_index(name="Total")
+                .sort_values("Total", ascending=False)
+            )
+            fig_base = px.bar(
+                df_graf_base,
+                x="Base",
+                y="Total",
+                color="Total",
+                color_continuous_scale="Blues",
+                text_auto=True,
+            )
+            fig_base.update_layout(
+                showlegend=False,
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(t=0, b=0, l=0, r=0),
+            )
             st.plotly_chart(fig_base, use_container_width=True)
-            
+
         with g2:
             st.markdown("**Distribuição de Status**")
-            df_graf_sit = df_filtrado.groupby('Situação').size().reset_index(name='Total')
-            fig_sit = px.pie(df_graf_sit, values='Total', names='Situação', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+            df_graf_sit = (
+                df_filtrado.groupby("Situação").size().reset_index(name="Total")
+            )
+            fig_sit = px.pie(
+                df_graf_sit,
+                values="Total",
+                names="Situação",
+                hole=0.4,
+                color_discrete_sequence=px.colors.qualitative.Pastel,
+            )
             fig_sit.update_layout(margin=dict(t=0, b=0, l=0, r=0))
             st.plotly_chart(fig_sit, use_container_width=True)
 
         # Tabela e Exportação
         st.write("---")
         col_tab1, col_tab2 = st.columns([4, 1])
-        with col_tab1: st.subheader("📋 Lista de Técnicos")
+        with col_tab1:
+            st.subheader("📋 Lista de Técnicos")
         with col_tab2:
             # Exportação Excel
             out = BytesIO()
             with pd.ExcelWriter(out, engine="openpyxl") as w:
                 df_filtrado.to_excel(w, index=False, sheet_name="Ativos")
-            st.download_button("📥 Exportar Lista (Excel)", out.getvalue(), "tecnicos_ativos.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button(
+                "📥 Exportar Lista (Excel)",
+                out.getvalue(),
+                "tecnicos_ativos.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
 
         st.dataframe(df_filtrado, use_container_width=True, hide_index=True, height=400)
-
 
     # ===========================================
     # ABA 2: CADASTRO MANUAL E LOTE
@@ -215,16 +317,36 @@ if not df_ativos_bruto.empty:
                 novo_nome = st.text_input("Nome do Técnico *")
             with c_form2:
                 sel_base = st.selectbox("Base *", lista_bases)
-                nova_base_input = st.text_input("Ou Nova Base:", disabled=(sel_base != "Nova Base..."))
+                nova_base_input = st.text_input(
+                    "Ou Nova Base:", disabled=(sel_base != "Nova Base...")
+                )
                 sel_monitor = st.selectbox("Monitor *", lista_monitores)
-                novo_monitor_input = st.text_input("Ou Novo Monitor:", disabled=(sel_monitor != "Novo Monitor..."))
-                nova_situacao = st.selectbox("Situação *", [s for s in LISTA_SITUACOES if s != "INATIVO"]) # Oculta Inativo
+                novo_monitor_input = st.text_input(
+                    "Ou Novo Monitor:", disabled=(sel_monitor != "Novo Monitor...")
+                )
+                nova_situacao = st.selectbox(
+                    "Situação *", [s for s in LISTA_SITUACOES if s != "INATIVO"]
+                )  # Oculta Inativo
 
             if st.form_submit_button("💾 Salvar Técnico", type="primary"):
-                b_final = nova_base_input.strip().upper() if sel_base == "Nova Base..." else sel_base
-                m_final = novo_monitor_input.strip().upper() if sel_monitor == "Novo Monitor..." else sel_monitor
+                b_final = (
+                    nova_base_input.strip().upper()
+                    if sel_base == "Nova Base..."
+                    else sel_base
+                )
+                m_final = (
+                    novo_monitor_input.strip().upper()
+                    if sel_monitor == "Novo Monitor..."
+                    else sel_monitor
+                )
 
-                if not novo_re or not novo_login or not novo_nome or not b_final or not m_final:
+                if (
+                    not novo_re
+                    or not novo_login
+                    or not novo_nome
+                    or not b_final
+                    or not m_final
+                ):
                     st.error("⚠️ Preencha todos os campos obrigatórios!")
                 else:
                     df_atualizado = df_ativos_bruto.copy()
@@ -232,26 +354,47 @@ if not df_ativos_bruto.empty:
                         "RE": novo_re.strip(),
                         "Login": novo_login.strip(),
                         "Técnico": novo_nome.strip().upper(),
-                        "Monitor": m_final, "Base": b_final,
+                        "Monitor": m_final,
+                        "Base": b_final,
                         "Situação": nova_situacao,
-                        "Ultima_Modificacao": gerar_log_auditoria(usuario_atual, "CRIADO")
+                        "Ultima_Modificacao": gerar_log_auditoria(
+                            usuario_atual, "CRIADO"
+                        ),
                     }
-                    df_atualizado = pd.concat([df_atualizado, pd.DataFrame([novo_registro])], ignore_index=True)
-                    atualizar_google_sheets(df_atualizado, "Técnico cadastrado com sucesso!")
+                    df_atualizado = pd.concat(
+                        [df_atualizado, pd.DataFrame([novo_registro])],
+                        ignore_index=True,
+                    )
+                    atualizar_google_sheets(
+                        df_atualizado, "Técnico cadastrado com sucesso!"
+                    )
 
         st.write("---")
         with st.expander("📁 Importação de Dados em Lote (Excel/CSV)"):
-            st.info("O arquivo deve conter exatamente as colunas: RE, Login, Técnico, Monitor, Base, Situação")
-            arq_upload = st.file_uploader("Arraste sua planilha aqui", type=["xlsx", "csv"])
+            st.info(
+                "O arquivo deve conter exatamente as colunas: RE, Login, Técnico, Monitor, Base, Situação"
+            )
+            arq_upload = st.file_uploader(
+                "Arraste sua planilha aqui", type=["xlsx", "csv"]
+            )
             if arq_upload and st.button("🚀 Processar Importação"):
                 try:
-                    df_lote = pd.read_excel(arq_upload) if arq_upload.name.endswith('xlsx') else pd.read_csv(arq_upload)
-                    df_lote["Ultima_Modificacao"] = gerar_log_auditoria(usuario_atual, "IMPORT LOTE")
-                    df_final = pd.concat([df_ativos_bruto, df_lote], ignore_index=True).drop_duplicates(subset=["RE"], keep='last')
-                    atualizar_google_sheets(df_final, f"{len(df_lote)} registros importados com sucesso!")
+                    df_lote = (
+                        pd.read_excel(arq_upload)
+                        if arq_upload.name.endswith("xlsx")
+                        else pd.read_csv(arq_upload)
+                    )
+                    df_lote["Ultima_Modificacao"] = gerar_log_auditoria(
+                        usuario_atual, "IMPORT LOTE"
+                    )
+                    df_final = pd.concat(
+                        [df_ativos_bruto, df_lote], ignore_index=True
+                    ).drop_duplicates(subset=["RE"], keep="last")
+                    atualizar_google_sheets(
+                        df_final, f"{len(df_lote)} registros importados com sucesso!"
+                    )
                 except Exception as e:
                     st.error(f"Erro no arquivo: Verifique as colunas. Detalhe: {e}")
-
 
     # ===========================================
     # ABA 3: EDIÇÃO E SOFT DELETE
@@ -260,9 +403,13 @@ if not df_ativos_bruto.empty:
         st.subheader("🔍 Buscar e Modificar Ativos")
         # Filtra os "Inativos" na busca a menos que se queira restaurar
         df_busca = df_ativos_bruto[df_ativos_bruto["Situação"] != "INATIVO"].copy()
-        df_busca["Identificador"] = df_busca["Técnico"].fillna("") + " | RE: " + df_busca["RE"].astype(str)
-        
-        tecnico_selecionado = st.selectbox("Selecione o Técnico:", [""] + df_busca["Identificador"].tolist())
+        df_busca["Identificador"] = (
+            df_busca["Técnico"].fillna("") + " | RE: " + df_busca["RE"].astype(str)
+        )
+
+        tecnico_selecionado = st.selectbox(
+            "Selecione o Técnico:", [""] + df_busca["Identificador"].tolist()
+        )
 
         if tecnico_selecionado != "":
             idx = df_busca[df_busca["Identificador"] == tecnico_selecionado].index[0]
@@ -276,36 +423,76 @@ if not df_ativos_bruto.empty:
                 with st.form("form_editar"):
                     e_col1, e_col2 = st.columns(2)
                     with e_col1:
-                        st.text_input("RE (Bloqueado)", value=dados_atuais.get("RE", ""), disabled=True)
-                        st.text_input("Login (Bloqueado)", value=dados_atuais.get("Login", ""), disabled=True)
-                        edit_nome = st.text_input("Técnico", value=dados_atuais.get("Técnico", ""))
+                        st.text_input(
+                            "RE (Bloqueado)",
+                            value=dados_atuais.get("RE", ""),
+                            disabled=True,
+                        )
+                        st.text_input(
+                            "Login (Bloqueado)",
+                            value=dados_atuais.get("Login", ""),
+                            disabled=True,
+                        )
+                        edit_nome = st.text_input(
+                            "Técnico", value=dados_atuais.get("Técnico", "")
+                        )
                     with e_col2:
-                        edit_base = st.text_input("Base", value=dados_atuais.get("Base", ""))
-                        edit_monitor = st.text_input("Monitor", value=dados_atuais.get("Monitor", ""))
-                        idx_sit = LISTA_SITUACOES.index(dados_atuais.get("Situação", "ATIVO")) if dados_atuais.get("Situação", "ATIVO") in LISTA_SITUACOES else 0
-                        edit_situacao = st.selectbox("Situação", LISTA_SITUACOES, index=idx_sit)
+                        edit_base = st.text_input(
+                            "Base", value=dados_atuais.get("Base", "")
+                        )
+                        edit_monitor = st.text_input(
+                            "Monitor", value=dados_atuais.get("Monitor", "")
+                        )
+                        idx_sit = (
+                            LISTA_SITUACOES.index(dados_atuais.get("Situação", "ATIVO"))
+                            if dados_atuais.get("Situação", "ATIVO") in LISTA_SITUACOES
+                            else 0
+                        )
+                        edit_situacao = st.selectbox(
+                            "Situação", LISTA_SITUACOES, index=idx_sit
+                        )
 
                     if st.form_submit_button("💾 Salvar Alterações", type="primary"):
                         df_atualizado = df_ativos_bruto.copy()
-                        df_atualizado.at[idx, "Técnico"] = (edit_nome or "").strip().upper()
-                        df_atualizado.at[idx, "Base"] = (edit_base or "").strip().upper()
-                        df_atualizado.at[idx, "Monitor"] = (edit_monitor or "").strip().upper()
+                        df_atualizado.at[idx, "Técnico"] = (
+                            (edit_nome or "").strip().upper()
+                        )
+                        df_atualizado.at[idx, "Base"] = (
+                            (edit_base or "").strip().upper()
+                        )
+                        df_atualizado.at[idx, "Monitor"] = (
+                            (edit_monitor or "").strip().upper()
+                        )
                         df_atualizado.at[idx, "Situação"] = edit_situacao
-                        df_atualizado.at[idx, "Ultima_Modificacao"] = gerar_log_auditoria(usuario_atual, "EDIÇÃO")
-                        
-                        atualizar_google_sheets(df_atualizado, "Dados atualizados com sucesso!")
+                        df_atualizado.at[idx, "Ultima_Modificacao"] = (
+                            gerar_log_auditoria(usuario_atual, "EDIÇÃO")
+                        )
+
+                        atualizar_google_sheets(
+                            df_atualizado, "Dados atualizados com sucesso!"
+                        )
 
             with col_exclusao:
                 st.markdown("#### 🗑️ Exclusão Segura (Soft Delete)")
-                st.info("A exclusão altera o status para 'INATIVO', mantendo o histórico de vendas do técnico nos relatórios.")
-                
-                if st.checkbox(f"Sim, desejo inativar o RE: {dados_atuais.get('RE', '')}"):
-                    if st.button("🚨 Inativar Técnico", type="primary", use_container_width=True):
+                st.info(
+                    "A exclusão altera o status para 'INATIVO', mantendo o histórico de vendas do técnico nos relatórios."
+                )
+
+                if st.checkbox(
+                    f"Sim, desejo inativar o RE: {dados_atuais.get('RE', '')}"
+                ):
+                    if st.button(
+                        "🚨 Inativar Técnico", type="primary", use_container_width=True
+                    ):
                         df_atualizado = df_ativos_bruto.copy()
                         df_atualizado.at[idx, "Situação"] = "INATIVO"
-                        df_atualizado.at[idx, "Ultima_Modificacao"] = gerar_log_auditoria(usuario_atual, "INATIVADO")
-                        
-                        atualizar_google_sheets(df_atualizado, "Técnico inativado com sucesso!")
+                        df_atualizado.at[idx, "Ultima_Modificacao"] = (
+                            gerar_log_auditoria(usuario_atual, "INATIVADO")
+                        )
+
+                        atualizar_google_sheets(
+                            df_atualizado, "Técnico inativado com sucesso!"
+                        )
 
 else:
     st.warning("⚠️ Planilha vazia ou não encontrada.")

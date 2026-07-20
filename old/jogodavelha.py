@@ -11,7 +11,8 @@ VAZIO = " "
 st.set_page_config(page_title="Jogo da Velha IA", page_icon="🕹️", layout="centered")
 
 # --- CSS CUSTOMIZADO (Visual Premium) ---
-st.markdown("""
+st.markdown(
+    """
     <style>
     /* Estilização dos botões para parecerem um tabuleiro de verdade */
     div[data-testid="column"] button {
@@ -27,34 +28,49 @@ st.markdown("""
         font-size: 3.5rem !important;
     }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # --- LÓGICA DO JOGO ---
 def verificar_vitoria(tabuleiro: List[List[str]], jogador: str) -> bool:
     # Checa linhas e colunas
     for i in range(3):
-        if all(tabuleiro[i][j] == jogador for j in range(3)) or \
-           all(tabuleiro[j][i] == jogador for j in range(3)):
+        if all(tabuleiro[i][j] == jogador for j in range(3)) or all(
+            tabuleiro[j][i] == jogador for j in range(3)
+        ):
             return True
     # Checa diagonais
-    if (tabuleiro[0][0] == tabuleiro[1][1] == tabuleiro[2][2] == jogador) or \
-       (tabuleiro[0][2] == tabuleiro[1][1] == tabuleiro[2][0] == jogador):
+    if (tabuleiro[0][0] == tabuleiro[1][1] == tabuleiro[2][2] == jogador) or (
+        tabuleiro[0][2] == tabuleiro[1][1] == tabuleiro[2][0] == jogador
+    ):
         return True
     return False
 
+
 def tabuleiro_cheio(tabuleiro: List[List[str]]) -> bool:
     return all(celula != VAZIO for linha in tabuleiro for celula in linha)
+
 
 def obter_posicoes_livres(tabuleiro: List[List[str]]) -> List[Tuple[int, int]]:
     return [(r, c) for r in range(3) for c in range(3) if tabuleiro[r][c] == VAZIO]
 
 
 # --- INTELIGÊNCIA ARTIFICIAL (MINIMAX) ---
-def minimax(tabuleiro: List[List[str]], profundidade: int, alpha: float, beta: float, maximizando: bool) -> float:
-    if verificar_vitoria(tabuleiro, JOGADOR_IA): return 10 - profundidade # IA prefere vencer rápido
-    if verificar_vitoria(tabuleiro, JOGADOR_HUMANO): return profundidade - 10 # IA prefere perder devagar
-    if tabuleiro_cheio(tabuleiro): return 0
+def minimax(
+    tabuleiro: List[List[str]],
+    profundidade: int,
+    alpha: float,
+    beta: float,
+    maximizando: bool,
+) -> float:
+    if verificar_vitoria(tabuleiro, JOGADOR_IA):
+        return 10 - profundidade  # IA prefere vencer rápido
+    if verificar_vitoria(tabuleiro, JOGADOR_HUMANO):
+        return profundidade - 10  # IA prefere perder devagar
+    if tabuleiro_cheio(tabuleiro):
+        return 0
 
     if maximizando:
         melhor_pontuacao = -math.inf
@@ -64,7 +80,8 @@ def minimax(tabuleiro: List[List[str]], profundidade: int, alpha: float, beta: f
             tabuleiro[r][c] = VAZIO
             melhor_pontuacao = max(pontuacao, melhor_pontuacao)
             alpha = max(alpha, pontuacao)
-            if beta <= alpha: break # Poda
+            if beta <= alpha:
+                break  # Poda
         return melhor_pontuacao
     else:
         melhor_pontuacao = math.inf
@@ -74,16 +91,21 @@ def minimax(tabuleiro: List[List[str]], profundidade: int, alpha: float, beta: f
             tabuleiro[r][c] = VAZIO
             melhor_pontuacao = min(pontuacao, melhor_pontuacao)
             beta = min(beta, pontuacao)
-            if beta <= alpha: break # Poda
+            if beta <= alpha:
+                break  # Poda
         return melhor_pontuacao
 
-def jogada_ia(tabuleiro: List[List[str]], dificuldade: str) -> Optional[Tuple[int, int]]:
+
+def jogada_ia(
+    tabuleiro: List[List[str]], dificuldade: str
+) -> Optional[Tuple[int, int]]:
     posicoes_livres = obter_posicoes_livres(tabuleiro)
-    if not posicoes_livres: return None
+    if not posicoes_livres:
+        return None
 
     # Se for a primeira jogada da IA no modo impossível, escolhe o meio ou canto para economizar processamento
     if len(posicoes_livres) == 9 and dificuldade == "Impossível":
-        return random.choice([(1,1), (0,0), (0,2), (2,0), (2,2)])
+        return random.choice([(1, 1), (0, 0), (0, 2), (2, 0), (2, 2)])
 
     if dificuldade == "Fácil":
         return random.choice(posicoes_livres)
@@ -95,11 +117,11 @@ def jogada_ia(tabuleiro: List[List[str]], dificuldade: str) -> Optional[Tuple[in
         tabuleiro[r][c] = JOGADOR_IA
         pontuacao = minimax(tabuleiro, 0, -math.inf, math.inf, False)
         tabuleiro[r][c] = VAZIO
-        
+
         if pontuacao > melhor_pontuacao:
             melhor_pontuacao = pontuacao
             melhor_jogada = (r, c)
-            
+
     return melhor_jogada
 
 
@@ -114,15 +136,17 @@ def inicializar_estado():
     if "placar" not in st.session_state:
         st.session_state.placar = {"Humano": 0, "IA": 0, "Empate": 0}
 
+
 def reiniciar_jogo(ia_comeca: bool = False, dificuldade: str = "Impossível"):
     st.session_state.tabuleiro = [[VAZIO for _ in range(3)] for _ in range(3)]
     st.session_state.game_over = False
     st.session_state.mensagem = ""
-    
+
     # Se a IA for configurada para começar, ela faz a primeira jogada imediatamente
     if ia_comeca:
         r, c = jogada_ia(st.session_state.tabuleiro, dificuldade)
         st.session_state.tabuleiro[r][c] = JOGADOR_IA
+
 
 inicializar_estado()
 
@@ -168,12 +192,19 @@ st.markdown("Mostre que a humanidade ainda tem salvação!")
 with st.sidebar:
     st.header("⚙️ Configurações")
     dificuldade = st.radio("Inteligência da IA:", ("Fácil", "Impossível"), index=1)
-    quem_comeca = st.radio("Quem começa jogando?", ("Você (❌)", "Máquina (⭕)"), index=0)
-    
+    quem_comeca = st.radio(
+        "Quem começa jogando?", ("Você (❌)", "Máquina (⭕)"), index=0
+    )
+
     # Botão para aplicar quem começa e reiniciar
-    ia_first = (quem_comeca == "Máquina (⭕)")
-    st.button("🔄 Aplicar e Reiniciar", on_click=reiniciar_jogo, args=(ia_first, dificuldade), use_container_width=True)
-    
+    ia_first = quem_comeca == "Máquina (⭕)"
+    st.button(
+        "🔄 Aplicar e Reiniciar",
+        on_click=reiniciar_jogo,
+        args=(ia_first, dificuldade),
+        use_container_width=True,
+    )
+
     st.divider()
     st.header("🏆 Placar Global")
     col1, col2 = st.columns(2)
@@ -189,8 +220,10 @@ with area_tabuleiro:
         cols = st.columns(3)
         for c in range(3):
             conteudo = st.session_state.tabuleiro[r][c]
-            label = conteudo if conteudo != VAZIO else "⠀" # Caractere invisível para manter tamanho
-            
+            label = (
+                conteudo if conteudo != VAZIO else "⠀"
+            )  # Caractere invisível para manter tamanho
+
             with cols[c]:
                 st.button(
                     label,
@@ -198,7 +231,7 @@ with area_tabuleiro:
                     on_click=processar_turno,
                     args=(r, c, dificuldade),
                     disabled=st.session_state.game_over or conteudo != VAZIO,
-                    use_container_width=True
+                    use_container_width=True,
                 )
 
 # Área de Mensagens e Reinício
@@ -212,4 +245,10 @@ if st.session_state.game_over:
         st.info(st.session_state.mensagem, icon="🤝")
 
     # Botão de jogar novamente chamando a função de reiniciar preservando quem começa
-    st.button("🎮 Jogar Novamente", on_click=reiniciar_jogo, args=(ia_first, dificuldade), type="primary", use_container_width=True)
+    st.button(
+        "🎮 Jogar Novamente",
+        on_click=reiniciar_jogo,
+        args=(ia_first, dificuldade),
+        type="primary",
+        use_container_width=True,
+    )

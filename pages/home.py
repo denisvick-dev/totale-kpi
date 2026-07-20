@@ -23,6 +23,7 @@ INTERVALO_REFRESH = 60  # segundos (60s é mais leve que 1s)
 # 🎨 BLOCO 2: FUNÇÕES DE ESTILO
 # =====================================
 
+
 def get_css_global():
     """Retorna o CSS global do portal."""
     return """
@@ -105,54 +106,66 @@ def get_css_carousel():
 # 🧩 BLOCO 3: FUNÇÕES DE COMPONENTES
 # =====================================
 
+
 def render_header():
     """Renderiza o cabeçalho do portal."""
-    st.markdown("""
+    st.markdown(
+        """
     <div class="top-bar">
         <h2 style="margin:0;">📊 Portal TOTALE</h2>
         <span>Painéis de Produção, Indicadores e Gestão Estratégica</span>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_intro():
     """Renderiza a introdução do portal."""
-    st.markdown("""
+    st.markdown(
+        """
     <div class="card">
         <b>Bem-vindo ao ambiente centralizado de dados da TOTALE.</b><br><br>
         Este portal fornece uma visão clara e estratégica dos processos produtivos e
         indicadores de performance, apoiando decisões com base em dados confiáveis.
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     st.write("")
 
 
 def render_status_sistema():
     """Renderiza o card de status do sistema."""
     dados_carregados = (
-        "dados_prod" in st.session_state
-        and st.session_state["dados_prod"] is not None
+        "dados_prod" in st.session_state and st.session_state["dados_prod"] is not None
     )
 
     if not dados_carregados:
-        st.markdown("""
+        st.markdown(
+            """
         <div class="card status-warning">
             <b>⚠️ Sistema aguardando atualização de dados</b><br><br>
             1️⃣ Acesse <b>🔁 Atualização de Dados</b> no menu lateral<br>
             2️⃣ Clique em <b>Atualizar Agora</b><br>
             3️⃣ Aguarde a conclusão
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
     else:
         ultima = st.session_state.get("ultima_atualizacao")
         hora = ultima.strftime("%d/%m/%Y às %H:%M:%S") if ultima else "Recente"
 
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="card status-ok">
             ✅ <b>Sistema atualizado e pronto para uso</b><br>
             Última sincronização: {hora}
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     st.write("")
 
@@ -162,20 +175,26 @@ def render_cards_navegacao():
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("""
+        st.markdown(
+            """
         <div class="card">
             <h4>⚙️ Produção</h4>
             Monitore eficiência operacional, volume produzido e desempenho por setor.
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col2:
-        st.markdown("""
+        st.markdown(
+            """
         <div class="card">
             <h4>📈 Indicadores Estratégicos</h4>
             Acompanhe metas, resultados financeiros e KPIs críticos do negócio.
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     st.write("")
     st.divider()
@@ -238,12 +257,13 @@ def render_carrossel():
                     st.session_state.slide_index + 1
                 ) % total
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # =====================================
 # ⏰ BLOCO 5: AUTO REFRESH INTELIGENTE
 # =====================================
+
 
 def auto_refresh(intervalo_segundos=60):
     """
@@ -266,6 +286,7 @@ def auto_refresh(intervalo_segundos=60):
 # 🕒 BLOCO 6: HORÁRIO DE BRASÍLIA
 # =====================================
 
+
 def get_hora_brasilia():
     """Retorna datetime atual no fuso de Brasília."""
     return datetime.now(FUSO_HORARIO)
@@ -277,7 +298,8 @@ def render_footer():
     data_str = agora.strftime("%d/%m/%Y")
     hora_str = agora.strftime("%H:%M")
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="footer">
         🏢 <b>Portal TOTALE</b>
         <span>|</span>
@@ -288,12 +310,15 @@ def render_footer():
         🔖 v{VERSAO_SISTEMA}
     </div>
     <style>.block-container {{ padding-bottom: 4.5rem; }}</style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 # =====================================
 # 🚀 BLOCO 7: EXECUÇÃO PRINCIPAL
 # =====================================
+
 
 def main():
     """Função principal que orquestra toda a página."""
