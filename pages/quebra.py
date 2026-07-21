@@ -14,6 +14,10 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from streamlit_gsheets import GSheetsConnection
 
+from datetime import datetime
+from html import escape
+
+
 # ====================================================
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ====================================================
@@ -33,8 +37,8 @@ if "df_memoria" not in st.session_state:
 # ====================================================
 class Config:
     SLA_QUEBRA_MAXIMA: float = 0.20
-    SLA_PME: float = 0.15  # ← SLA mais rígido para PME
-    SLA_MIGRACAO: float = 0.18  # ← SLA para Migração
+    SLA_PME: float = 0.20  # ← SLA para PME
+    SLA_MIGRACAO: float = 0.25  # ← SLA para Migração
     URL_ATIVOS: str = (
         "https://docs.google.com/spreadsheets/d/"
         "1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
@@ -55,7 +59,7 @@ class Config:
             "icone": "🏢",
             "cor": "#7C3AED",
             "cor_clara": "#EDE9FE",
-            "sla": 0.15,
+            "sla": 0.20,
             "tema_kpi": "roxo",
             "descricao": "Pequenas e Médias Empresas",
         },
@@ -63,7 +67,7 @@ class Config:
             "icone": "🔄",
             "cor": "#0369A1",
             "cor_clara": "#E0F2FE",
-            "sla": 0.18,
+            "sla": 0.25,
             "tema_kpi": "azul",
             "descricao": "Mudança de Pacote + GPON",
         },
@@ -870,7 +874,7 @@ class DataLoader:
             else pd.Series("", index=df.index, dtype=str)
         )
         
-                # ── Flags individuais ─────────────────────────────────────────────────────
+        # ── Flags individuais ─────────────────────────────────────────────────────
 
         # GPON: habilidade contém "PON(1/100)" ou variações
         flag_gpon = hab_upper.str.contains(r"PON", regex=True, na=False)
@@ -1707,7 +1711,7 @@ def render_aba_segmento(
                 )
                 if not df_mon_reg.empty:
                     render_dataframe(
-                        df_mon_reg.head(int(top_n)),
+                        df_mon_reg,
                         titulo=f"Monitores — {tipo}",
                         icone="👔",
                         fmt={
@@ -1979,18 +1983,12 @@ def main():
 
         st.divider()
         st.subheader("🔮 Probabilidade de Quebra")
-        p_ot = st.slider("Otimista (%)", 0, 100, 10, 5) / 100.0
-        p_base = st.slider("Base (%)", 0, 100, 30, 5) / 100.0
-        p_pess = st.slider("Pessimista (%)", 0, 100, 60, 5) / 100.0
+        p_ot = st.slider("Otimista (%)", 0, 100, 15, 5) / 100.0
+        p_base = st.slider("Base (%)", 0, 100, 20, 5) / 100.0
+        p_pess = st.slider("Pessimista (%)", 0, 100, 50, 5) / 100.0
 
-        st.divider()
-        st.subheader("⚙️ SLA por Segmento")
-        sla_pme = st.number_input("Meta SLA PME (%)", 0.0, 100.0, 15.0, 1.0) / 100
-        sla_mig = st.number_input("Meta SLA Migração (%)", 0.0, 100.0, 18.0, 1.0) / 100
-
-        st.divider()
-        min_aloc = st.number_input("Mín. OS (Rankings)", min_value=1, value=5)
-        top_n = st.number_input("Visualizar Top N", min_value=1, value=10)
+        min_aloc = 1
+        top_n = 999999
 
     if df.empty:
         st.warning("Nenhum dado para os filtros selecionados.")
@@ -1998,6 +1996,12 @@ def main():
 
     # ── Resultado da Base ─────────────────────────────────────────────
     render_resultado_base(sorted(df[Config.COL_REGIAO].unique()), len(df))
+
+    # ── Aviso sobre páginas dedicadas ─────────────────────────────────
+    st.info(
+        "👈 Para análises detalhadas de segmentos específicos, acesse **PME** ou "
+        "**Migração** no menu lateral."
+    )
 
     # ── KPIs Globais ──────────────────────────────────────────────────
     m = Motor.projetar(df, p_base)
@@ -2015,21 +2019,16 @@ def main():
     )
     st.markdown("")
 
-    # ── Abas principais ───────────────────────────────────────────────
-    aba_visao, aba_rank, aba_causa, aba_back, aba_tipos, aba_pme, aba_mig = st.tabs(
+    # ── Abas principais (SEM PME e Migração) ──────────────────────────
+    aba_visao, aba_rank, aba_causa, aba_back, aba_tipos = st.tabs(
         [
             "📊 Visão & Projeções",
             "🧭 Desempenho",
             "🔍 Causas",
             "🚨 Backoffice",
             "📂 Por Tipo de Serviço",
-            "🏢 PME",
-            "🔄 Migração",
         ]
     )
-
-    # ── Recupera col_baixa para causa raiz ───────────────────────────
-    col_baixa = "_COL_BAIXA" if "_COL_BAIXA" in df.columns else ""
 
     # ── ABA: VISÃO & PROJEÇÕES ────────────────────────────────────────
     with aba_visao:
@@ -2140,7 +2139,7 @@ def main():
                 st.info("Sem dados suficientes.")
             else:
                 render_dataframe(
-                    df_rm.head(int(top_n)),
+                    df_rm,
                     titulo="Ranking de Monitores",
                     icone="👔",
                     fmt=fmt_rank,
@@ -2166,7 +2165,7 @@ def main():
                     ascending=[False, False, False],
                 ).reset_index(drop=True)
                 render_dataframe(
-                    df_rt_sorted.head(int(top_n)),
+                    df_rt_sorted,
                     titulo="Ranking de Técnicos",
                     icone="👤",
                     fmt=fmt_rank,
@@ -2324,7 +2323,7 @@ def main():
                         )
                         if not df_rank_tipo.empty:
                             render_dataframe(
-                                df_rank_tipo.head(int(top_n)),
+                                df_rank_tipo,
                                 titulo=f"Monitores — {tipo}",
                                 icone="👔",
                                 fmt=fmt_r,
@@ -2341,34 +2340,6 @@ def main():
                             )
             else:
                 st.info("Nenhum tipo disponível encontrado.")
-
-    # ── ABA: PME (DETALHADA) ──────────────────────────────────────────
-    with aba_pme:
-        render_aba_segmento(
-            df=df,
-            tipo="PME",
-            p_ot=p_ot,
-            p_base=p_base,
-            p_pess=p_pess,
-            min_aloc=min_aloc,
-            top_n=top_n,
-            col_baixa=col_baixa,
-            sla_meta=sla_pme,
-        )
-
-    # ── ABA: MIGRAÇÃO (DETALHADA) ─────────────────────────────────────
-    with aba_mig:
-        render_aba_segmento(
-            df=df,
-            tipo="Migração",
-            p_ot=p_ot,
-            p_base=p_base,
-            p_pess=p_pess,
-            min_aloc=min_aloc,
-            top_n=top_n,
-            col_baixa=col_baixa,
-            sla_meta=sla_mig,
-        )
 
 
 if __name__ == "__main__":
