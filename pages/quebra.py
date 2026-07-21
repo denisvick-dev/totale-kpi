@@ -17,6 +17,19 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 from html import escape
 
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import (
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 # ====================================================
 # 1. CONFIGURAÇÃO DA PÁGINA
@@ -1216,6 +1229,404 @@ class Motor:
         return Motor.tabela_cenarios(
             df_seg, "TÉCNICO", 0.1, p_base, 0.6, min_aloc
         ).head(top_n)
+        
+# ====================================================
+# 8. RELATÓRIO PDF EXECUTIVO (PME / MIGRAÇÃO)
+# ====================================================
+class RelatorioPDF:
+    """Geração de relatório executivo em PDF para PME e Migração."""
+
+    @staticmethod
+    def _fmt(v: Any, col: str = "") -> str:
+        if pd.isna(v):
+            return "-"
+        col_u = str(col).upper()
+
+        if isinstance(v, (float, np.floating)):
+            if any(x in col_u for x in ["QUEBRA", "FECHAMENTO", "META", "%", "PERCENTUAL"]):
+                return f"{v:.2%}"
+            if float(v).is_integer():
+                return f"{int(v):,}".replace(",", ".")
+            return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        if isinstance(v, (int, np.integer)):
+            return f"{v:,}".replace(",", ".")
+
+        return escape(str(v))
+
+    @staticmethod
+    def _tab(
+        df: pd.DataFrame,
+        limite: Optional[int] = None,
+        larguras: Optional[List[float]] = None,
+    ) -> Table:
+        if df is None or df.empty:
+            tab = Table([["Sem dados disponíveis"]], colWidths=[26.5 * cm])
+            tab.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+                        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#334155")),
+                        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+                        ("FONTSIZE", (0, 0), (-1, -1), 8),
+                        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#CBD5E1")),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ]
+                )
+            )
+            return tab
+
+        base = df.copy()
+        if limite is not None:
+            base = base.head(limite)
+
+        dados = [list(base.columns)]
+        for _, ln in base.iterrows():
+            dados.append([RelatorioPDF._fmt(ln[c], c) for c in base.columns])
+
+        if larguras is None:
+            col_widths = [(26.5 * cm) / max(len(base.columns), 1)] * len(base.columns)
+        else:
+            col_widths = [w * cm for w in larguras]
+
+        tab = Table(dados, colWidths=col_widths, repeatRows=1, hAlign="LEFT")
+        tab.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 7),
+                    ("FONTSIZE", (0, 1), (-1, -1), 6.5),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#CBD5E1")),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        return tab
+
+    @staticmethod
+    def _rodape(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor("#64748B"))
+        canvas.drawString(1.2 * cm, 0.7 * cm, "Gestão de Quebra de Agenda")
+        canvas.drawRightString(28.3 * cm, 0.7 * cm, f"Página {doc.page}")
+        canvas.restoreState()
+
+    @staticmethod
+    def _styles():
+        s = getSampleStyleSheet()
+
+        s.add(
+            ParagraphStyle(
+                name="TituloExec",
+                parent=s["Title"],
+                fontName="Helvetica-Bold",
+                fontSize=22,
+                leading=26,
+                textColor=colors.HexColor("#0F172A"),
+                alignment=TA_CENTER,
+                spaceAfter=6,
+            )
+        )
+        s.add(
+            ParagraphStyle(
+                name="SubExec",
+                parent=s["Normal"],
+                fontName="Helvetica",
+                fontSize=10,
+                leading=14,
+                textColor=colors.HexColor("#475569"),
+                alignment=TA_CENTER,
+                spaceAfter=18,
+            )
+        )
+        s.add(
+            ParagraphStyle(
+                name="TextoPDF",
+                parent=s["Normal"],
+                fontName="Helvetica",
+                fontSize=8.5,
+                leading=11,
+                textColor=colors.HexColor("#334155"),
+                alignment=TA_LEFT,
+            )
+        )
+
+        s["Heading2"].fontName = "Helvetica-Bold"
+        s["Heading2"].fontSize = 13
+        s["Heading2"].leading = 17
+        s["Heading2"].textColor = colors.HexColor("#1E3A5F")
+
+        return s
+
+    @staticmethod
+    @st.cache_data(show_spinner=False)
+    def gerar_segmento(
+        df: pd.DataFrame,
+        tipo: str,
+        sla_meta: float,
+        p_ot: float,
+        p_base: float,
+        p_pess: float,
+        min_aloc: float = 3,
+        top_n: int = 10,
+    ) -> bytes:
+        buf = BytesIO()
+
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=landscape(A4),
+            rightMargin=1.0 * cm,
+            leftMargin=1.0 * cm,
+            topMargin=1.0 * cm,
+            bottomMargin=1.2 * cm,
+        )
+
+        s = RelatorioPDF._styles()
+        df_seg = df[df["TIPO_SERVICO"] == tipo].copy()
+
+        elementos: List[Any] = [
+            Paragraph(
+                f"RELATÓRIO EXECUTIVO<br/>{escape(tipo.upper())} — QUEBRA DE AGENDA",
+                s["TituloExec"],
+            ),
+            Paragraph(
+                f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')} | "
+                f"Registros analisados: {len(df_seg):,}".replace(",", "."),
+                s["SubExec"],
+            ),
+        ]
+
+        if df_seg.empty:
+            elementos.append(
+                Paragraph(
+                    f"Não há registros de {escape(tipo)} para os filtros aplicados.",
+                    s["TextoPDF"],
+                )
+            )
+            doc.build(
+                elementos,
+                onFirstPage=RelatorioPDF._rodape,
+                onLaterPages=RelatorioPDF._rodape,
+            )
+            buf.seek(0)
+            return buf.getvalue()
+
+        m = Motor.projetar(df_seg, p_base)
+        folga = Motor.folga_sla(df_seg, sla_meta)
+
+        # 1) Resumo executivo
+        resumo = pd.DataFrame(
+            [
+                {
+                    "Alocado": m["alocado"],
+                    "Executadas": m["exec"],
+                    "Não Exec.": m["naoexec"],
+                    "Pendentes": m["pend"],
+                    "Quebra Atual": m["quebra_atual"],
+                    "Proj. Base": m["fechamento_proj"],
+                    "Meta": sla_meta,
+                    "Exec. Mínima": folga["precisa_executar_pendente"],
+                }
+            ]
+        )
+
+        elementos.append(Paragraph("1. Resumo Executivo", s["Heading2"]))
+        elementos.append(
+            RelatorioPDF._tab(
+                resumo,
+                larguras=[3.2, 3.2, 3.2, 3.2, 3.2, 3.2, 2.6, 3.6],
+            )
+        )
+        elementos.append(Spacer(1, 0.25 * cm))
+
+        if m["fechamento_proj"] > sla_meta:
+            diagnostico = (
+                f"O cenário base projeta fechamento de {m['fechamento_proj']:.2%}, "
+                f"{(m['fechamento_proj'] - sla_meta):.2%} acima da meta de {sla_meta:.2%}. "
+                f"Será necessário executar ao menos "
+                f"{int(np.ceil(folga['precisa_executar_pendente'])):,} OS pendentes "
+                f"para retorno ao limite."
+            )
+        else:
+            diagnostico = (
+                f"O cenário base projeta fechamento de {m['fechamento_proj']:.2%}, "
+                f"com folga de {(sla_meta - m['fechamento_proj']):.2%} em relação à meta "
+                f"de {sla_meta:.2%}. A operação ainda suporta até "
+                f"{int(np.floor(folga['folga_ne_pendente'])):,} OS adicionais como "
+                f"não executadas dentro do SLA."
+            )
+
+        elementos.append(Paragraph(escape(diagnostico), s["TextoPDF"]))
+        elementos.append(Spacer(1, 0.35 * cm))
+
+        # 2) Cenários
+        cenarios = []
+        for nome, p in [
+            ("Otimista", p_ot),
+            ("Base", p_base),
+            ("Pessimista", p_pess),
+        ]:
+            proj = Motor.projetar(df_seg, p)
+            cenarios.append(
+                {
+                    "Cenário": nome,
+                    "Probab. Pend.": p,
+                    "Fechamento": proj["fechamento_proj"],
+                    "Não Exec. Proj.": proj["naoexec_proj"],
+                }
+            )
+
+        elementos.append(Paragraph("2. Cenários de Fechamento", s["Heading2"]))
+        elementos.append(
+            RelatorioPDF._tab(
+                pd.DataFrame(cenarios),
+                larguras=[5.0, 5.0, 6.0, 6.0],
+            )
+        )
+        elementos.append(Spacer(1, 0.35 * cm))
+
+        # 3) Plano de ação
+        df_causa = Motor.causa_raiz_segmento(df_seg, tipo, "_COL_BAIXA", top_n=8)
+        acoes: List[str] = []
+
+        if folga["estourado"]:
+            excesso = abs(folga["naoexec"] - folga["limite_ne_total"])
+            acoes.append(
+                f"Atuar imediatamente sobre {int(np.ceil(excesso)):,} OS acima do limite do SLA."
+            )
+
+        if folga["precisa_executar_pendente"] > 0:
+            acoes.append(
+                f"Executar no mínimo {int(np.ceil(folga['precisa_executar_pendente'])):,} "
+                f"OS pendentes para atingir a meta de {sla_meta:.0%}."
+            )
+
+        if not df_causa.empty:
+            top1 = df_causa.iloc[0]
+            acoes.append(
+                f"Atacar o principal motivo de baixa '{top1['Motivo de Baixa']}', "
+                f"responsável por {top1['% do Total']:.1%} das quebras do segmento."
+            )
+
+        if tipo == "PME":
+            acoes.extend(
+                [
+                    "Redistribuir ordens para técnicos habilitados em PME nas regiões críticas.",
+                    "Fazer contato proativo com clientes empresariais com agenda em risco.",
+                    "Revisar janelas de atendimento corporativo para reduzir indisponibilidade do cliente.",
+                ]
+            )
+        elif tipo == "Migração":
+            acoes.extend(
+                [
+                    "Validar estoque de equipamentos GPON e materiais nas regiões com maior quebra.",
+                    "Priorizar migrações no início do turno por maior tempo médio de execução.",
+                    "Confirmar habilitação técnica GPON antes da alocação das ordens.",
+                ]
+            )
+
+        elementos.append(Paragraph("3. Plano de Ação Prioritário", s["Heading2"]))
+        if acoes:
+            for i, acao in enumerate(acoes, 1):
+                elementos.append(Paragraph(f"{i}. {escape(acao)}", s["TextoPDF"]))
+                elementos.append(Spacer(1, 0.08 * cm))
+        else:
+            elementos.append(Paragraph("Sem ações automáticas identificadas.", s["TextoPDF"]))
+
+        elementos.append(PageBreak())
+
+        # 4) Técnicos críticos
+        elementos.append(Paragraph("4. Técnicos Críticos", s["Heading2"]))
+        df_tec = Motor.tecnicos_criticos(
+            df_seg, tipo, p_base, float(min_aloc), int(top_n)
+        )
+        cols_tec = [
+            c
+            for c in [
+                "TÉCNICO",
+                "Alocado",
+                "Executada",
+                "Não Executada",
+                "Pendente",
+                "Quebra Atual",
+                "Fechamento Base",
+            ]
+            if c in df_tec.columns
+        ]
+        elementos.append(
+            RelatorioPDF._tab(
+                df_tec[cols_tec] if not df_tec.empty else df_tec,
+                limite=min(int(top_n), 10),
+            )
+        )
+        elementos.append(Spacer(1, 0.35 * cm))
+
+        # 5) Performance regional
+        elementos.append(Paragraph("5. Performance Regional", s["Heading2"]))
+        df_reg = Motor.comparativo_regioes(df_seg, tipo)
+        cols_reg = [
+            c
+            for c in [
+                "REGIÃO",
+                "Alocado",
+                "Executada",
+                "Não Executada",
+                "Pendente",
+                "Quebra",
+            ]
+            if c in df_reg.columns
+        ]
+        elementos.append(RelatorioPDF._tab(df_reg[cols_reg] if not df_reg.empty else df_reg))
+        elementos.append(Spacer(1, 0.35 * cm))
+
+        # 6) Motivos de baixa
+        elementos.append(Paragraph("6. Principais Motivos de Baixa", s["Heading2"]))
+        elementos.append(RelatorioPDF._tab(df_causa, limite=8))
+        elementos.append(Spacer(1, 0.35 * cm))
+
+        # 7) Monitores
+        elementos.append(Paragraph("7. Monitores do Segmento", s["Heading2"]))
+        df_mon = Motor.tabela_cenarios(
+            df_seg, "MONITOR", p_ot, p_base, p_pess, float(min_aloc)
+        )
+        cols_mon = [
+            c
+            for c in [
+                "MONITOR",
+                "Alocado",
+                "Executada",
+                "Não Executada",
+                "Pendente",
+                "Quebra Atual",
+                "Fechamento Base",
+            ]
+            if c in df_mon.columns
+        ]
+        elementos.append(
+            RelatorioPDF._tab(
+                df_mon[cols_mon] if not df_mon.empty else df_mon,
+                limite=min(int(top_n), 10),
+            )
+        )
+
+        doc.build(
+            elementos,
+            onFirstPage=RelatorioPDF._rodape,
+            onLaterPages=RelatorioPDF._rodape,
+        )
+        buf.seek(0)
+        return buf.getvalue()
 
 
 # ====================================================
@@ -1248,6 +1659,40 @@ def render_aba_segmento(
     render_alerta_sla(m_seg["quebra_atual"], sla_meta, tipo)
 
     st.markdown("")
+    
+    # ── PDF Executivo ───────────────────────────────────────────────
+    if tipo in {"PME", "Migração"}:
+        col_pdf1, col_pdf2 = st.columns([1.2, 2.8])
+
+        with col_pdf1:
+            pdf_bytes = RelatorioPDF.gerar_segmento(
+                df=df,
+                tipo=tipo,
+                sla_meta=sla_meta,
+                p_ot=p_ot,
+                p_base=p_base,
+                p_pess=p_pess,
+                min_aloc=float(min_aloc),
+                top_n=min(int(top_n), 10),
+            )
+
+            st.download_button(
+                f"📄 Baixar PDF Executivo — {tipo}",
+                data=pdf_bytes,
+                file_name=f"relatorio_executivo_{tipo.lower().replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                key=f"pdf_exec_{tipo}",
+                use_container_width=True,
+            )
+
+        with col_pdf2:
+            st.info(
+                "O PDF executivo consolida resumo operacional, cenários de fechamento, "
+                "técnicos críticos, performance regional, principais causas de quebra "
+                "e plano de ação prioritário."
+            )
+
+        st.markdown("")
 
     # ── Sub-abas ─────────────────────────────────────────────────────
     sub1, sub2, sub3, sub4, sub5 = st.tabs(
