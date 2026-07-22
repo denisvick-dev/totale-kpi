@@ -172,8 +172,8 @@ def main():
             qtde_os,
             consultivo,
         ],
-        "COMPILADO": [gestao_ativos],
         "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons],
+        "COMPILADO": [gestao_ativos],
         "DISPAROS DIÁRIOS": [rota_inicial, volumetria],
         "QUEBRA": [quebra, quebra_pme, quebra_mig],
     }
