@@ -1,14 +1,15 @@
-"""
-Página dedicada à análise do segmento PME.
-Coloque em pages/ para navegação automática.
-"""
-
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# ── Adiciona pages/ ao sys.path (onde quebra.py está) ───────────────
+_DIR = Path(__file__).resolve().parent   # .../projeto/pages/
+if str(_DIR) not in sys.path:
+    sys.path.insert(0, str(_DIR))
+
+# ── Raiz do projeto (um nível acima de pages/) ───────────────────────
+_ROOT = _DIR.parent                      # .../projeto/
 
 from datetime import datetime
 from html import escape
@@ -20,7 +21,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-# ── ReportLab ───────────────────────────────────────────────────────
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4, landscape
@@ -52,9 +52,6 @@ from quebra import (
     render_section,
     render_segmento_header,
 )
-
-from reportlab.platypus import KeepInFrame
-from reportlab.lib.utils import ImageReader
 
 # ====================================================
 # CONFIGURAÇÃO DA PÁGINA
