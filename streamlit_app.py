@@ -159,23 +159,23 @@ def main():
         "pages/visao_tecnico_cons.py", title="Consultivo", icon="🗣️"
     )
     rota_inicial = st.Page("pages/rota_inicial.py", title="Rota Inicial", icon="🗺️")
-    quebra = st.Page("pages/quebra.py", title="Quebra de Agenda", icon="📉")
+    quebra = st.Page("pages/quebra.py", title="Geral", icon="📉")
     volumetria = st.Page("pages/volumetria.py", title="Volumetria", icon="📊")
-    quebra_pme = st.Page("pages/quebra_pme.py", title="Quebra PME", icon="📉")
-    quebra_mig = st.Page("pages/quebra_migracao.py", title="Quebra Migração", icon="📉")
+    quebra_pme = st.Page("pages/quebra_pme.py", title="Visão PME", icon="📉")
+    quebra_mig = st.Page("pages/quebra_migracao.py", title="Visão Migração", icon="📉")
 
     # Criando o Dicionário para agrupar as seções
     paginas_agrupadas = {
         "MENU PRINCIPAL": [home_page, envio_excel],
-        "PAINÉIS DE PROD. E CONS.": [
+        "CENTRAL DE PERFORMANCE": [
             ranking_pontos,
             qtde_os,
             consultivo,
-            gestao_ativos,
         ],
+        "COMPILADO": [gestao_ativos],
         "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons],
-        "DISPAROS DIÁRIOS": [rota_inicial, quebra, volumetria],
-        "QUEBRA": [quebra_pme, quebra_mig],
+        "DISPAROS DIÁRIOS": [rota_inicial, volumetria],
+        "QUEBRA": [quebra, quebra_pme, quebra_mig],
     }
 
     # Passando o dicionário para a navegação

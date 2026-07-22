@@ -64,6 +64,36 @@ class Visual:
             <h2 style="margin: 0; padding-top: 5px; color: {cores['texto']}; font-weight: 900;">{valor}</h2>
         </div>
         """
+        
+    @staticmethod        
+    def aplicar_capa():
+        st.markdown(
+            """
+        <style>
+            .hero {
+                background: linear-gradient(135deg, #F37C04 0%, #E05A00 50%, #C24400 100%);
+                padding: 2rem; border-radius: 1rem;
+                color: white; margin-bottom: 2rem;
+                box-shadow: 0 4px 15px rgba(243, 124, 4, 0.3);
+            }
+            .kpi-card {
+                padding: 1.4rem 1.6rem; border-radius: 1rem; border-left: 5px solid;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+                min-height: 110px; display: flex; flex-direction: column; justify-content: center;
+            }
+            .kpi-val  { font-size: 1.85rem; font-weight: 800; line-height: 1.1; margin: 0.3rem 0; }
+            .kpi-lab  { font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
+            .kpi-sub  { font-size: 0.78rem; margin-top: 0.2rem; }
+            .section-header {
+                display: flex; align-items: center; gap: 0.6rem;
+                margin: 1.5rem 0 0.8rem; padding-bottom: 0.4rem;
+                border-bottom: 2px solid #E2E8F0;
+            }
+            .section-header h3 { margin: 0; font-size: 1.1rem; color: #0F172A; }
+        </style>
+        """,
+            unsafe_allow_html=True,
+        )
 
 
 # ====================================================
@@ -241,7 +271,14 @@ class ProcessadorDeDados:
 # ====================================================
 
 st.set_page_config(page_title="Atualização de Dados", page_icon="🔁", layout="wide")
-st.title("🔁 Central de Atualização de Dados")
+
+Visual.aplicar_capa()
+st.markdown(
+    '<div class="hero" style="background:linear-gradient(135deg,#1E293B 0%,#475569 35%,#94A3B8 70%,#CBD5E1 100%);">'
+    "<h1>🔁 Central de Atualização de Dados</h1>"
+    "</div>",
+    unsafe_allow_html=True,
+)
 
 
 def executar_atualizacao():

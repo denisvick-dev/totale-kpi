@@ -92,6 +92,36 @@ class ComponenteVisual:
             <p style="margin:0; font-size:13px; color:{cores['titulo']};"><b>{titulo}</b></p>
             <h2 style="margin:5px 0 0 0; color:{cores['texto']}; font-weight:900; font-size:28px;">{valor}{delta_html}</h2>
         </div>"""
+        
+    @staticmethod        
+    def aplicar_capa():
+        st.markdown(
+            """
+        <style>
+            .hero {
+                background: linear-gradient(135deg, #F37C04 0%, #E05A00 50%, #C24400 100%);
+                padding: 2rem; border-radius: 1rem;
+                color: white; margin-bottom: 2rem;
+                box-shadow: 0 4px 15px rgba(243, 124, 4, 0.3);
+            }
+            .kpi-card {
+                padding: 1.4rem 1.6rem; border-radius: 1rem; border-left: 5px solid;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+                min-height: 110px; display: flex; flex-direction: column; justify-content: center;
+            }
+            .kpi-val  { font-size: 1.85rem; font-weight: 800; line-height: 1.1; margin: 0.3rem 0; }
+            .kpi-lab  { font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
+            .kpi-sub  { font-size: 0.78rem; margin-top: 0.2rem; }
+            .section-header {
+                display: flex; align-items: center; gap: 0.6rem;
+                margin: 1.5rem 0 0.8rem; padding-bottom: 0.4rem;
+                border-bottom: 2px solid #E2E8F0;
+            }
+            .section-header h3 { margin: 0; font-size: 1.1rem; color: #0F172A; }
+        </style>
+        """,
+            unsafe_allow_html=True,
+        )
 
 
 class Calculos:
@@ -208,7 +238,14 @@ def preparar_ranking(
 # ====================================================
 # BLOCO 3: CARREGAMENTO PRINCIPAL E TRATAMENTO
 # ====================================================
-st.title("📋 Painel de Consultivos e Produtos")
+ComponenteVisual.aplicar_capa()
+st.markdown(
+    '<div class="hero" style="background:linear-gradient(135deg,#C24400 0%,#E05A00 35%,#F37C04 70%,#FFAB40 100%);">'
+    "<h1>📋 Central de Performance | Painel de Consultivos e Produtos</h1>"
+    "<p>Análise de mix de produtos, consultivos realizados e oportunidades comerciais</p>"
+    "</div>",
+    unsafe_allow_html=True,
+)
 
 if (
     "dados_cons" not in st.session_state
