@@ -122,7 +122,24 @@ class ComponenteVisual:
         """,
             unsafe_allow_html=True,
         )
+        
+    @staticmethod
+    def colorir_metas(valor: Any) -> str:
+        """Destaca valores numéricos maiores que 350."""
+        try:
+            numero = pd.to_numeric(valor, errors="coerce")
 
+            if pd.notna(numero) and numero > 350:
+                return (
+                    "background-color: #BBF7D0; "
+                    "color: #166534; "
+                    "font-weight: bold;"
+                )
+        except (TypeError, ValueError):
+            pass
+
+        # Mantém a formatação original da coluna
+        return ""
 
 class Calculos:
     @staticmethod
@@ -464,19 +481,46 @@ colunas_reais = [
 ]
 todas_num = [c for c in df_exibir.columns if c not in ["Posição"] + grupo]
 
-style_df = df_exibir.style.format(formatter=cast(Any, {c: "{:,}" for c in todas_num}))
+style_df = df_exibir.style.format(
+    formatter=cast(Any, {c: "{:,}" for c in todas_num})
+)
+
+# Formatação das colunas realizadas
 if colunas_reais:
     style_df = style_df.set_properties(
-        **{"background-color": "#F8FAFC", "font-weight": "bold"},
+        **{
+            "background-color": "#F8FAFC",
+            "font-weight": "bold",
+        },
         subset=cast(Any, colunas_reais),
     )
+
+# Formatação das colunas projetadas
 if colunas_proj:
     style_df = style_df.set_properties(
-        **{"background-color": "#FEF9C3", "color": "#854D0E", "font-weight": "bold"},
+        **{
+            "background-color": "#FEF9C3",
+            "color": "#854D0E",
+            "font-weight": "bold",
+        },
         subset=cast(Any, colunas_proj),
     )
 
-st.dataframe(style_df, use_container_width=True, height=450, hide_index=True)
+# Colunas nas quais a meta de 350 será verificada
+coluna_meta = colunas_reais
+
+if coluna_meta:
+    style_df = style_df.map(
+        ComponenteVisual.colorir_metas,
+        subset=cast(Any, coluna_meta),
+    )
+
+st.dataframe(
+    style_df,
+    use_container_width=True,
+    height=450,
+    hide_index=True,
+)
 
 # Abas de Gráficos Rápidos e Alertas
 aba1, aba2 = st.tabs(["📈 Desempenho e Matriz", "🚫 Equipes sem Consultivos"])
