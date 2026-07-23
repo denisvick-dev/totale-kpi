@@ -794,6 +794,97 @@ class PDFExecutivoMigracao:
         doc.build(el, onFirstPage=cls._rodape, onLaterPages=cls._rodape)
         buf.seek(0)
         return buf.getvalue()
+    
+# ====================================================
+# UTILITÁRIO — DataFrame de Pendentes Migração
+# ====================================================
+
+def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
+    """
+    Retorna um DataFrame com as OS pendentes do segmento Migração,
+    contendo as colunas: Contrato, Login, Técnico, Monitor e Qtde. de O.S.
+
+    Faz busca tolerante aos nomes de coluna reais do DataFrame.
+    """
+
+    # ── Mapeamento tolerante de colunas ────────────────────────────
+    MAPA_COLUNAS = {
+        "Contrato": [
+            "CONTRATO", "Nº CONTRATO", "NUM_CONTRATO",
+            "NUMERO CONTRATO", "NÚMERO CONTRATO", "CONTRATO_ID",
+            "COD_CONTRATO", "CÓDIGO CONTRATO",
+        ],
+        "Login": [
+            "LOGIN", "LOGIN TÉCNICO", "LOGIN_TECNICO",
+            "USER", "USUÁRIO", "USERNAME",
+        ],
+        "Técnico": [
+            "TÉCNICO", "TECNICO", "NOME TÉCNICO",
+            "NOME_TECNICO", "NOME DO TÉCNICO",
+        ],
+        "Monitor": [
+            "MONITOR", "SUPERVISOR", "NOME MONITOR",
+            "NOME_MONITOR",
+        ],
+        "Qtde. O.S.": [
+            "TOTAL DE TAREFAS"
+        ],
+    }
+
+    def _encontrar_coluna(df: pd.DataFrame, candidatos: list[str]) -> str | None:
+        """Retorna o primeiro nome de coluna que existir no DataFrame."""
+        cols_upper = {c.upper(): c for c in df.columns}
+        for cand in candidatos:
+            if cand.upper() in cols_upper:
+                return cols_upper[cand.upper()]
+        return None
+
+    # ── Filtrar apenas pendentes ────────────────────────────────────
+    if "Status Contrato" in df_seg.columns:
+        mask_pend = df_seg["Status Contrato"].str.upper().isin(
+            ["PENDENTE", "PENDING", "ABERTO", "EM ABERTO", "NÃO EXECUTADO"]
+        )
+    else:
+        # Fallback: usa classificar_status se disponível
+        mask_pend = pd.Series([True] * len(df_seg), index=df_seg.index)
+
+    df_pend = df_seg[mask_pend].copy()
+
+    if df_pend.empty:
+        return pd.DataFrame(
+            columns=["Contrato", "Login", "Técnico", "Monitor", "Qtde. de O.S."]
+        )
+
+    # ── Montar DataFrame de saída ───────────────────────────────────
+    df_out = pd.DataFrame(index=df_pend.index)
+
+    for nome_saida, candidatos in MAPA_COLUNAS.items():
+        col_real = _encontrar_coluna(df_pend, candidatos)
+
+        if col_real:
+            df_out[nome_saida] = df_pend[col_real].values
+        else:
+            df_out[nome_saida] = "N/D"   # coluna não encontrada na base
+            
+    if "Qtde. O.S." in df_out.columns:
+        df_out["Qtde. O.S."] = (
+            pd.to_numeric(df_out["Qtde. O.S."], errors="coerce")
+            .fillna(0)                                                # NaN → 0
+            .astype(int)                                            # float → int
+    )
+
+    # Remove duplicatas, ordena por Técnico
+    df_out = (
+        df_out
+        .drop_duplicates()
+        .sort_values(["Técnico"], na_position="last")
+        .reset_index(drop=True)
+    )
+
+    # Índice começando em 1 para exibição
+    df_out.index = df_out.index + 1
+
+    return df_out
 
 
 # ====================================================
@@ -1090,7 +1181,191 @@ def _sub_plano_acao(
             f"plano_{TIPO.lower()}.xlsx",
             key="dl_plano_mig",
         )
+        
+def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
+    """
+    Exibe tabela de contratos pendentes com:
+    Contrato · Login · Técnico · Monitor · Qtde. de O.S.
+    + métricas rápidas + exportação Excel.
+    """
 
+    render_section(f"📋 Contratos Pendentes — {TIPO}")
+
+    # ── Gera o DataFrame ────────────────────────────────────────────
+    df_pend = _build_df_pendentes(df_seg)
+
+    # ── Métricas rápidas ────────────────────────────────────────────
+    total_pend = len(df_pend)
+
+    m1, m2, m3 = st.columns(3)
+
+    render_kpi(
+        m1,
+        "Total Pendentes",
+        f"{total_pend:,}",
+        sub="contratos sem execução",
+        tema="laranja" if total_pend > 0 else "verde",
+    )
+
+    # Técnicos únicos com pendência
+    tec_unicos = (
+        df_pend["Técnico"]
+        .replace("N/D", pd.NA)
+        .dropna()
+        .nunique()
+    )
+    render_kpi(
+        m2,
+        "Técnicos Envolvidos",
+        f"{tec_unicos:,}",
+        sub="com contrato pendente",
+        tema="azul",
+    )
+
+    # Monitores únicos
+    mon_unicos = (
+        df_pend["Monitor"]
+        .replace("N/D", pd.NA)
+        .dropna()
+        .nunique()
+    )
+    render_kpi(
+        m3,
+        "Monitores Envolvidos",
+        f"{mon_unicos:,}",
+        sub="supervisionando pendências",
+        tema="cinza",
+    )
+
+    st.markdown("")
+
+    if df_pend.empty:
+        render_insight(
+            "✅ Nenhum contrato pendente encontrado para os filtros atuais.",
+            tipo="ok",
+        )
+        return
+
+    # ── Filtros rápidos dentro da aba ───────────────────────────────
+    with st.expander("🔎 Filtros rápidos na tabela de pendentes", expanded=False):
+        fc1, fc2 = st.columns(2)
+
+        with fc1:
+            opts_tec = ["Todos"] + sorted(
+                str(x)
+                for x in df_pend["Técnico"].dropna().unique()
+                if str(x) not in {"N/D", "nan"}
+            )
+            f_tec = st.selectbox(
+                "Técnico", opts_tec, key="pend_f_tec"
+            )
+
+        with fc2:
+            opts_mon = ["Todos"] + sorted(
+                str(x)
+                for x in df_pend["Monitor"].dropna().unique()
+                if str(x) not in {"N/D", "nan"}
+            )
+            f_mon = st.selectbox(
+                "Monitor", opts_mon, key="pend_f_mon"
+            )
+
+    # Aplica filtros rápidos
+    df_view = df_pend.copy()
+    if f_tec != "Todos":
+        df_view = df_view[df_view["Técnico"] == f_tec]
+    if f_mon != "Todos":
+        df_view = df_view[df_view["Monitor"] == f_mon]
+
+    # ── Exibição da tabela ──────────────────────────────────────────
+    st.markdown(
+        f"**Exibindo {len(df_view):,} de {total_pend:,} contratos pendentes**"
+    )
+
+    render_dataframe(
+        df_view.reset_index(drop=True),
+        titulo=f"Contratos Pendentes — {TIPO}",
+        icone="📋",
+        height=480,
+    )
+
+    # ── Gráficos auxiliares ─────────────────────────────────────────
+    st.markdown("")
+    render_section("📊 Distribuição das Pendências")
+    
+    df_top_mon = (
+        df_view[df_view["Monitor"] != "N/D"]
+        .groupby("Monitor")
+        .size()
+        .reset_index(name="Pendentes")
+        .sort_values("Pendentes")
+    )
+
+    if not df_top_mon.empty:
+        fig_mon = go.Figure(
+            go.Bar(
+                x=df_top_mon["Pendentes"],
+                y=df_top_mon["Monitor"],
+                orientation="h",
+                marker_color="#7C3AED",
+                text=df_top_mon["Pendentes"],
+                textposition="outside",
+            )
+        )
+        fig_mon.update_layout(
+            title="Pendentes por Monitor",
+            xaxis_title="Contratos Pendentes",
+            yaxis=dict(autorange="reversed"),
+            height=max(300, len(df_top_mon) * 38),
+            margin=dict(l=10, r=30, t=40, b=10),
+        )
+        st.plotly_chart(
+            fig_mon,
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
+    else:
+        st.info("Sem dados de monitor para exibir.")
+
+    # ── Exportação ──────────────────────────────────────────────────
+    st.markdown("")
+    col_exp1, col_exp2, _ = st.columns([1, 1, 2])
+
+    with col_exp1:
+        st.download_button(
+            label="📥 Exportar Pendentes (filtrado)",
+            data=Utils.gerar_excel(
+                df_view.reset_index(drop=True),
+                f"Pendentes_{TIPO[:20]}_filtrado",
+            ),
+            file_name=(
+                f"pendentes_pme_filtrado_"
+                f"{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            ),
+            mime=(
+                "application/vnd.openxmlformats-officedocument"
+                ".spreadsheetml.sheet"
+            ),
+            key="dl_pend_pme_filtrado",
+        )
+
+    with col_exp2:
+        st.download_button(
+            label="📥 Exportar Pendentes (completo)",
+            data=Utils.gerar_excel(
+                df_pend.reset_index(drop=True),
+                f"Pendentes_{TIPO[:20]}_completo",
+            ),
+            file_name=(
+                f"pendentes_pme_completo_"
+                f"{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            ),
+            mime=(
+                "application/vnd.openxmlformats-officedocument"
+                ".spreadsheetml.sheet"
+            ),
+            key="dl_pend_pme_completo",
+        )
 
 # ====================================================
 # APLICAÇÃO PRINCIPAL
@@ -1205,8 +1480,8 @@ def main() -> None:
     st.divider()
 
     # ── Sub-abas ─────────────────────────────────────────────────────
-    sub1, sub2, sub3, sub4 = st.tabs(
-        ["📊 Visão Geral", "🔍 Causa Raiz", "👤 Técnicos", "🎯 Plano de Ação"]
+    sub1, sub2, sub3, sub4, sub5 = st.tabs(
+        ["📊 Visão Geral", "🔍 Causa Raiz", "👤 Técnicos", "🎯 Plano de Ação", "📋 Pendentes"]
     )
     with sub1:
         _sub_visao_geral(df_seg, m_seg, p_ot, p_base, p_pess, sla_meta)
@@ -1216,6 +1491,8 @@ def main() -> None:
         _sub_tecnicos(df_seg, p_base, min_aloc, top_n, sla_meta)
     with sub4:
         _sub_plano_acao(df_seg, p_base, sla_meta)
+    with sub5:
+        _sub_pendentes(df_seg, sla_meta)
 
 
 # ====================================================
