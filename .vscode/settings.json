@@ -1,6 +1,6 @@
 {
-    "editor.fontFamily": "Victor Mono",
-    "editor.fontSize": 14,
+    "editor.fontFamily": "Recursive Mono Linear Light",
+    "editor.fontSize": 16,
     "editor.defaultFormatter": "shamanu4.django-intellisense",
     "editor.fontVariations": false
 }
