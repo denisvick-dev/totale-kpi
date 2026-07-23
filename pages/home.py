@@ -30,6 +30,13 @@ def get_css_global():
     <style>
         /* Fundo geral */
         .main { background-color: #F3F2F1; }
+        
+        /* ── Hero Banner ── */
+        .hero {
+            background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
+            padding: 2rem; border-radius: 1rem;
+            color: white; margin-bottom: 2rem;
+        }
 
         /* Remove padding exagerado */
         .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
@@ -110,12 +117,10 @@ def get_css_carousel():
 def render_header():
     """Renderiza o cabeçalho do portal."""
     st.markdown(
-        """
-    <div class="top-bar">
-        <h2 style="margin:0;">📊 Portal TOTALE</h2>
-        <span>Painéis de Produção, Indicadores e Gestão Estratégica</span>
-    </div>
-    """,
+        '<div class="hero" style="background:linear-gradient(135deg, #012869 0%, #7A5237 50%, #F37C04 100%);">'
+        "<h1>📊 Portal TOTALE</h1>"
+        "<p>Painéis de Produção, Indicadores e Gestão Estratégica</p>"
+        "</div>",
         unsafe_allow_html=True,
     )
 
