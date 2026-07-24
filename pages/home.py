@@ -31,11 +31,48 @@ def get_css_global():
         /* Fundo geral */
         .main { background-color: #F3F2F1; }
         
-        /* ── Hero Banner ── */
-        .hero {
-            background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
-            padding: 2rem; border-radius: 1rem;
-            color: white; margin-bottom: 2rem;
+    /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
+            .hero-corp {
+            background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
+            padding: 32px 40px;
+            border-radius: 16px;
+            color: white;
+            box-shadow: 0 10px 40px rgba(1, 40, 105, 0.25);
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-corp::before {
+            content: '';
+            position: absolute;
+            top: -50%; right: -10%;
+            width: 400px; height: 400px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+        }
+        .hero-title {
+            font-size: 34px;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.5px;
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+        }
+        .hero-subtitle {
+            font-size: 15px;
+            opacity: 0.92;
+            margin: 6px 0 0 0;
+            font-weight: 400;
+        }
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.18);
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
         }
 
         /* Remove padding exagerado */
@@ -117,10 +154,16 @@ def get_css_carousel():
 def render_header():
     """Renderiza o cabeçalho do portal."""
     st.markdown(
-        '<div class="hero" style="background:linear-gradient(135deg, #012869 0%, #7A5237 50%, #F37C04 100%);">'
-        "<h1>📊 Portal TOTALE</h1>"
-        "<p>Painéis de Produção, Indicadores e Gestão Estratégica</p>"
-        "</div>",
+        f"""
+        <div class="hero-corp">
+            <div style="position:relative;z-index:2;">
+                <h1 class="hero-title">📊 Portal TOTALE</h1>
+                <p class="hero-subtitle">
+                    Painéis de Produção, Indicadores e Gestão Estratégica
+                </p>
+            </div>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 

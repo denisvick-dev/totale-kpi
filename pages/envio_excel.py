@@ -38,8 +38,8 @@ class Configuracoes:
     }
 
     # URLs de Exportação
-    URL_PROD  = "https://docs.google.com/spreadsheets/d/11Dp9WdZYUrT_LBvfo07Mi8muKXZykU7v/export?format=xlsx"
-    URL_CONS  = "https://drive.google.com/uc?id=1YOWJ0HuGcEP2vJaZwl2kcgrtNgsoMBDs&export=download"
+    URL_PROD = "https://docs.google.com/spreadsheets/d/11Dp9WdZYUrT_LBvfo07Mi8muKXZykU7v/export?format=xlsx"
+    URL_CONS = "https://drive.google.com/uc?id=1YOWJ0HuGcEP2vJaZwl2kcgrtNgsoMBDs&export=download"
     URL_ATIVOS = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/export?format=csv"
 
     # Valores considerados "vazios" — centralizado aqui para ser usado em todo o projeto
@@ -73,12 +73,123 @@ class Visual:
         st.markdown(
             """
         <style>
-            .hero {
-                background: linear-gradient(135deg, #F37C04 0%, #E05A00 50%, #C24400 100%);
-                padding: 2rem; border-radius: 1rem;
-                color: white; margin-bottom: 2rem;
-                box-shadow: 0 4px 15px rgba(243, 124, 4, 0.3);
-            }
+        /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) — ESTILO PORTAL TOTALE */
+        .hero-corp {
+            background: linear-gradient(90deg, 
+                #1E293B 0%,       /* Slate escuro (esquerda) */
+                #334155 25%,      /* Slate médio */
+                #64748B 55%,      /* Prata slate */
+                #94A3B8 75%,      /* Prata claro */
+                #CBD5E1 92%,      /* Prata brilhante */
+                #94A3B8 100%      /* Retorno sutil ao prata */
+            );
+            padding: 32px 48px;
+            border-radius: 12px;
+            color: white;
+            box-shadow: 
+                0 8px 32px rgba(15, 23, 42, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.20);
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(203, 213, 225, 0.25);
+            min-height: 110px;
+        }
+
+        /* Círculo prata brilhante no canto direito (como o dourado da imagem) */
+        .hero-corp::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -80px;
+            transform: translateY(-50%);
+            width: 380px;
+            height: 380px;
+            background: radial-gradient(
+                circle at center,
+                rgba(226, 232, 240, 0.35) 0%,      /* Centro prata brilhante */
+                rgba(203, 213, 225, 0.20) 30%,     /* Prata médio */
+                rgba(148, 163, 184, 0.08) 55%,     /* Prata suave */
+                transparent 75%
+            );
+            border-radius: 50%;
+            pointer-events: none;
+            filter: blur(2px);
+        }
+
+        /* Reflexo prata diagonal (efeito metálico escovado) */
+        .hero-corp::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 40%;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0.06) 40%,
+                rgba(255, 255, 255, 0.12) 50%,
+                rgba(255, 255, 255, 0.06) 60%,
+                transparent 100%
+            );
+            transform: skewX(-15deg);
+            pointer-events: none;
+        }
+
+        .hero-title {
+            font-size: 36px;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.8px;
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+            color: #FFFFFF;
+            text-shadow: 
+                0 2px 4px rgba(0, 0, 0, 0.5),
+                0 1px 2px rgba(0, 0, 0, 0.3),
+                0 0 24px rgba(255, 255, 255, 0.12);
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .hero-subtitle {
+            font-size: 14px;
+            opacity: 0.90;
+            margin: 8px 0 0 0;
+            font-weight: 400;
+            color: #F1F5F9;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+            position: relative;
+            z-index: 2;
+            letter-spacing: 0.3px;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: linear-gradient(135deg,
+                rgba(255, 255, 255, 0.22) 0%,
+                rgba(255, 255, 255, 0.10) 100%
+            );
+            padding: 5px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            color: #FFFFFF;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            box-shadow: 
+                0 2px 8px rgba(0, 0, 0, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            position: relative;
+            z-index: 2;
+        }
+        
             .kpi-card {
                 padding: 1.4rem 1.6rem; border-radius: 1rem; border-left: 5px solid;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.06);
@@ -116,8 +227,10 @@ class ProcessadorDeDados:
         return (
             serie.astype(str)
             .str.strip()
-            .replace(list(Configuracoes.VAZIOS), "")  # Substitui strings vazias conhecidas
-            .fillna("")                                 # Garante que np.nan vire ""
+            .replace(
+                list(Configuracoes.VAZIOS), ""
+            )  # Substitui strings vazias conhecidas
+            .fillna("")  # Garante que np.nan vire ""
         )
 
     @staticmethod
@@ -152,7 +265,7 @@ class ProcessadorDeDados:
         #    → tv_do_internet  = "CLARO TV+ BOX"
         # ----------------------------------------------------------------
         internet_bruta = df["PLANO INTERNET"].astype(str).str.strip()
-        partes          = internet_bruta.str.split(".", n=1, expand=True)
+        partes = internet_bruta.str.split(".", n=1, expand=True)
 
         internet_limpa = ProcessadorDeDados._normalizar_serie(partes[0])
 
@@ -178,7 +291,7 @@ class ProcessadorDeDados:
         # ----------------------------------------------------------------
         # 5. Flags booleanas (base para contagem e tipo de serviço)
         # ----------------------------------------------------------------
-        tem_tv       = tv_limpa       != ""
+        tem_tv = tv_limpa != ""
         tem_internet = internet_limpa != ""
 
         # ----------------------------------------------------------------
@@ -191,9 +304,9 @@ class ProcessadorDeDados:
         # 7. TIPO SERVIÇO — np.select deixa as condições legíveis
         # ----------------------------------------------------------------
         condicoes = [
-            tem_tv & tem_internet,           # Tem ambos
-            tem_tv & ~tem_internet,          # Só TV
-            ~tem_tv & tem_internet,          # Só Internet
+            tem_tv & tem_internet,  # Tem ambos
+            tem_tv & ~tem_internet,  # Só TV
+            ~tem_tv & tem_internet,  # Só Internet
         ]
         opcoes = [
             tv_limpa + " & " + internet_limpa,
@@ -205,7 +318,7 @@ class ProcessadorDeDados:
         # ----------------------------------------------------------------
         # 8. Persiste as colunas limpas no DataFrame
         # ----------------------------------------------------------------
-        df["PLANO TV"]       = tv_limpa
+        df["PLANO TV"] = tv_limpa
         df["PLANO INTERNET"] = internet_limpa
 
         return df
@@ -274,42 +387,48 @@ class ProcessadorDeDados:
         # 4. Processamento de Produtos (códigos numéricos na OBSERVACAO)
         if "OBSERVACAO" in cons.columns:
             cons["LISTA_PRODUTOS"] = (
-                cons["OBSERVACAO"]
-                .fillna("")
-                .astype(str)
-                .str.findall(r"\b\d{9,12}\b")
+                cons["OBSERVACAO"].fillna("").astype(str).str.findall(r"\b\d{9,12}\b")
             )
             cons["QTDE_PRODUTOS"] = cons["LISTA_PRODUTOS"].apply(len)
         else:
             cons["LISTA_PRODUTOS"] = [[] for _ in range(len(cons))]
-            cons["QTDE_PRODUTOS"]  = 0
+            cons["QTDE_PRODUTOS"] = 0
 
         # 5. Tratamento vetorizado de planos (TV / Internet / Tipo)
         cons = ProcessadorDeDados.tratar_planos_vetorizado(cons)
 
         # 6. Cálculos de Equipamentos
-        tipo_servico = cons.get("TIPO SERVIÇO", pd.Series("", index=cons.index)).fillna("").astype(str)
-        qtde_prod    = cons["QTDE_PRODUTOS"].fillna(0).astype(int)
+        tipo_servico = (
+            cons.get("TIPO SERVIÇO", pd.Series("", index=cons.index))
+            .fillna("")
+            .astype(str)
+        )
+        qtde_prod = cons["QTDE_PRODUTOS"].fillna(0).astype(int)
 
-        is_combinado = tipo_servico.str.contains("&",    case=False, regex=False)
-        tem_tv       = tipo_servico.str.contains("TV",   case=False, regex=False)
-        tem_virtua   = tipo_servico.str.contains(r"MEGA|GIGA", case=False, regex=True)
+        is_combinado = tipo_servico.str.contains("&", case=False, regex=False)
+        tem_tv = tipo_servico.str.contains("TV", case=False, regex=False)
+        tem_virtua = tipo_servico.str.contains(r"MEGA|GIGA", case=False, regex=True)
 
         # Quando é combinado (TV + Internet), cada serviço conta como 1 equipamento
         # Quando é simples, multiplica pela qtde de produtos (ex: mesh)
-        cons["QTDE_TV"]     = np.where(is_combinado, tem_tv.astype(int),     tem_tv.astype(int)     * qtde_prod)
-        cons["QTDE_VIRTUA"] = np.where(is_combinado, tem_virtua.astype(int), tem_virtua.astype(int) * qtde_prod)
-        cons["QTDE_MESH"]   = (qtde_prod - cons["QTDE_TV"] - cons["QTDE_VIRTUA"]).clip(lower=0)
+        cons["QTDE_TV"] = np.where(
+            is_combinado, tem_tv.astype(int), tem_tv.astype(int) * qtde_prod
+        )
+        cons["QTDE_VIRTUA"] = np.where(
+            is_combinado, tem_virtua.astype(int), tem_virtua.astype(int) * qtde_prod
+        )
+        cons["QTDE_MESH"] = (qtde_prod - cons["QTDE_TV"] - cons["QTDE_VIRTUA"]).clip(
+            lower=0
+        )
 
         # 7. Merge com Ativos
         if (
             not ativos.empty
-            and "Login"          in ativos.columns
+            and "Login" in ativos.columns
             and "LOGIN NETSALES" in cons.columns
         ):
-            ativos_limpo = (
-                ativos[["Login", "Monitor", "U.N.", "Base"]]
-                .drop_duplicates(subset=["Login"])
+            ativos_limpo = ativos[["Login", "Monitor", "U.N.", "Base"]].drop_duplicates(
+                subset=["Login"]
             )
             cons = pd.merge(
                 cons,
@@ -331,16 +450,21 @@ st.set_page_config(page_title="Atualização de Dados", page_icon="🔁", layout
 
 Visual.aplicar_capa()
 st.markdown(
-    '<div class="hero" style="background:linear-gradient(135deg,#1E293B 0%,#475569 35%,#94A3B8 70%,#CBD5E1 100%);">'
-    "<h1>🔁 Central de Atualização de Dados</h1>"
-    "</div>",
+    f"""
+    <div class="hero-corp">
+        <div style="position:relative;z-index:2;">
+            <h1 class="hero-title">🔁 Central de Atualização de Dados</h1>
+            <p class="hero-subtitle">Sincronização e gestão de bases operacionais</p>
+        </div>
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 
 
 def executar_atualizacao() -> bool:
     status = st.empty()
-    barra  = st.progress(0)
+    barra = st.progress(0)
 
     try:
         status.info("⏳ Fazendo download e processando dados em nuvem. Aguarde...")
@@ -350,9 +474,9 @@ def executar_atualizacao() -> bool:
         p_raw, c_raw, a_raw = ProcessadorDeDados.baixar_e_processar()
         barra.progress(90)
 
-        st.session_state["dados_prod"]        = p_raw
-        st.session_state["dados_cons"]        = c_raw
-        st.session_state["dados_ativos"]      = a_raw
+        st.session_state["dados_prod"] = p_raw
+        st.session_state["dados_cons"] = c_raw
+        st.session_state["dados_ativos"] = a_raw
         st.session_state["ultima_atualizacao"] = datetime.now(Configuracoes.FUSO)
 
         barra.progress(100)
@@ -376,7 +500,9 @@ col_btn, _ = st.columns([1, 4])
 with col_btn:
     if st.button("🔄 Atualizar Agora", use_container_width=True, type="primary"):
         if executar_atualizacao():
-            st.success("✅ Dados atualizados com sucesso e disponíveis para todas as páginas!")
+            st.success(
+                "✅ Dados atualizados com sucesso e disponíveis para todas as páginas!"
+            )
 
 st.divider()
 
@@ -405,14 +531,18 @@ hora_str = (
     else "Nunca atualizado"
 )
 
-aba1, aba2 = st.tabs(["📊 Pré-visualização: Produção", "📋 Pré-visualização: Consultivos"])
+aba1, aba2 = st.tabs(
+    ["📊 Pré-visualização: Produção", "📋 Pré-visualização: Consultivos"]
+)
 
 # ---------- Aba Produção ----------
 with aba1:
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown(
-            Visual.criar_card("Total Registros", f"{len(df_prod):,}".replace(",", "."), "azul"),
+            Visual.criar_card(
+                "Total Registros", f"{len(df_prod):,}".replace(",", "."), "azul"
+            ),
             unsafe_allow_html=True,
         )
     with c2:
@@ -427,7 +557,9 @@ with aba1:
         )
 
     if not df_prod.empty:
-        st.dataframe(df_prod.head(100), use_container_width=True, height=400, hide_index=True)
+        st.dataframe(
+            df_prod.head(100), use_container_width=True, height=400, hide_index=True
+        )
     else:
         st.warning("⚠️ Nenhuma aba chamada 'Prod' encontrada.")
 
@@ -436,7 +568,9 @@ with aba2:
     c4, c5, c6 = st.columns(3)
     with c4:
         st.markdown(
-            Visual.criar_card("Total Registros", f"{len(df_cons):,}".replace(",", "."), "azul"),
+            Visual.criar_card(
+                "Total Registros", f"{len(df_cons):,}".replace(",", "."), "azul"
+            ),
             unsafe_allow_html=True,
         )
     with c5:
@@ -451,6 +585,8 @@ with aba2:
         )
 
     if not df_cons.empty:
-        st.dataframe(df_cons.head(100), use_container_width=True, height=400, hide_index=True)
+        st.dataframe(
+            df_cons.head(100), use_container_width=True, height=400, hide_index=True
+        )
     else:
         st.warning("⚠️ Nenhuma aba encontrada ou o arquivo CSV está vazio.")

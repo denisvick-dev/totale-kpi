@@ -159,12 +159,50 @@ class ComponenteVisual:
         st.markdown(
             """
         <style>
-            .hero {
-                background: linear-gradient(135deg, #F37C04 0%, #E05A00 50%, #C24400 100%);
-                padding: 2rem; border-radius: 1rem;
-                color: white; margin-bottom: 2rem;
-                box-shadow: 0 4px 15px rgba(243, 124, 4, 0.3);
-            }
+    /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
+            .hero-corp {
+            background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
+            padding: 32px 40px;
+            border-radius: 16px;
+            color: white;
+            box-shadow: 0 10px 40px rgba(1, 40, 105, 0.25);
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-corp::before {
+            content: '';
+            position: absolute;
+            top: -50%; right: -10%;
+            width: 400px; height: 400px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+        }
+        .hero-title {
+            font-size: 34px;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.5px;
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+        }
+        .hero-subtitle {
+            font-size: 15px;
+            opacity: 0.92;
+            margin: 6px 0 0 0;
+            font-weight: 400;
+        }
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.18);
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        
             .kpi-card {
                 padding: 1.4rem 1.6rem; border-radius: 1rem; border-left: 5px solid;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.06);
@@ -615,12 +653,18 @@ class Graficos:
 # ====================================================
 ComponenteVisual.aplicar_capa()
 st.markdown(
-    '<div class="hero" style="background:linear-gradient(135deg,#C24400 0%,#E05A00 35%,#F37C04 70%,#FFAB40 100%);">'
-    "<h1>📈 Central de Performance | Produção por Técnico</h1>"
-    "<p>Acompanhamento individual de execução, produtividade e performance em campo</p>"
-    "</div>",
-    unsafe_allow_html=True,
-)
+        f"""
+        <div class="hero-corp">
+            <div style="position:relative;z-index:2;">
+                <h1 class="hero-title">📈 Central de Performance | Produção por Técnico</h1>
+                <p class="hero-subtitle">
+                    Acompanhamento individual de execução, produtividade e performance em campo
+                </p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 if "dados_prod" not in st.session_state:
     st.warning("⚠️ Carregue os dados na página principal primeiro.")

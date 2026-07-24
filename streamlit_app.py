@@ -4,7 +4,6 @@ import pandas as pd
 # Injeção de CSS para personalizar a aparência da Sidebar e dos widgets
 st.html("""
     <style>
-    
     /* CRIAÇÃO DE ESTILOS PARA A SIDEBAR */
     
     .stSidebar h2 {
