@@ -35,8 +35,8 @@ for _p in [_HERE, _ROOT]:
         sys.path.insert(0, _p)
 
 try:
-    from utils import Utils                                  # type: ignore
-    from componentes import aplicar_estilo, render_section   # type: ignore
+    from utils import Utils  # type: ignore
+    from componentes import aplicar_estilo, render_section  # type: ignore
 except ImportError:
     Utils = None
     aplicar_estilo = lambda: None
@@ -48,18 +48,18 @@ except ImportError:
 # ====================================================
 META_QUEBRA = 0.20
 
-COR_PRIMARIA   = "#012869"
+COR_PRIMARIA = "#012869"
 COR_SECUNDARIA = "#F37C04"
-COR_SUCESSO    = "#059669"
-COR_ALERTA     = "#DC2626"
-COR_NEUTRO     = "#64748B"
+COR_SUCESSO = "#059669"
+COR_ALERTA = "#DC2626"
+COR_NEUTRO = "#64748B"
 
 CORES_TIPO = {
-    "Novos Domicílios":  "#1E40AF",
-    "Migração":          "#0284C7",
-    "GPON":              "#A21CAF",
-    "PME":               "#1E3A8A",
-    "Quebra Geral":      "#78350F",
+    "Novos Domicílios": "#1E40AF",
+    "Migração": "#0284C7",
+    "GPON": "#A21CAF",
+    "PME": "#1E3A8A",
+    "Quebra Geral": "#78350F",
 }
 
 ORDEM_TIPOS = [
@@ -71,32 +71,78 @@ ORDEM_TIPOS = [
 
 MAPA_TIPO_SERVICO = {
     "Novos Domicílios": ["NOVO", "DOMICILIO", "DOMICÍLIO", "ND"],
-    "Migração":         ["MIGRA"],
-    "GPON":             ["GPON", "FIBRA"],
-    "PME":              ["PME", "EMPRESAR"],
+    "Migração": ["MIGRA"],
+    "GPON": ["GPON", "FIBRA"],
+    "PME": ["PME", "EMPRESAR"],
 }
 
-COL_CAND_MONITOR  = ["MONITOR", "SUPERVISOR", "GESTOR"]
-COL_CAND_TECNICO  = ["TÉCNICO", "TECNICO", "NOME TÉCNICO", "NOME_TECNICO"]
-COL_CAND_LOGIN    = ["LOGIN", "LOGIN TÉCNICO", "USUÁRIO", "USER"]
-COL_CAND_CONTRATO = ["CONTRATO", "Nº CONTRATO", "NUMERO CONTRATO",
-                     "CONTRATO_ID", "COD_CONTRATO"]
-COL_CAND_TIPO     = ["TIPO_SERVICO", "TIPO SERVIÇO", "TIPO SERVICO",
-                     "SEGMENTO", "SERVICO", "SERVIÇO"]
-COL_CAND_STATUS   = ["Status Contrato", "STATUS CONTRATO",
-                     "STATUS DA O.S 1", "STATUS OS 1", "STATUS"]
-COL_CAND_MOTIVO   = ["CODIGO DE BAIXA 1", "MOTIVO DE BAIXA 1", "COD BAIXA 1",
-                     "CÓDIGO BAIXA 1", "CÓD DE BAIXA 1"]
-COL_CAND_REGIAO   = ["REGIÃO", "REGIAO", "UF", "ESTADO", "CIDADE", "PRACA"]
-COL_CAND_DATA     = ["PERÍODO", "PERIODO", "DATA AGENDAMENTO",
-                     "DATA_AGENDAMENTO", "DATA VISITA", "DATA"]
+COL_CAND_MONITOR = ["MONITOR", "SUPERVISOR", "GESTOR"]
+COL_CAND_TECNICO = ["TÉCNICO", "TECNICO", "NOME TÉCNICO", "NOME_TECNICO"]
+COL_CAND_LOGIN = ["LOGIN", "LOGIN TÉCNICO", "USUÁRIO", "USER"]
+COL_CAND_CONTRATO = [
+    "CONTRATO",
+    "Nº CONTRATO",
+    "NUMERO CONTRATO",
+    "CONTRATO_ID",
+    "COD_CONTRATO",
+]
+COL_CAND_TIPO = [
+    "TIPO_SERVICO",
+    "TIPO SERVIÇO",
+    "TIPO SERVICO",
+    "SEGMENTO",
+    "SERVICO",
+    "SERVIÇO",
+]
+COL_CAND_STATUS = [
+    "Status Contrato",
+    "STATUS CONTRATO",
+    "STATUS DA O.S 1",
+    "STATUS OS 1",
+    "STATUS",
+]
+COL_CAND_MOTIVO = [
+    "CODIGO DE BAIXA 1",
+    "MOTIVO DE BAIXA 1",
+    "COD BAIXA 1",
+    "CÓDIGO BAIXA 1",
+    "CÓD DE BAIXA 1",
+]
+COL_CAND_REGIAO = ["REGIÃO", "REGIAO", "UF", "ESTADO", "CIDADE", "PRACA"]
+COL_CAND_DATA = [
+    "PERÍODO",
+    "PERIODO",
+    "DATA AGENDAMENTO",
+    "DATA_AGENDAMENTO",
+    "DATA VISITA",
+    "DATA",
+]
+COL_CAND_STATUS_ATIV = [
+    "STATUS ATIVIDADE",
+    "STATUS ATIVIDADE",
+    "STATUS_ATIVIDADE",
+    "STATUS DA ATIVIDADE",
+    "STATUS_DA_ATIVIDADE",
+    "SITUAÇÃO ATIVIDADE",
+    "SITUACAO ATIVIDADE",
+    "SITUAÇÃO",
+    "SITUACAO",
+    "STATUS CADASTRO",
+    "STATUS_CADASTRO",
+    "STATUS CLIENTE",
+    "STATUS_CLIENTE",
+    "STATUS ASSINATURA",
+    "STATUS_ASSINATURA",
+    "STATUS CONTRATO ATIVIDADE",
+]
 
 
 # ====================================================
 # CSS CORPORATIVO
 # ====================================================
 def _injetar_css_corporativo() -> None:
-    st.markdown("""
+    st.markdown(
+        """
     <style>
         .main .block-container {
             padding-top: 1rem;
@@ -230,12 +276,33 @@ def _injetar_css_corporativo() -> None:
             color: #012869;
         }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 # ====================================================
 # UTILITÁRIOS
 # ====================================================
+def _is_suspenso(valor: Any) -> bool:
+    """
+    Retorna True se o status de atividade indica SUSPENSÃO.
+    Aceita variações: SUSPENSO, SUSPENSA, SUSP, SUSPENSÃO, BLOQUEADO, INATIVO.
+    """
+    if pd.isna(valor):
+        return False
+    s = str(valor).upper().strip()
+    if not s or s in {"NAN", "NONE", "—", "-", ""}:
+        return False
+
+    termos_susp = [
+        "SUSPEN",  # cobre SUSPENSO, SUSPENSA, SUSPENSÃO, SUSP
+        "BLOQUEAD",  # BLOQUEADO, BLOQUEADA
+        "INATIV",  # INATIVO, INATIVA
+    ]
+    return any(t in s for t in termos_susp)
+
+
 def _encontrar_coluna(df: pd.DataFrame, candidatos: list[str]) -> str | None:
     cols_upper = {c.upper().strip(): c for c in df.columns}
     for cand in candidatos:
@@ -258,17 +325,28 @@ def _classificar_status_os(status: Any) -> str:
 
     # ── NÃO EXECUTADO (Quebra) — checa primeiro por causa de "NÃO EXECUTADO" ──
     termos_nao_exec = [
-        "NÃO EXECUTAD", "NAO EXECUTAD", "QUEBRA", "CANCELAD",
-        "IMPRODUTIV", "SEM ACESSO", "REAGENDAD",
-        "NÃO REALIZ", "NAO REALIZ", "INSUCESSO",
+        "NÃO EXECUTAD",
+        "NAO EXECUTAD",
+        "QUEBRA",
+        "CANCELAD",
+        "IMPRODUTIV",
+        "SEM ACESSO",
+        "REAGENDAD",
+        "NÃO REALIZ",
+        "NAO REALIZ",
+        "INSUCESSO",
     ]
     if any(t in s for t in termos_nao_exec):
         return "NAO_EXECUTADO"
 
     # ── EXECUTADO ──────────────────────────────────────────────
     termos_exec = [
-        "EXECUTAD", "CONCLUID", "REALIZAD", "FINALIZAD",
-        "ATENDID", "SUCESSO",
+        "EXECUTAD",
+        "CONCLUID",
+        "REALIZAD",
+        "FINALIZAD",
+        "ATENDID",
+        "SUCESSO",
     ]
     if any(t in s for t in termos_exec):
         return "EXECUTADO"
@@ -307,7 +385,9 @@ def _fmt_pct_br(v: Any) -> str:
     """Formata percentual no padrão brasileiro: 20,50%"""
     try:
         val = float(v)
-        return f"{val * 100:,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
+        return (
+            f"{val * 100:,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
     except (ValueError, TypeError):
         return "0,00%"
 
@@ -366,37 +446,45 @@ def _gerar_excel_multi(dfs: dict[str, pd.DataFrame]) -> bytes:
 def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
     """
     Fórmula: Quebra = Não Executados / (Executados + Não Executados)
-    Pendentes NÃO entram no denominador.
+    Remove contratos com Status de Atividade = SUSPENSO antes de calcular.
     """
 
-    col_mon    = _encontrar_coluna(df, COL_CAND_MONITOR)
-    col_tipo   = _encontrar_coluna(df, COL_CAND_TIPO)
+    col_mon = _encontrar_coluna(df, COL_CAND_MONITOR)
+    col_tipo = _encontrar_coluna(df, COL_CAND_TIPO)
     col_status = _encontrar_coluna(df, COL_CAND_STATUS)
+    col_status_ativ = _encontrar_coluna(df, COL_CAND_STATUS_ATIV)
 
     if not col_mon or not col_status:
         return pd.DataFrame()
 
     df_work = df.copy()
+
+    # ✅ REMOVER SUSPENSOS ANTES DE QUALQUER CÁLCULO
+    if col_status_ativ:
+        mask_nao_suspenso = ~df_work[col_status_ativ].apply(_is_suspenso)
+        df_work = df_work[mask_nao_suspenso].copy()
+
+    if df_work.empty:
+        return pd.DataFrame()
+
     df_work["_MON"] = (
-        df_work[col_mon].fillna("SEM MONITOR")
-        .astype(str).str.strip().str.upper()
+        df_work[col_mon].fillna("SEM MONITOR").astype(str).str.strip().str.upper()
     )
     df_work["_TIPO"] = (
         df_work[col_tipo].apply(_classificar_tipo)
-        if col_tipo and col_tipo in df_work.columns else None
+        if col_tipo and col_tipo in df_work.columns
+        else None
     )
 
-    # Classificação em 3 estados
     df_work["_STATUS_CLASS"] = df_work[col_status].apply(_classificar_status_os)
-    df_work["_EXEC"]     = df_work["_STATUS_CLASS"] == "EXECUTADO"
+    df_work["_EXEC"] = df_work["_STATUS_CLASS"] == "EXECUTADO"
     df_work["_NAO_EXEC"] = df_work["_STATUS_CLASS"] == "NAO_EXECUTADO"
-    df_work["_PEND"]     = df_work["_STATUS_CLASS"] == "PENDENTE"
+    df_work["_PEND"] = df_work["_STATUS_CLASS"] == "PENDENTE"
 
     df_valid = df_work.dropna(subset=["_TIPO"]).copy()
     if df_valid.empty:
         return pd.DataFrame()
 
-    # Agregação Monitor × Segmento
     grp = (
         df_valid.groupby(["_MON", "_TIPO"])
         .agg(
@@ -407,7 +495,6 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
 
-    # ✅ FÓRMULA CORRETA
     grp["denominador"] = grp["executados"] + grp["nao_executados"]
     grp["pct"] = np.where(
         grp["denominador"] > 0,
@@ -416,8 +503,10 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     pivot = grp.pivot_table(
-        index="_MON", columns="_TIPO",
-        values="pct", fill_value=0.0,
+        index="_MON",
+        columns="_TIPO",
+        values="pct",
+        fill_value=0.0,
     )
 
     for tipo in ORDEM_TIPOS:
@@ -425,9 +514,8 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
             pivot[tipo] = 0.0
     pivot = pivot[ORDEM_TIPOS]
 
-    # Quebra Geral por Monitor
     exec_por_mon = df_work.groupby("_MON")["_EXEC"].sum().rename("exec")
-    ne_por_mon   = df_work.groupby("_MON")["_NAO_EXEC"].sum().rename("nao_exec")
+    ne_por_mon = df_work.groupby("_MON")["_NAO_EXEC"].sum().rename("nao_exec")
 
     pivot = pivot.join(exec_por_mon).join(ne_por_mon)
     denom_mon = pivot["exec"] + pivot["nao_exec"]
@@ -445,12 +533,12 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
     for tipo in ORDEM_TIPOS:
         sub = df_valid[df_valid["_TIPO"] == tipo]
         exec_s = int(sub["_EXEC"].sum())
-        ne_s   = int(sub["_NAO_EXEC"].sum())
-        denom  = exec_s + ne_s
+        ne_s = int(sub["_NAO_EXEC"].sum())
+        denom = exec_s + ne_s
         total_row[tipo] = ne_s / denom if denom > 0 else 0.0
 
     exec_tot = int(df_work["_EXEC"].sum())
-    ne_tot   = int(df_work["_NAO_EXEC"].sum())
+    ne_tot = int(df_work["_NAO_EXEC"].sum())
     denom_tot = exec_tot + ne_tot
     total_row["Quebra Geral"] = ne_tot / denom_tot if denom_tot > 0 else 0.0
 
@@ -462,36 +550,42 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
 # ====================================================
 # EXTRAÇÃO COMPLETA
 # ====================================================
-def build_extracao_completa(df: pd.DataFrame) -> pd.DataFrame:
+def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     """
-    Extração drill-down com classificação em 3 estados.
-    Remove registros sem contrato válido.
+    Retorna (df_extracao, qtd_suspensos_removidos).
+    Remove:
+      1) Contratos com Status de Atividade = SUSPENSO
+      2) Contratos com número vazio/inválido
     """
 
-    col_mon      = _encontrar_coluna(df, COL_CAND_MONITOR)
-    col_tec      = _encontrar_coluna(df, COL_CAND_TECNICO)
-    col_login    = _encontrar_coluna(df, COL_CAND_LOGIN)
+    col_mon = _encontrar_coluna(df, COL_CAND_MONITOR)
+    col_tec = _encontrar_coluna(df, COL_CAND_TECNICO)
+    col_login = _encontrar_coluna(df, COL_CAND_LOGIN)
     col_contrato = _encontrar_coluna(df, COL_CAND_CONTRATO)
-    col_tipo     = _encontrar_coluna(df, COL_CAND_TIPO)
-    col_status   = _encontrar_coluna(df, COL_CAND_STATUS)
-    col_motivo   = _encontrar_coluna(df, COL_CAND_MOTIVO)
-    col_regiao   = _encontrar_coluna(df, COL_CAND_REGIAO)
-    col_data     = _encontrar_coluna(df, COL_CAND_DATA)
+    col_tipo = _encontrar_coluna(df, COL_CAND_TIPO)
+    col_status = _encontrar_coluna(df, COL_CAND_STATUS)
+    col_status_ativ = _encontrar_coluna(df, COL_CAND_STATUS_ATIV)
+    col_motivo = _encontrar_coluna(df, COL_CAND_MOTIVO)
+    col_regiao = _encontrar_coluna(df, COL_CAND_REGIAO)
+    col_data = _encontrar_coluna(df, COL_CAND_DATA)
 
     df_ext = pd.DataFrame(index=df.index)
 
-    df_ext["Contrato"]      = df[col_contrato] if col_contrato else "—"
-    df_ext["Login"]         = df[col_login]    if col_login    else "—"
-    df_ext["Técnico"]       = df[col_tec]      if col_tec      else "—"
-    df_ext["Monitor"]       = df[col_mon]      if col_mon      else "—"
-    df_ext["Região"]        = df[col_regiao]   if col_regiao   else "—"
-    df_ext["Tipo Original"] = df[col_tipo]     if col_tipo     else "—"
-    df_ext["Segmento"] = (
-        df[col_tipo].apply(_classificar_tipo) if col_tipo else None
+    df_ext["Contrato"] = df[col_contrato] if col_contrato else "—"
+    df_ext["Login"] = df[col_login] if col_login else "—"
+    df_ext["Técnico"] = df[col_tec] if col_tec else "—"
+    df_ext["Monitor"] = df[col_mon] if col_mon else "—"
+    df_ext["Região"] = df[col_regiao] if col_regiao else "—"
+    df_ext["Tipo Original"] = df[col_tipo] if col_tipo else "—"
+    df_ext["Segmento"] = df[col_tipo].apply(_classificar_tipo) if col_tipo else None
+    df_ext["Status"] = df[col_status] if col_status else "—"
+    df_ext["Status Atividade"] = (
+        df[col_status_ativ].fillna("—").astype(str).str.strip().str.upper()
+        if col_status_ativ
+        else "—"
     )
-    df_ext["Status"]       = df[col_status] if col_status else "—"
     df_ext["Motivo Baixa"] = df[col_motivo] if col_motivo else "—"
-    df_ext["Período"]      = df[col_data]   if col_data   else "—"
+    df_ext["Período"] = df[col_data] if col_data else "—"
 
     # Classificação em 3 estados
     if col_status:
@@ -499,16 +593,33 @@ def build_extracao_completa(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df_ext["Classificação"] = "PENDENTE"
 
-    df_ext["É Executado"]     = df_ext["Classificação"] == "EXECUTADO"
+    df_ext["É Executado"] = df_ext["Classificação"] == "EXECUTADO"
     df_ext["É Não Executado"] = df_ext["Classificação"] == "NAO_EXECUTADO"
-    df_ext["É Pendente"]      = df_ext["Classificação"] == "PENDENTE"
+    df_ext["É Pendente"] = df_ext["Classificação"] == "PENDENTE"
 
-    # ── REMOVER CONTRATOS VAZIOS ────────────────────────────────
+    # ── ✅ 1) REMOVER SUSPENSOS ─────────────────────────────────
+    if col_status_ativ:
+        mask_suspenso = df[col_status_ativ].apply(_is_suspenso)
+        qtd_suspensos = int(mask_suspenso.sum())
+        df_ext = df_ext[~mask_suspenso].copy()
+    else:
+        qtd_suspensos = 0
+
+    # ── ✅ 2) REMOVER CONTRATOS VAZIOS ──────────────────────────
     df_ext["Contrato"] = df_ext["Contrato"].astype(str).str.strip()
 
     valores_invalidos = {
-        "", "—", "NAN", "NULL", "NONE", "0", "0.0",
-        "N/D", "N/A", "NA", "-",
+        "",
+        "—",
+        "NAN",
+        "NULL",
+        "NONE",
+        "0",
+        "0.0",
+        "N/D",
+        "N/A",
+        "NA",
+        "-",
     }
 
     mask_contrato_valido = (
@@ -529,16 +640,14 @@ def build_extracao_completa(df: pd.DataFrame) -> pd.DataFrame:
     except Exception:
         df_ext["Período"] = df_ext["Período"].astype(str)
 
-    # Padronização de strings
+    # Padronização
     for col in ["Monitor", "Técnico", "Login", "Região"]:
-        df_ext[col] = (
-            df_ext[col].fillna("—").astype(str).str.strip().str.upper()
-        )
+        df_ext[col] = df_ext[col].fillna("—").astype(str).str.strip().str.upper()
 
     df_ext = df_ext.reset_index(drop=True)
     df_ext.index = df_ext.index + 1
 
-    return df_ext
+    return df_ext, qtd_suspensos
 
 
 # ====================================================
@@ -602,44 +711,47 @@ def _estilizar_tabela(df: pd.DataFrame, meta: float):
     styler = styler.format(format_dict)  # type: ignore[arg-type]
 
     # ── Estilos de tabela ───────────────────────────────────────
-    styler = styler.set_table_styles([
-        {
-            "selector": "th",
-            "props": [
-                ("background", "linear-gradient(180deg,#012869 0%,#1E3A8A 100%)"),
-                ("color", "white"),
-                ("font-weight", "700"),
-                ("font-size", "13px"),
-                ("text-align", "center"),
-                ("padding", "14px 10px"),
-                ("letter-spacing", "0.5px"),
-                ("text-transform", "uppercase"),
-                ("border", "none"),
-                ("border-right", "1px solid rgba(255,255,255,0.15)"),
-            ],
-        },
-        {
-            "selector": "td",
-            "props": [
-                ("border-bottom", "1px solid #E2E8F0"),
-                ("font-variant-numeric", "tabular-nums"),
-            ]
-        },
-        {
-            "selector": "table",
-            "props": [
-                ("border-collapse", "separate"),
-                ("border-spacing", "0"),
-                ("width", "100%"),
-                ("font-family", "'Segoe UI', -apple-system, sans-serif"),
-                ("border-radius", "8px"),
-                ("overflow", "hidden"),
-                ("box-shadow", "0 4px 12px rgba(0,0,0,0.08)"),
-            ]
-        },
-    ])
+    styler = styler.set_table_styles(
+        [
+            {
+                "selector": "th",
+                "props": [
+                    ("background", "linear-gradient(180deg,#012869 0%,#1E3A8A 100%)"),
+                    ("color", "white"),
+                    ("font-weight", "700"),
+                    ("font-size", "13px"),
+                    ("text-align", "center"),
+                    ("padding", "14px 10px"),
+                    ("letter-spacing", "0.5px"),
+                    ("text-transform", "uppercase"),
+                    ("border", "none"),
+                    ("border-right", "1px solid rgba(255,255,255,0.15)"),
+                ],
+            },
+            {
+                "selector": "td",
+                "props": [
+                    ("border-bottom", "1px solid #E2E8F0"),
+                    ("font-variant-numeric", "tabular-nums"),
+                ],
+            },
+            {
+                "selector": "table",
+                "props": [
+                    ("border-collapse", "separate"),
+                    ("border-spacing", "0"),
+                    ("width", "100%"),
+                    ("font-family", "'Segoe UI', -apple-system, sans-serif"),
+                    ("border-radius", "8px"),
+                    ("overflow", "hidden"),
+                    ("box-shadow", "0 4px 12px rgba(0,0,0,0.08)"),
+                ],
+            },
+        ]
+    )
 
     return styler
+
 
 # ====================================================
 # GRÁFICO CORPORATIVO
@@ -656,28 +768,30 @@ def plot_desempenho(df_matriz: pd.DataFrame, meta: float) -> go.Figure:
     for tipo in cols_tipo:
         cor = CORES_TIPO.get(tipo, "#6B7280")
 
-        fig.add_trace(go.Bar(
-            name=tipo,
-            x=df_plot["Monitor"],
-            y=df_plot[tipo],
-            marker=dict(
-                color=cor,
-                line=dict(color="white", width=1.5),
-            ),
-            text=[_fmt_pct_br(v) for v in df_plot[tipo]],
-            textposition="outside",
-            textfont=dict(
-                size=14,
-                color="#1F2937",
-                family="'Segoe UI', sans-serif",
-            ),
-            cliponaxis=False,
-            hovertemplate=(
-                f"<b>{tipo}</b><br>"
-                "Monitor: %{x}<br>"
-                "Quebra: %{y:.2%}<extra></extra>"
-            ),
-        ))
+        fig.add_trace(
+            go.Bar(
+                name=tipo,
+                x=df_plot["Monitor"],
+                y=df_plot[tipo],
+                marker=dict(
+                    color=cor,
+                    line=dict(color="white", width=1.5),
+                ),
+                text=[_fmt_pct_br(v) for v in df_plot[tipo]],
+                textposition="outside",
+                textfont=dict(
+                    size=14,
+                    color="#1F2937",
+                    family="'Segoe UI', sans-serif",
+                ),
+                cliponaxis=False,
+                hovertemplate=(
+                    f"<b>{tipo}</b><br>"
+                    "Monitor: %{x}<br>"
+                    "Quebra: %{y:.2%}<extra></extra>"
+                ),
+            )
+        )
 
     fig.add_hline(
         y=meta,
@@ -723,8 +837,10 @@ def plot_desempenho(df_matriz: pd.DataFrame, meta: float) -> go.Figure:
         ),
         legend=dict(
             orientation="h",
-            yanchor="bottom", y=-0.28,
-            xanchor="center", x=0.5,
+            yanchor="bottom",
+            y=-0.28,
+            xanchor="center",
+            x=0.5,
             font=dict(size=13, color="#334155"),
             bgcolor="rgba(248,250,252,0.9)",
             bordercolor="#E2E8F0",
@@ -743,7 +859,9 @@ def plot_desempenho(df_matriz: pd.DataFrame, meta: float) -> go.Figure:
 # ====================================================
 # COMPONENTES DE UI
 # ====================================================
-def _render_kpi(col, label: str, valor: str, sub: str = "", cor: str = COR_PRIMARIA) -> None:
+def _render_kpi(
+    col, label: str, valor: str, sub: str = "", cor: str = COR_PRIMARIA
+) -> None:
     col.markdown(
         f"""
         <div class="kpi-card" style="border-left-color:{cor};">
@@ -829,12 +947,14 @@ def main() -> None:
         col_mon = _encontrar_coluna(df_full, COL_CAND_MONITOR)
         if col_mon:
             monitores = ["Todos os Monitores"] + sorted(
-                str(x) for x in df_full[col_mon].dropna().unique()
+                str(x)
+                for x in df_full[col_mon].dropna().unique()
                 if str(x).upper() not in {"NAN", "SEM MONITOR", "NÃO MAPEADO"}
             )
             sel_mon = st.selectbox("👔 **Monitor**", monitores, key="qr_mon_corp")
             df_filt = (
-                df_full if sel_mon == "Todos os Monitores"
+                df_full
+                if sel_mon == "Todos os Monitores"
                 else df_full[df_full[col_mon] == sel_mon]
             )
         else:
@@ -842,11 +962,16 @@ def main() -> None:
 
         st.markdown("---")
 
-        meta_slider_pct = st.slider(
-            "🎯 **Meta de Quebra (%)**",
-            min_value=5, max_value=50,
-            value=int(META_QUEBRA * 100), step=1,
-        ) / 100
+        meta_slider_pct = (
+            st.slider(
+                "🎯 **Meta de Quebra (%)**",
+                min_value=5,
+                max_value=50,
+                value=int(META_QUEBRA * 100),
+                step=1,
+            )
+            / 100
+        )
 
         st.markdown("---")
         st.markdown("**🚦 Critério de Cores**")
@@ -884,7 +1009,7 @@ def main() -> None:
     # ── PROCESSAMENTO ───────────────────────────────────────────
     with st.spinner("⏳ Processando dados gerenciais..."):
         df_matriz = build_matriz_desempenho(df_filt)
-        df_extracao = build_extracao_completa(df_filt)
+        df_extracao, qtd_suspensos = build_extracao_completa(df_filt)
 
     if df_matriz.empty:
         st.error("⚠️ Dados insuficientes para gerar a matriz de desempenho.")
@@ -900,11 +1025,11 @@ def main() -> None:
     col_status_full = _encontrar_coluna(df_filt, COL_CAND_STATUS)
     if col_status_full:
         status_class = df_filt[col_status_full].apply(_classificar_status_os)
-        total_exec     = int((status_class == "EXECUTADO").sum())
+        total_exec = int((status_class == "EXECUTADO").sum())
         total_nao_exec = int((status_class == "NAO_EXECUTADO").sum())
         total_pendente = int((status_class == "PENDENTE").sum())
-        denom_geral    = total_exec + total_nao_exec
-        quebra_geral   = total_nao_exec / denom_geral if denom_geral > 0 else 0.0
+        denom_geral = total_exec + total_nao_exec
+        quebra_geral = total_nao_exec / denom_geral if denom_geral > 0 else 0.0
     else:
         total_exec = total_nao_exec = total_pendente = 0
         denom_geral = 0
@@ -948,10 +1073,12 @@ def main() -> None:
     # ── ABAS ────────────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
 
-    tab_resumo, tab_extracao = st.tabs([
-        "📊  Matriz Resumo (Monitor × Segmento)",
-        "📋  Extração Completa (Drill-down)",
-    ])
+    tab_resumo, tab_extracao = st.tabs(
+        [
+            "📊  Matriz Resumo (Monitor × Segmento)",
+            "📋  Extração Completa (Drill-down)",
+        ]
+    )
 
     # ═══════════════════════════════════════════════════════════
     # TAB 1: RESUMO
@@ -1012,24 +1139,25 @@ def main() -> None:
     with tab_extracao:
         _render_section_header("📋", "Extração Completa da Base", "Drill-down")
 
-        # KPIs da extração
         total_os = len(df_extracao)
         total_os_original = len(df_filt)
-        removidos = total_os_original - total_os
+        removidos_total = total_os_original - total_os
+        # removidos por contrato vazio = total removidos - suspensos
+        removidos_vazio = max(0, removidos_total - qtd_suspensos)
 
-        ext_exec     = int(df_extracao["É Executado"].sum())
+        ext_exec = int(df_extracao["É Executado"].sum())
         ext_nao_exec = int(df_extracao["É Não Executado"].sum())
-        ext_pend     = int(df_extracao["É Pendente"].sum())
-        ext_denom    = ext_exec + ext_nao_exec
-        ext_pct      = ext_nao_exec / ext_denom if ext_denom > 0 else 0.0
+        ext_pend = int(df_extracao["É Pendente"].sum())
+        ext_denom = ext_exec + ext_nao_exec
+        ext_pct = ext_nao_exec / ext_denom if ext_denom > 0 else 0.0
 
         ek1, ek2, ek3, ek4 = st.columns(4)
 
         _render_kpi(
             ek1,
-            "Total de OS Válidas",
+            "OS Válidas",
             _fmt_int_br(total_os),
-            f"{_fmt_int_br(removidos)} sem contrato removidas",
+            f"de {_fmt_int_br(total_os_original)} originais",
             COR_PRIMARIA,
         )
         _render_kpi(
@@ -1054,15 +1182,30 @@ def main() -> None:
             COR_NEUTRO,
         )
 
-        # Aviso se muitos removidos
-        if removidos > 0:
-            pct_removido = removidos / total_os_original if total_os_original > 0 else 0
-            if pct_removido > 0.10:
-                st.warning(
-                    f"⚠️ **{_fmt_int_br(removidos)} registros** foram removidos "
-                    f"por não possuírem número de contrato válido "
-                    f"(**{_fmt_pct_br(pct_removido)}** da base original)."
+        # ── AVISOS DE EXCLUSÃO ────────────────────────────────────
+        if qtd_suspensos > 0 or removidos_vazio > 0:
+            linhas_aviso = []
+            if qtd_suspensos > 0:
+                linhas_aviso.append(
+                    f"🚫 <b>{_fmt_int_br(qtd_suspensos)}</b> contratos com "
+                    f"<b>Status de Atividade = SUSPENSO</b> foram excluídos."
                 )
+            if removidos_vazio > 0:
+                linhas_aviso.append(
+                    f"⚠️ <b>{_fmt_int_br(removidos_vazio)}</b> registros com "
+                    f"<b>número de contrato vazio/inválido</b> foram excluídos."
+                )
+
+            st.markdown(
+                f"""
+                <div class="info-caption" style="background:#FEF3C7;
+                    border-left-color:#D97706;color:#92400E;">
+                    <b>Registros excluídos da análise:</b><br>
+                    {"<br>".join(linhas_aviso)}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
         st.markdown(
             f"""
@@ -1070,6 +1213,10 @@ def main() -> None:
                 🧮 <b>Cálculo da Quebra desta extração:</b>
                 {_fmt_int_br(ext_nao_exec)} ÷ ({_fmt_int_br(ext_exec)} + {_fmt_int_br(ext_nao_exec)})
                 = <b>{_fmt_pct_br(ext_pct)}</b>
+                <br>
+                <span style="color:#64748B;">
+                    Suspensos e contratos vazios não entram em nenhum cálculo.
+                </span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1090,21 +1237,24 @@ def main() -> None:
 
         with fc1:
             opts_seg = ["Todos"] + sorted(
-                str(x) for x in df_extracao["Segmento"].dropna().unique()
+                str(x)
+                for x in df_extracao["Segmento"].dropna().unique()
                 if str(x) not in {"None", "nan"}
             )
             f_seg = st.selectbox("Segmento", opts_seg, key="ext_f_seg")
 
         with fc2:
             opts_mon_ext = ["Todos"] + sorted(
-                str(x) for x in df_extracao["Monitor"].dropna().unique()
+                str(x)
+                for x in df_extracao["Monitor"].dropna().unique()
                 if str(x) not in {"—", "nan"}
             )
             f_mon = st.selectbox("Monitor", opts_mon_ext, key="ext_f_mon")
 
         with fc3:
             opts_tec = ["Todos"] + sorted(
-                str(x) for x in df_extracao["Técnico"].dropna().unique()
+                str(x)
+                for x in df_extracao["Técnico"].dropna().unique()
                 if str(x) not in {"—", "nan"}
             )
             f_tec = st.selectbox("Técnico", opts_tec, key="ext_f_tec")
@@ -1137,8 +1287,9 @@ def main() -> None:
             df_view = df_view[df_view["É Pendente"] == True]
 
         st.markdown(
-            f"**Exibindo `{len(df_view):,}` de `{total_os:,}` registros**"
-            .replace(",", "."),
+            f"**Exibindo `{len(df_view):,}` de `{total_os:,}` registros**".replace(
+                ",", "."
+            ),
         )
 
         # ── TABELA ──────────────────────────────────────────────
@@ -1149,41 +1300,67 @@ def main() -> None:
             hide_index=True,
             column_config={
                 "Contrato": st.column_config.TextColumn(
-                    "📄 Contrato", width="small",
+                    "📄 Contrato",
+                    width="small",
                     help="Número do contrato",
+                ),
+                "Status Atividade": st.column_config.TextColumn(
+                    "🔒 Status Atividade",
+                    width="small",
+                    help="Status cadastral do contrato (ATIVO, SUSPENSO, etc.)",
                 ),
                 "Login": st.column_config.TextColumn("🔑 Login", width="small"),
                 "Técnico": st.column_config.TextColumn("👤 Técnico", width="medium"),
                 "Monitor": st.column_config.TextColumn("👔 Monitor", width="medium"),
                 "Região": st.column_config.TextColumn("🌎 Região", width="small"),
                 "Tipo Original": st.column_config.TextColumn(
-                    "Tipo (Original)", width="medium",
+                    "Tipo (Original)",
+                    width="medium",
                 ),
                 "Segmento": st.column_config.TextColumn("🏷️ Segmento", width="small"),
                 "Status": st.column_config.TextColumn("📊 Status", width="medium"),
                 "Classificação": st.column_config.TextColumn(
-                    "🏁 Classificação", width="small",
+                    "🏁 Classificação",
+                    width="small",
                     help="EXECUTADO · NAO_EXECUTADO · PENDENTE",
                 ),
                 "Motivo Baixa": st.column_config.TextColumn(
-                    "💬 Motivo Baixa", width="large",
+                    "💬 Motivo Baixa",
+                    width="large",
                 ),
                 "Período": st.column_config.TextColumn("📅 Período", width="small"),
                 "É Executado": st.column_config.CheckboxColumn(
-                    "✅", help="OS executada", width="small",
+                    "✅",
+                    help="OS executada",
+                    width="small",
                 ),
                 "É Não Executado": st.column_config.CheckboxColumn(
-                    "❌", help="OS em quebra", width="small",
+                    "❌",
+                    help="OS em quebra",
+                    width="small",
                 ),
                 "É Pendente": st.column_config.CheckboxColumn(
-                    "⏳", help="OS pendente (fora do cálculo)", width="small",
+                    "⏳",
+                    help="OS pendente (fora do cálculo)",
+                    width="small",
                 ),
             },
             column_order=[
-                "Contrato", "Login", "Técnico", "Monitor", "Região",
-                "Segmento", "Tipo Original", "Status", "Classificação",
-                "É Executado", "É Não Executado", "É Pendente",
-                "Motivo Baixa", "Período",
+                "Contrato",
+                "Login",
+                "Técnico",
+                "Monitor",
+                "Região",
+                "Segmento",
+                "Tipo Original",
+                "Status",
+                "Status Atividade",  # ← juntos
+                "Classificação",
+                "É Executado",
+                "É Não Executado",
+                "É Pendente",
+                "Motivo Baixa",
+                "Período",
             ],
         )
 
@@ -1210,10 +1387,12 @@ def main() -> None:
                 use_container_width=True,
             )
         with ex3:
-            excel_multi = _gerar_excel_multi({
-                "Resumo": df_matriz,
-                "Extracao_Completa": df_extracao,
-            })
+            excel_multi = _gerar_excel_multi(
+                {
+                    "Resumo": df_matriz,
+                    "Extracao_Completa": df_extracao,
+                }
+            )
             st.download_button(
                 "📦 **Relatório Consolidado**",
                 data=excel_multi,
