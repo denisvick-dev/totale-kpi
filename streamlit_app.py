@@ -163,6 +163,7 @@ def main():
     volumetria = st.Page("pages/volumetria.py", title="Volumetria", icon="📊")
     quebra_pme = st.Page("pages/quebra_pme.py", title="Visão PME", icon="📉")
     quebra_mig = st.Page("pages/quebra_migracao.py", title="Visão Migração", icon="📉")
+    quebra_resumo = st.Page("pages/quebra_resumo.py", title="Resumo", icon="📉")
 
     # Criando o Dicionário para agrupar as seções
     paginas_agrupadas = {
@@ -175,7 +176,7 @@ def main():
         "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons],
         "COMPILADO": [gestao_ativos],
         "DISPAROS DIÁRIOS": [rota_inicial, volumetria],
-        "QUEBRA": [quebra, quebra_pme, quebra_mig],
+        "QUEBRA": [quebra, quebra_resumo, quebra_pme, quebra_mig],
     }
 
     # Passando o dicionário para a navegação
