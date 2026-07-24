@@ -20,7 +20,7 @@ import sys
 import os
 from datetime import datetime
 from io import BytesIO
-from typing import Any
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import streamlit as st
 import pandas as pd
@@ -136,6 +136,16 @@ COL_CAND_STATUS_ATIV = [
     "STATUS CONTRATO ATIVIDADE",
 ]
 
+COL_REGIAO = "REGIÃO"
+REGIOES_PRINCIPAIS = ["LESTE", "GRU", "ABCDM"]
+
+CORES_REGIAO: Dict[str, Dict[str, str]] = {
+    "LESTE": {"bg": "#DBEAFE", "text": "#1E40AF", "border": "#3B82F6"},
+    "GRU": {"bg": "#D1FAE5", "text": "#065F46", "border": "#10B981"},
+    "ABCDM": {"bg": "#EDE9FE", "text": "#5B21B6", "border": "#8B5CF6"},
+    "OUTRAS": {"bg": "#F1F5F9", "text": "#475569", "border": "#94A3B8"},
+}
+
 
 # ====================================================
 # CSS CORPORATIVO
@@ -190,6 +200,21 @@ def _injetar_css_corporativo() -> None:
             letter-spacing: 0.5px;
             text-transform: uppercase;
         }
+        
+        /* ── Resultado Base ── */
+        .resultado-base {
+            background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
+            padding: 1rem 1.5rem; border-radius: 0.75rem; margin-bottom: 1.5rem;
+            display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem;
+        }
+        .resultado-base-label  { color: #94A3B8; font-size: 0.8rem; font-weight: 700;
+                                  text-transform: uppercase; letter-spacing: 0.08em; }
+        .resultado-base-regiao { padding: 0.3rem 0.9rem; border-radius: 999px;
+                                  font-size: 0.82rem; font-weight: 700; border: 2px solid; }
+        .resultado-base-count  { color: #64748B; font-size: 0.72rem;
+                                  margin-left: auto; font-weight: 600; 
+        }
+        
         .kpi-card {
             background: white;
             border-radius: 12px;
@@ -886,6 +911,26 @@ def _render_section_header(icon: str, title: str, badge: str = "") -> None:
         """,
         unsafe_allow_html=True,
     )
+    
+def render_resultado_base(regioes: List[str], total: int):
+    badges = ""
+    for reg in sorted(regioes):
+        c = CORES_REGIAO.get(reg, CORES_REGIAO["OUTRAS"])
+        badges += (
+            f'<span class="resultado-base-regiao" '
+            f'style="background:{c["bg"]};color:{c["text"]};border-color:{c["border"]}">'
+            f"{reg}</span>"
+        )
+    st.markdown(
+        f"""
+    <div class="resultado-base">
+        <span class="resultado-base-label">📋 Resultado da Base:</span>
+        {badges}
+        <span class="resultado-base-count">{total:,} registros</span>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 # ====================================================
@@ -926,6 +971,8 @@ def main() -> None:
         return
 
     df_full: pd.DataFrame = st.session_state["df_memoria"].copy()
+    
+    render_resultado_base(sorted(df_full[COL_REGIAO].unique()), len(df_full))
 
     # ── SIDEBAR ─────────────────────────────────────────────────
     with st.sidebar:

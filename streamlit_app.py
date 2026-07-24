@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from componentes import aplicar_estilo
 
 # Injeção de CSS para personalizar a aparência da Sidebar e dos widgets
 st.html("""
@@ -135,7 +136,10 @@ st.set_page_config(
     page_title="Painéis de Produção TOTALE",
     page_icon="assets/images/icons/totale.ico",
     layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+aplicar_estilo()
 
 
 def main():

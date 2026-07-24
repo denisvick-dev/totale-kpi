@@ -77,7 +77,7 @@ class ComponenteVisual:
             font-size: 10px;
             font-weight: 500;
             min-width: 180px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
             pointer-events: none; /* Evita que o tooltip pisque ao passar o mouse nele */
         }
 
@@ -129,6 +129,71 @@ class ComponenteVisual:
             {html_tooltip}
         </div>
         """
+        
+    @staticmethod
+    def aplicar_capa():
+        st.markdown(
+            """
+        <style>
+        /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
+            .hero-corp {
+            background: linear-gradient(135deg, #F37C04 0%, #1E40AF 50%, #012869 100%);
+            padding: 32px 40px;
+            border-radius: 16px;
+            color: white;
+            box-shadow: 0 10px 40px rgba(243, 124, 4, 0.25);
+            text-shadow:
+                0 2px 4px rgba(0, 0, 0, 0.5),
+                0 1px 2px rgba(0, 0, 0, 0.3),
+                0 0 24px rgba(255, 255, 255, 0.12);
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-corp::before {
+            content: '';
+            position: absolute;
+            top: -50%; right: -10%;
+            width: 400px; height: 400px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+        }
+        .hero-title {
+            font-size: 34px;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.5px;
+            text-shadow:
+                0 2px 4px rgba(0, 0, 0, 0.5),
+                0 1px 2px rgba(0, 0, 0, 0.3),
+                0 0 24px rgba(255, 255, 255, 0.12);
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+        }
+        .hero-subtitle {
+            font-size: 14px;
+            opacity: 0.90;
+            margin: 8px 0 0 0;
+            font-weight: 400;
+            color: #F1F5F9;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+            position: relative;
+            z-index: 2;
+            letter-spacing: 0.3px;
+        }
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.18);
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+    </style>
+    """,
+            unsafe_allow_html=True,
+    )
 
 
 # ====================================================
@@ -265,11 +330,14 @@ def preparar_base_cache(df: pd.DataFrame) -> pd.DataFrame:
 # BLOCO 6: INICIALIZAÇÃO E TRATAMENTO DE BASES
 # ====================================================
 st.set_page_config(page_title="Raio-X do Técnico", page_icon="🔍", layout="wide")
-
-st.title("🔍 Raio-X: Desempenho Operacional")
+ComponenteVisual.aplicar_capa()
 st.markdown(
-    "Auditoria detalhada de **Execução Física** (O.S. e Pontuação) por técnico/equipe."
-)
+        '<div class="hero-corp">'
+        "<h1>🔍 Raio-X: Desempenho Operacional</h1>"
+        "<p>Auditoria detalhada de Execução Física (O.S. e Pontuação) por técnico/equipe</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 # Carregamento Seguro da Base de Produção
 df_prod = pd.DataFrame()

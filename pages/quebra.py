@@ -189,7 +189,7 @@ def aplicar_estilo():
         """
     <style>
     /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
-            .hero-corp {
+                    .hero-corp {
             background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
             padding: 32px 40px;
             border-radius: 16px;
@@ -2379,7 +2379,7 @@ def main():
     aplicar_estilo()
 
     st.markdown(
-        '<div class="hero">'
+        '<div class="hero-corp">'
         "<h1>📉 Gestão de Quebra de Agenda</h1>"
         "<p>Análise de quebra, projeções de SLA e plano de ação operacional</p>"
         "</div>",
