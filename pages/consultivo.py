@@ -13,7 +13,6 @@ from streamlit_gsheets import GSheetsConnection
 # ====================================================
 st.set_page_config(page_title="Total de Consultivos", page_icon="📋", layout="wide")
 
-
 class Configuracoes:
     url_ativos = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
     cores_grafico = ["#0EA5E9", "#22C55E", "#A855F7", "#F97316", "#EF4444", "#3B82F6"]

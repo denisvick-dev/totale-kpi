@@ -5,11 +5,17 @@ import time
 import requests
 from io import BytesIO, StringIO
 from datetime import datetime, timezone, timedelta
+from componentes import aplicar_estilo
 
 # ====================================================
 # BLOCO 1: CONFIGURAÇÕES GLOBAIS
 # ====================================================
 
+# ✅ set_page_config SEMPRE deve ser o primeiro comando Streamlit
+st.set_page_config(page_title="Atualização de Dados", page_icon="🔁", layout="wide")
+
+# ✅ aplicar_estilo() DEPOIS do set_page_config
+aplicar_estilo()
 
 class Configuracoes:
     """Parâmetros e configurações gerais da aplicação."""
@@ -59,12 +65,31 @@ class Visual:
         cores = Configuracoes.TEMAS_CARD.get(tema, Configuracoes.TEMAS_CARD["azul"])
         return f"""
         <div style="
-            background-color: {cores['fundo']}; padding: 20px; border-radius: 10px;
-            border-left: 6px solid {cores['borda']}; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px;
-            transition: transform 0.2s;"
-            onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-            <p style="margin: 0; font-size: 14px; color: {cores['titulo']};"><b>{titulo}</b></p>
-            <h2 style="margin: 0; padding-top: 5px; color: {cores['texto']}; font-weight: 900;">{valor}</h2>
+            background-color: {cores['fundo']};
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 6px solid {cores['borda']};
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+            transition: transform 0.2s;
+            font-family: 'Manrope', 'Segoe UI', Arial, sans-serif;"
+            onmouseover="this.style.transform='scale(1.02)'"
+            onmouseout="this.style.transform='scale(1)'">
+            <p style="
+                margin: 0;
+                font-size: 14px;
+                color: {cores['titulo']};
+                font-family: 'Manrope', 'Segoe UI', Arial, sans-serif;">
+                <b>{titulo}</b>
+            </p>
+            <h2 style="
+                margin: 0;
+                padding-top: 5px;
+                color: {cores['texto']};
+                font-weight: 900;
+                font-family: 'Manrope', 'Segoe UI', Arial, sans-serif;">
+                {valor}
+            </h2>
         </div>
         """
 
@@ -445,9 +470,6 @@ class ProcessadorDeDados:
 # ====================================================
 # BLOCO 4: INTERFACE E LÓGICA DE ATUALIZAÇÃO
 # ====================================================
-
-st.set_page_config(page_title="Atualização de Dados", page_icon="🔁", layout="wide")
-
 Visual.aplicar_capa()
 st.markdown(
     f"""

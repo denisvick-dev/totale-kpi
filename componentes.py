@@ -127,7 +127,7 @@ def _injetar_fontes_no_head_pai() -> None:
                     'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block',
                     'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block',
                     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
-                    'https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&display=swap',
+                    'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap',
                     'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap'
                 ];
 
@@ -202,7 +202,7 @@ def _injetar_css_global() -> None:
         /* ═══════════════════════════════════════════════════════
            IMPORT DE FONTES DE TEXTO
            ═══════════════════════════════════════════════════════ */
-        @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap");
+        @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap");
 
         /* ═══════════════════════════════════════════════════════
            🔒 @FONT-FACE FORÇADO — MATERIAL ICONS
