@@ -24,28 +24,27 @@ import streamlit.components.v1 as components
 import plotly.io as pio
 import plotly.graph_objects as go
 
-
 # ====================================================
 # CONSTANTES GLOBAIS — TIPOGRAFIA
 # ====================================================
 FONTE_TITULO = "'Manrope', 'Segoe UI', Arial, sans-serif"
-FONTE_TEXTO  = "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+FONTE_TEXTO = "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 FONTE_CODIGO = "'JetBrains Mono', Consolas, 'Courier New', monospace"
 
 
 # ====================================================
 # PALETA CORPORATIVA
 # ====================================================
-COR_PRIMARIA   = "#012869"      # Azul institucional
-COR_SECUNDARIA = "#F37C04"      # Laranja
-COR_SUCESSO    = "#059669"      # Verde
-COR_ALERTA     = "#DC2626"      # Vermelho
-COR_NEUTRO     = "#64748B"      # Cinza slate
-COR_TEXTO      = "#1F2937"      # Chumbo
-COR_TEXTO_2    = "#374151"      # Cinza escuro
-COR_TEXTO_3    = "#6B7280"      # Cinza médio
-COR_BORDA      = "#E2E8F0"      # Prata claro
-COR_FUNDO      = "#F8FAFC"      # Fundo claro
+COR_PRIMARIA = "#012869"  # Azul institucional
+COR_SECUNDARIA = "#F37C04"  # Laranja
+COR_SUCESSO = "#059669"  # Verde
+COR_ALERTA = "#DC2626"  # Vermelho
+COR_NEUTRO = "#64748B"  # Cinza slate
+COR_TEXTO = "#1F2937"  # Chumbo
+COR_TEXTO_2 = "#374151"  # Cinza escuro
+COR_TEXTO_3 = "#6B7280"  # Cinza médio
+COR_BORDA = "#E2E8F0"  # Prata claro
+COR_FUNDO = "#F8FAFC"  # Fundo claro
 
 
 # ====================================================
@@ -97,9 +96,16 @@ def _configurar_plotly_global() -> None:
             paper_bgcolor="white",
             plot_bgcolor="white",
             colorway=[
-                COR_PRIMARIA, COR_SECUNDARIA, COR_SUCESSO,
-                COR_ALERTA, "#8B5CF6", "#EC4899",
-                "#14B8A6", "#F59E0B", "#6366F1", COR_NEUTRO,
+                COR_PRIMARIA,
+                COR_SECUNDARIA,
+                COR_SUCESSO,
+                COR_ALERTA,
+                "#8B5CF6",
+                "#EC4899",
+                "#14B8A6",
+                "#F59E0B",
+                "#6366F1",
+                COR_NEUTRO,
             ],
         )
     )
@@ -115,8 +121,6 @@ def _injetar_fontes_no_head_pai() -> None:
     """
     Usa JavaScript para injetar as fontes DIRETAMENTE no <head>
     do documento pai (contorna restrições de iframe do Streamlit).
-
-    Isso resolve o problema de "keyboard_double" aparecer como texto.
     """
     components.html(
         """
@@ -202,7 +206,7 @@ def _injetar_css_global() -> None:
         /* ═══════════════════════════════════════════════════════
            IMPORT DE FONTES DE TEXTO
            ═══════════════════════════════════════════════════════ */
-        @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap");
+        @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap");
 
         /* ═══════════════════════════════════════════════════════
            🔒 @FONT-FACE FORÇADO — MATERIAL ICONS
@@ -274,7 +278,6 @@ def _injetar_css_global() -> None:
         }
 
         /* ─── SPAN — CUIDADO com ícones! ───────────────────── */
-        /* Aplica Inter apenas em spans que NÃO sejam ícones */
         span:not([class*="material"]):not([class*="Icon"]):not([class*="icon"]):not([data-testid*="Icon"]):not([data-testid*="icon"]) {
             font-family: var(--font-texto) !important;
         }
@@ -393,7 +396,7 @@ def _injetar_css_global() -> None:
            COMPONENTES CUSTOMIZADOS
            ═══════════════════════════════════════════════════════ */
 
-        /* ─── HERO CORPORATIVO ────────── */
+        /* ─── HERO CORPORATIVO ───────────────────────────────── */
         .hero-corp {
             background: linear-gradient(90deg,
                 #1E293B 0%,
@@ -670,7 +673,7 @@ def _injetar_css_global() -> None:
                          "Material Icons Outlined" !important;
             font-weight: normal !important;
             font-style: normal !important;
-            font-size: 14px;
+            font-size: 24px !important;
             line-height: 1 !important;
             letter-spacing: normal !important;
             text-transform: none !important;
@@ -708,6 +711,27 @@ def _injetar_css_global() -> None:
             font-family: "Material Symbols Rounded",
                          "Material Icons" !important;
         }
+
+        /* ═══════════════════════════════════════════════════════
+           ÍCONES DA SIDEBAR — TAMANHO REDUZIDO
+           ⚠️ Deve vir DEPOIS do override global acima
+           ═══════════════════════════════════════════════════════ */
+        section[data-testid="stSidebar"] [data-testid="stIconMaterial"],
+        section[data-testid="stSidebar"] [data-testid="stSidebarNavIcon"],
+        section[data-testid="stSidebar"] [data-testid*="Icon"],
+        section[data-testid="stSidebar"] [class*="material"],
+        section[data-testid="stSidebar"] .material-icons,
+        section[data-testid="stSidebar"] .material-symbols-rounded,
+        section[data-testid="stSidebar"] .material-symbols-outlined {
+            font-size: 16px !important;
+            width: 16px !important;
+            height: 16px !important;
+        }
+
+        /* Emojis dos itens de navegação da sidebar */
+        section[data-testid="stSidebar"] [data-testid="stSidebarNavLink"] span:first-child {
+            font-size: 14px !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -726,8 +750,8 @@ def aplicar_estilo() -> None:
         aplicar_estilo()
     """
     _configurar_plotly_global()
-    _injetar_fontes_no_head_pai()   # 🔒 Injeta fontes no head do doc pai
-    _injetar_css_global()            # Aplica CSS com @font-face + estilos
+    _injetar_fontes_no_head_pai()
+    _injetar_css_global()
 
 
 # ====================================================
@@ -745,9 +769,7 @@ def render_section_header(icon: str, title: str, badge: str = "") -> None:
     Exemplo:
         render_section_header("📊", "Indicadores", "KPIs")
     """
-    badge_html = (
-        f'<span class="section-badge">{badge}</span>' if badge else ""
-    )
+    badge_html = f'<span class="section-badge">{badge}</span>' if badge else ""
     st.markdown(
         f"""
         <div class="section-header">
@@ -784,11 +806,11 @@ def render_kpi(
         'azul' | 'verde' | 'vermelho' | 'laranja' | 'cinza'
     """
     cores = {
-        "azul":     COR_PRIMARIA,
-        "verde":    COR_SUCESSO,
+        "azul": COR_PRIMARIA,
+        "verde": COR_SUCESSO,
         "vermelho": COR_ALERTA,
-        "laranja":  COR_SECUNDARIA,
-        "cinza":    COR_NEUTRO,
+        "laranja": COR_SECUNDARIA,
+        "cinza": COR_NEUTRO,
     }
     cor = cores.get(tema, COR_PRIMARIA)
 
@@ -815,11 +837,11 @@ def render_kpi_sm(
     Versão compacta do KPI para uso em containers menores.
     """
     cores = {
-        "azul":     COR_PRIMARIA,
-        "verde":    COR_SUCESSO,
+        "azul": COR_PRIMARIA,
+        "verde": COR_SUCESSO,
         "vermelho": COR_ALERTA,
-        "laranja":  COR_SECUNDARIA,
-        "cinza":    COR_NEUTRO,
+        "laranja": COR_SECUNDARIA,
+        "cinza": COR_NEUTRO,
     }
     cor = cores.get(tema, COR_PRIMARIA)
 
@@ -849,11 +871,11 @@ def render_insight(msg: str, tipo: str = "info") -> None:
     tipo: 'ok' | 'info' | 'alerta' | 'critico' | 'acao'
     """
     config = {
-        "ok":      ("#D1FAE5", "#065F46", "#059669", "✅"),
-        "info":    ("#DBEAFE", "#1E40AF", "#3B82F6", "ℹ️"),
-        "alerta":  ("#FEF3C7", "#92400E", "#F59E0B", "⚠️"),
+        "ok": ("#D1FAE5", "#065F46", "#059669", "✅"),
+        "info": ("#DBEAFE", "#1E40AF", "#3B82F6", "ℹ️"),
+        "alerta": ("#FEF3C7", "#92400E", "#F59E0B", "⚠️"),
         "critico": ("#FEE2E2", "#991B1B", "#DC2626", "🚨"),
-        "acao":    ("#EDE9FE", "#5B21B6", "#8B5CF6", "🎯"),
+        "acao": ("#EDE9FE", "#5B21B6", "#8B5CF6", "🎯"),
     }
     bg, texto, borda, icone = config.get(tipo, config["info"])
 
@@ -885,12 +907,8 @@ def render_hero(
             badge="Atualizado hoje",
         )
     """
-    subtitulo_html = (
-        f'<p class="hero-subtitle">{subtitulo}</p>' if subtitulo else ""
-    )
-    badge_html = (
-        f'<span class="hero-badge">{badge}</span>' if badge else ""
-    )
+    subtitulo_html = f'<p class="hero-subtitle">{subtitulo}</p>' if subtitulo else ""
+    badge_html = f'<span class="hero-badge">{badge}</span>' if badge else ""
 
     st.markdown(
         f"""
@@ -925,12 +943,9 @@ def render_dataframe(
 
     if fmt:
         try:
-            styler = df.style
-            for col, formato in fmt.items():
-                if col in df.columns:
-                    styler = styler.format(
-                        {col: formato}  # type: ignore
-                    )
+            # ✅ Filtra apenas colunas existentes e aplica formato de uma vez
+            fmt_valido = {c: f for c, f in fmt.items() if c in df.columns}
+            styler = df.style.format(fmt_valido)  # type: ignore
             st.dataframe(styler, height=height, use_container_width=True, **kwargs)
         except Exception:
             st.dataframe(df, height=height, use_container_width=True, **kwargs)

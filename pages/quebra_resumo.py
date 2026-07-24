@@ -831,6 +831,14 @@ def plot_desempenho(df_matriz: pd.DataFrame, meta: float) -> go.Figure:
     )
 
     fig.update_layout(
+        # ─── PALETA CORPORATIVA (Variações de Azul e Laranja) ───
+        colorway=[
+            "#012869",  # Azul Corporativo Principal
+            "#F37C04",  # Laranja Corporativo
+            "#1E40AF",  # Azul Médio Vibrante
+            "#F97316",  # Laranja Claro / Âmbar
+            "#0284C7",  # Azul Claro / Céu
+        ],
         title=dict(
             text=(
                 "<b style='color:#012869;font-size:22px;'>"
@@ -849,7 +857,7 @@ def plot_desempenho(df_matriz: pd.DataFrame, meta: float) -> go.Figure:
         xaxis=dict(
             title="",
             tickangle=-25,
-            tickfont=dict(size=15, color="#1F2937"),
+            tickfont=dict(size=14, color="#1F2937"),
             showline=True,
             linewidth=2,
             linecolor="#CBD5E1",
@@ -860,22 +868,23 @@ def plot_desempenho(df_matriz: pd.DataFrame, meta: float) -> go.Figure:
             tickfont=dict(size=13, color="#64748B"),
             gridcolor="#F1F5F9",
         ),
+        # ─── LEGENDA EMBAIXO E CENTRALIZADA ───
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.28,
+            orientation="h",  # Horizontal
+            yanchor="top",    # Ancla pelo topo da legenda
+            y=-0.25,          # Posição logo abaixo do eixo X
             xanchor="center",
-            x=0.5,
+            x=0.5,            # Centralizado horizontalmente
             font=dict(size=13, color="#334155"),
-            bgcolor="rgba(248,250,252,0.9)",
+            bgcolor="rgba(248, 250, 252, 0.9)",
             bordercolor="#E2E8F0",
             borderwidth=1,
         ),
         height=620,
-        margin=dict(l=50, r=40, t=110, b=160),
+        margin=dict(l=50, r=40, t=110, b=130),
         plot_bgcolor="white",
         paper_bgcolor="white",
-        font=dict(family="'Segoe UI', -apple-system, sans-serif"),
+        font=dict(family="'Inter', 'Segoe UI', -apple-system, sans-serif"),
     )
 
     return fig
