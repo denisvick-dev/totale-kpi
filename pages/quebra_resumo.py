@@ -158,6 +158,40 @@ def _injetar_css_corporativo() -> None:
             padding-top: 1rem;
             max-width: 1400px;
         }
+
+        /* ═══════════════════════════════════════════════════════
+           TOPO FIXO — HERO + RESULTADO DA BASE (agrupados)
+           ═══════════════════════════════════════════════════════ */
+
+        /* Faz o container do Streamlit que contém .topo-fixo-quebra grudar */
+        div[data-testid="stElementContainer"]:has(.topo-fixo-quebra) {
+            position: sticky !important;
+            top: 0.75rem !important;
+            z-index: 1000 !important;
+        }
+
+        /* Wrapper visual */
+        .topo-fixo-quebra {
+            background: rgba(248, 250, 252, 0.92);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 0.5rem 0;
+            border-radius: 12px;
+        }
+
+        /* Hero mantém curvas e sombra */
+        .topo-fixo-quebra .hero-corp {
+            margin-bottom: 12px !important;
+        }
+
+        /* Resultado da Base mantém curvas */
+        .topo-fixo-quebra .resultado-base {
+            margin-bottom: 0 !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════
+           HERO CORPORATIVO
+           ═══════════════════════════════════════════════════════ */
         .hero-corp {
             background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
             padding: 32px 40px;
@@ -200,21 +234,37 @@ def _injetar_css_corporativo() -> None:
             letter-spacing: 0.5px;
             text-transform: uppercase;
         }
-        
-        /* ── Resultado Base ── */
+
+        /* ═══════════════════════════════════════════════════════
+           RESULTADO DA BASE
+           ═══════════════════════════════════════════════════════ */
         .resultado-base {
             background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
-            padding: 1rem 1.5rem; border-radius: 0.75rem; margin-bottom: 1.5rem;
-            display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
-        .resultado-base-label  { color: #94A3B8; font-size: 0.8rem; font-weight: 700;
-                                  text-transform: uppercase; letter-spacing: 0.08em; }
-        .resultado-base-regiao { padding: 0.3rem 0.9rem; border-radius: 999px;
-                                  font-size: 0.82rem; font-weight: 700; border: 2px solid; }
-        .resultado-base-count  { color: #64748B; font-size: 0.72rem;
-                                  margin-left: auto; font-weight: 600; 
+        .resultado-base-label {
+            color: #94A3B8; font-size: 0.8rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.08em;
         }
-        
+        .resultado-base-regiao {
+            padding: 0.3rem 0.9rem; border-radius: 999px;
+            font-size: 0.82rem; font-weight: 700; border: 2px solid;
+        }
+        .resultado-base-count {
+            color: #64748B; font-size: 0.72rem;
+            margin-left: auto; font-weight: 600;
+        }
+
+        /* ═══════════════════════════════════════════════════════
+           DEMAIS COMPONENTES
+           ═══════════════════════════════════════════════════════ */
         .kpi-card {
             background: white;
             border-radius: 12px;
@@ -310,10 +360,6 @@ def _injetar_css_corporativo() -> None:
 # UTILITÁRIOS
 # ====================================================
 def _is_suspenso(valor: Any) -> bool:
-    """
-    Retorna True se o status de atividade indica SUSPENSÃO.
-    Aceita variações: SUSPENSO, SUSPENSA, SUSP, SUSPENSÃO, BLOQUEADO, INATIVO.
-    """
     if pd.isna(valor):
         return False
     s = str(valor).upper().strip()
@@ -321,9 +367,9 @@ def _is_suspenso(valor: Any) -> bool:
         return False
 
     termos_susp = [
-        "SUSPEN",  # cobre SUSPENSO, SUSPENSA, SUSPENSÃO, SUSP
-        "BLOQUEAD",  # BLOQUEADO, BLOQUEADA
-        "INATIV",  # INATIVO, INATIVA
+        "SUSPEN",
+        "BLOQUEAD",
+        "INATIV",
     ]
     return any(t in s for t in termos_susp)
 
@@ -337,18 +383,11 @@ def _encontrar_coluna(df: pd.DataFrame, candidatos: list[str]) -> str | None:
 
 
 def _classificar_status_os(status: Any) -> str:
-    """
-    Classifica o status em 3 categorias:
-    - 'EXECUTADO'      → OS concluída com sucesso
-    - 'NAO_EXECUTADO'  → OS com desfecho negativo (quebra)
-    - 'PENDENTE'       → OS ainda em aberto (fora do cálculo)
-    """
     if pd.isna(status):
         return "PENDENTE"
 
     s = str(status).upper().strip()
 
-    # ── NÃO EXECUTADO (Quebra) — checa primeiro por causa de "NÃO EXECUTADO" ──
     termos_nao_exec = [
         "NÃO EXECUTAD",
         "NAO EXECUTAD",
@@ -364,7 +403,6 @@ def _classificar_status_os(status: Any) -> str:
     if any(t in s for t in termos_nao_exec):
         return "NAO_EXECUTADO"
 
-    # ── EXECUTADO ──────────────────────────────────────────────
     termos_exec = [
         "EXECUTAD",
         "CONCLUID",
@@ -376,7 +414,6 @@ def _classificar_status_os(status: Any) -> str:
     if any(t in s for t in termos_exec):
         return "EXECUTADO"
 
-    # ── PENDENTE ───────────────────────────────────────────────
     termos_pend = ["PENDENTE", "ABERTO", "EM ABERTO", "AGENDAD", "AGUARD"]
     if any(t in s for t in termos_pend):
         return "PENDENTE"
@@ -407,7 +444,6 @@ def _classificar_tipo(valor: Any) -> str | None:
 
 
 def _fmt_pct_br(v: Any) -> str:
-    """Formata percentual no padrão brasileiro: 20,50%"""
     try:
         val = float(v)
         return (
@@ -418,7 +454,6 @@ def _fmt_pct_br(v: Any) -> str:
 
 
 def _fmt_int_br(v: Any) -> str:
-    """Formata inteiro com separador de milhar brasileiro: 1.234"""
     try:
         return f"{int(float(v)):,}".replace(",", ".")
     except (ValueError, TypeError):
@@ -457,7 +492,6 @@ def _gerar_excel(df: pd.DataFrame, sheet: str = "Dados") -> bytes:
 
 
 def _gerar_excel_multi(dfs: dict[str, pd.DataFrame]) -> bytes:
-    """Gera Excel com múltiplas abas."""
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         for sheet_name, df in dfs.items():
@@ -469,11 +503,6 @@ def _gerar_excel_multi(dfs: dict[str, pd.DataFrame]) -> bytes:
 # MATRIZ DE DESEMPENHO (Monitor × Segmento)
 # ====================================================
 def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Fórmula: Quebra = Não Executados / (Executados + Não Executados)
-    Remove contratos com Status de Atividade = SUSPENSO antes de calcular.
-    """
-
     col_mon = _encontrar_coluna(df, COL_CAND_MONITOR)
     col_tipo = _encontrar_coluna(df, COL_CAND_TIPO)
     col_status = _encontrar_coluna(df, COL_CAND_STATUS)
@@ -484,7 +513,6 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
 
     df_work = df.copy()
 
-    # ✅ REMOVER SUSPENSOS ANTES DE QUALQUER CÁLCULO
     if col_status_ativ:
         mask_nao_suspenso = ~df_work[col_status_ativ].apply(_is_suspenso)
         df_work = df_work[mask_nao_suspenso].copy()
@@ -553,7 +581,6 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
 
     pivot = pivot.reset_index().rename(columns={"_MON": "Monitor"})
 
-    # Linha Total Geral
     total_row: dict[str, Any] = {"Monitor": "Total Geral"}
     for tipo in ORDEM_TIPOS:
         sub = df_valid[df_valid["_TIPO"] == tipo]
@@ -576,13 +603,6 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
 # EXTRAÇÃO COMPLETA
 # ====================================================
 def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """
-    Retorna (df_extracao, qtd_suspensos_removidos).
-    Remove:
-      1) Contratos com Status de Atividade = SUSPENSO
-      2) Contratos com número vazio/inválido
-    """
-
     col_mon = _encontrar_coluna(df, COL_CAND_MONITOR)
     col_tec = _encontrar_coluna(df, COL_CAND_TECNICO)
     col_login = _encontrar_coluna(df, COL_CAND_LOGIN)
@@ -612,7 +632,6 @@ def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     df_ext["Motivo Baixa"] = df[col_motivo] if col_motivo else "—"
     df_ext["Período"] = df[col_data] if col_data else "—"
 
-    # Classificação em 3 estados
     if col_status:
         df_ext["Classificação"] = df[col_status].apply(_classificar_status_os)
     else:
@@ -622,7 +641,6 @@ def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     df_ext["É Não Executado"] = df_ext["Classificação"] == "NAO_EXECUTADO"
     df_ext["É Pendente"] = df_ext["Classificação"] == "PENDENTE"
 
-    # ── ✅ 1) REMOVER SUSPENSOS ─────────────────────────────────
     if col_status_ativ:
         mask_suspenso = df[col_status_ativ].apply(_is_suspenso)
         qtd_suspensos = int(mask_suspenso.sum())
@@ -630,7 +648,6 @@ def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     else:
         qtd_suspensos = 0
 
-    # ── ✅ 2) REMOVER CONTRATOS VAZIOS ──────────────────────────
     df_ext["Contrato"] = df_ext["Contrato"].astype(str).str.strip()
 
     valores_invalidos = {
@@ -655,7 +672,6 @@ def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
 
     df_ext = df_ext[mask_contrato_valido].copy()
 
-    # Formatação de Período
     try:
         df_ext["Período"] = (
             pd.to_datetime(df_ext["Período"], dayfirst=True, errors="coerce")
@@ -665,7 +681,6 @@ def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     except Exception:
         df_ext["Período"] = df_ext["Período"].astype(str)
 
-    # Padronização
     for col in ["Monitor", "Técnico", "Login", "Região"]:
         df_ext[col] = df_ext[col].fillna("—").astype(str).str.strip().str.upper()
 
@@ -679,9 +694,6 @@ def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
 # ESTILO DA TABELA RESUMO
 # ====================================================
 def _estilizar_tabela(df: pd.DataFrame, meta: float):
-    """
-    Aplica cores gerenciais + formatação percentual pt-BR robusta.
-    """
     cols_pct = [c for c in df.columns if c != "Monitor"]
 
     def _aplicar_cores(row: pd.Series) -> list[str]:
@@ -727,15 +739,10 @@ def _estilizar_tabela(df: pd.DataFrame, meta: float):
 
         return estilos
 
-    # ── Aplica cores ────────────────────────────────────────────
     styler = df.style.apply(_aplicar_cores, axis=1)
-
-    # ── ✅ FORMATAÇÃO PERCENTUAL — MÉTODO ROBUSTO ──────────────
-    # Aplica formatter por coluna individualmente (mais confiável)
     format_dict = {col: _fmt_pct_br for col in cols_pct}
     styler = styler.format(format_dict)  # type: ignore[arg-type]
 
-    # ── Estilos de tabela ───────────────────────────────────────
     styler = styler.set_table_styles(
         [
             {
@@ -831,13 +838,12 @@ def plot_desempenho(df_matriz: pd.DataFrame, meta: float) -> go.Figure:
     )
 
     fig.update_layout(
-        # ─── PALETA CORPORATIVA (Variações de Azul e Laranja) ───
         colorway=[
-            "#012869",  # Azul Corporativo Principal
-            "#F37C04",  # Laranja Corporativo
-            "#1E40AF",  # Azul Médio Vibrante
-            "#F97316",  # Laranja Claro / Âmbar
-            "#0284C7",  # Azul Claro / Céu
+            "#012869",
+            "#F37C04",
+            "#1E40AF",
+            "#F97316",
+            "#0284C7",
         ],
         title=dict(
             text=(
@@ -868,13 +874,12 @@ def plot_desempenho(df_matriz: pd.DataFrame, meta: float) -> go.Figure:
             tickfont=dict(size=13, color="#64748B"),
             gridcolor="#F1F5F9",
         ),
-        # ─── LEGENDA EMBAIXO E CENTRALIZADA ───
         legend=dict(
-            orientation="h",  # Horizontal
-            yanchor="top",    # Ancla pelo topo da legenda
-            y=-0.25,          # Posição logo abaixo do eixo X
+            orientation="h",
+            yanchor="top",
+            y=-0.25,
             xanchor="center",
-            x=0.5,            # Centralizado horizontalmente
+            x=0.5,
             font=dict(size=13, color="#334155"),
             bgcolor="rgba(248, 250, 252, 0.9)",
             bordercolor="#E2E8F0",
@@ -920,8 +925,13 @@ def _render_section_header(icon: str, title: str, badge: str = "") -> None:
         """,
         unsafe_allow_html=True,
     )
-    
-def render_resultado_base(regioes: List[str], total: int):
+
+
+def html_resultado_base(regioes: List[str], total: int) -> str:
+    """
+    Retorna o HTML do bloco 'Resultado da Base' — sem quebras de linha
+    para evitar interpretação como bloco de código pelo Markdown.
+    """
     badges = ""
     for reg in sorted(regioes):
         c = CORES_REGIAO.get(reg, CORES_REGIAO["OUTRAS"])
@@ -930,16 +940,19 @@ def render_resultado_base(regioes: List[str], total: int):
             f'style="background:{c["bg"]};color:{c["text"]};border-color:{c["border"]}">'
             f"{reg}</span>"
         )
-    st.markdown(
-        f"""
-    <div class="resultado-base">
-        <span class="resultado-base-label">📋 Resultado da Base:</span>
-        {badges}
-        <span class="resultado-base-count">{total:,} registros</span>
-    </div>
-    """,
-        unsafe_allow_html=True,
+
+    total_fmt = f"{total:,}".replace(",", ".")
+    return (
+        f'<div class="resultado-base">'
+        f'<span class="resultado-base-label">📋 Resultado da Base:</span>'
+        f'{badges}'
+        f'<span class="resultado-base-count">{total_fmt} registros</span>'
+        f'</div>'
     )
+
+
+def render_resultado_base(regioes: List[str], total: int):
+    st.markdown(html_resultado_base(regioes, total), unsafe_allow_html=True)
 
 
 # ====================================================
@@ -953,35 +966,52 @@ def main() -> None:
 
     _injetar_css_corporativo()
 
-    # ── HERO ────────────────────────────────────────────────────
     data_ref = datetime.now().strftime("%d/%m/%Y")
     hora_ref = datetime.now().strftime("%H:%M")
 
-    st.markdown(
-        f"""
-        <div class="hero-corp">
-            <div style="position:relative;z-index:2;">
-                <h1 class="hero-title">📊 Desempenho | Quebra Operacional</h1>
-                <p class="hero-subtitle">
-                    Análise consolidada · Novos Domicílios · Migração · GPON · PME
-                </p>
-                <span class="hero-badge">
-                    Atualizado em {data_ref} · {hora_ref}
-                </span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
+    # ── HERO SEM BASE (quando não há dados) ─────────────────────
     if st.session_state.get("df_memoria") is None:
+        st.markdown(
+            f"""
+<div class="hero-corp">
+<div style="position:relative;z-index:2;">
+<h1 class="hero-title">📊 Desempenho | Quebra Operacional</h1>
+<p class="hero-subtitle">Análise consolidada · Novos Domicílios · Migração · GPON · PME</p>
+<span class="hero-badge">Atualizado em {data_ref} · {hora_ref}</span>
+</div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
         st.warning("⚠️ **Nenhuma base carregada.**")
         st.info("👈 Volte ao **Dashboard Geral** no menu lateral e realize o upload.")
         return
 
     df_full: pd.DataFrame = st.session_state["df_memoria"].copy()
-    
-    render_resultado_base(sorted(df_full[COL_REGIAO].unique()), len(df_full))
+
+    regioes_base = (
+        sorted(df_full[COL_REGIAO].dropna().unique())
+        if COL_REGIAO in df_full.columns
+        else ["OUTRAS"]
+    )
+
+    # ── ✅ HERO + RESULTADO DA BASE (BLOCO ÚNICO FIXO NA ROLAGEM) ──
+    # ⚠️ Sem indentação nas linhas HTML para o Markdown não interpretar como código
+    st.markdown(
+        f"""
+<div class="topo-fixo-quebra">
+<div class="hero-corp">
+<div style="position:relative;z-index:2;">
+<h1 class="hero-title">📊 Desempenho | Quebra Operacional</h1>
+<p class="hero-subtitle">Análise consolidada · Novos Domicílios · Migração · GPON · PME</p>
+<span class="hero-badge">Atualizado em {data_ref} · {hora_ref}</span>
+</div>
+</div>
+{html_resultado_base(regioes_base, len(df_full))}
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
     # ── SIDEBAR ─────────────────────────────────────────────────
     with st.sidebar:
@@ -1077,7 +1107,6 @@ def main() -> None:
     df_sem_total = df_matriz[df_matriz["Monitor"] != "Total Geral"]
     total_row = df_matriz[df_matriz["Monitor"] == "Total Geral"].iloc[0]
 
-    # Cálculo consolidado
     col_status_full = _encontrar_coluna(df_filt, COL_CAND_STATUS)
     if col_status_full:
         status_class = df_filt[col_status_full].apply(_classificar_status_os)
@@ -1184,7 +1213,6 @@ def main() -> None:
                 use_container_width=True,
             )
 
-        # GRÁFICO
         _render_section_header("📊", "Análise Comparativa Visual", "Gráfico")
         fig = plot_desempenho(df_matriz, meta=meta_slider_pct)
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
@@ -1198,7 +1226,6 @@ def main() -> None:
         total_os = len(df_extracao)
         total_os_original = len(df_filt)
         removidos_total = total_os_original - total_os
-        # removidos por contrato vazio = total removidos - suspensos
         removidos_vazio = max(0, removidos_total - qtd_suspensos)
 
         ext_exec = int(df_extracao["É Executado"].sum())
@@ -1238,7 +1265,6 @@ def main() -> None:
             COR_NEUTRO,
         )
 
-        # ── AVISOS DE EXCLUSÃO ────────────────────────────────────
         if qtd_suspensos > 0 or removidos_vazio > 0:
             linhas_aviso = []
             if qtd_suspensos > 0:
@@ -1278,7 +1304,6 @@ def main() -> None:
             unsafe_allow_html=True,
         )
 
-        # ── FILTROS ─────────────────────────────────────────────
         st.markdown(
             """
             <div class="info-caption">
@@ -1327,7 +1352,6 @@ def main() -> None:
                 key="ext_f_status",
             )
 
-        # Aplicar filtros
         df_view = df_extracao.copy()
         if f_seg != "Todos":
             df_view = df_view[df_view["Segmento"] == f_seg]
@@ -1348,7 +1372,6 @@ def main() -> None:
             ),
         )
 
-        # ── TABELA ──────────────────────────────────────────────
         st.dataframe(
             df_view,
             use_container_width=True,
@@ -1410,7 +1433,7 @@ def main() -> None:
                 "Segmento",
                 "Tipo Original",
                 "Status",
-                "Status Atividade",  # ← juntos
+                "Status Atividade",
                 "Classificação",
                 "É Executado",
                 "É Não Executado",
@@ -1420,7 +1443,6 @@ def main() -> None:
             ],
         )
 
-        # ── EXPORTAÇÃO ──────────────────────────────────────────
         st.markdown("<br>", unsafe_allow_html=True)
         _render_section_header("📥", "Exportação", "Excel · CSV")
 
