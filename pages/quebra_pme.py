@@ -14,6 +14,7 @@ _ROOT = _DIR.parent                      # .../projeto/
 from datetime import datetime
 from html import escape
 from io import BytesIO
+from textwrap import dedent
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -100,6 +101,214 @@ FMT_QUEBRA: Dict[str, str] = {
     "Fechamento Base": "{:.2%}",
     "Fechamento Pessimista": "{:.2%}",
 }
+
+
+# ====================================================
+# TOPO FIXO — HERO + RESULTADO DA BASE
+# ====================================================
+def _injetar_css_topo_fixo_pme() -> None:
+    """CSS local para fixar Hero + Resultado da Base durante a rolagem."""
+    st.markdown(
+        dedent(
+            """
+            <style>
+            /* Wrapper do elemento Streamlit que contém o topo */
+            div[data-testid="stElementContainer"]:has(.topo-fixo-pme) {
+                position: sticky !important;
+                top: 0.75rem !important;
+                z-index: 1000 !important;
+            }
+
+            /* Fundo sutil evita que o conteúdo atrás apareça ao rolar */
+            .topo-fixo-pme {
+                background: rgba(248, 250, 252, 0.96);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                padding: 0.5rem 0;
+                border-radius: 16px;
+            }
+
+            /* ── Hero PME ───────────────────────────────────── */
+            .topo-fixo-pme .hero-pme {
+                background: linear-gradient(
+                    135deg,
+                    #4C1D95 0%,
+                    #7C3AED 55%,
+                    #A855F7 100%
+                );
+                padding: 32px 40px;
+                border-radius: 16px;
+                color: white;
+                box-shadow: 0 10px 40px rgba(76, 29, 149, 0.25);
+                margin-bottom: 12px;
+                position: relative;
+                overflow: hidden;
+            }
+
+            .topo-fixo-pme .hero-pme::before {
+                content: "";
+                position: absolute;
+                top: -55%;
+                right: -8%;
+                width: 390px;
+                height: 390px;
+                background: rgba(255, 255, 255, 0.07);
+                border-radius: 50%;
+                pointer-events: none;
+            }
+
+            .topo-fixo-pme .hero-pme h1 {
+                position: relative;
+                z-index: 2;
+                color: white !important;
+                font-family: "Manrope", "Segoe UI", Arial, sans-serif !important;
+                font-size: 34px;
+                font-weight: 800;
+                margin: 0;
+                letter-spacing: -0.5px;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.28);
+            }
+
+            .topo-fixo-pme .hero-pme p {
+                position: relative;
+                z-index: 2;
+                color: rgba(255, 255, 255, 0.92) !important;
+                font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
+                font-size: 15px;
+                margin: 8px 0 0;
+                font-weight: 400;
+            }
+
+            /* ── Resultado da Base ─────────────────────────── */
+            .topo-fixo-pme .resultado-base {
+                margin-bottom: 0 !important;
+                background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
+                padding: 1rem 1.5rem;
+                border-radius: 0.75rem;
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 0.6rem;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            }
+
+            .topo-fixo-pme .resultado-base-label {
+                color: #94A3B8;
+                font-size: 0.8rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+            }
+
+            .topo-fixo-pme .resultado-base-regiao {
+                padding: 0.3rem 0.9rem;
+                border-radius: 999px;
+                font-size: 0.82rem;
+                font-weight: 700;
+                border: 2px solid;
+            }
+
+            .topo-fixo-pme .resultado-base-count {
+                color: #64748B;
+                font-size: 0.72rem;
+                margin-left: auto;
+                font-weight: 600;
+            }
+
+            /* Ajuste para telas menores */
+            @media (max-width: 768px) {
+                div[data-testid="stElementContainer"]:has(.topo-fixo-pme) {
+                    top: 0.25rem !important;
+                }
+
+                .topo-fixo-pme .hero-pme {
+                    padding: 22px 20px;
+                }
+
+                .topo-fixo-pme .hero-pme h1 {
+                    font-size: 25px;
+                }
+
+                .topo-fixo-pme .resultado-base-count {
+                    width: 100%;
+                    margin-left: 0;
+                }
+            }
+            </style>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _html_resultado_base_pme(regioes: List[str], total: int) -> str:
+    """Gera o HTML do Resultado da Base para uso dentro do topo fixo."""
+    cores_regiao = {
+        "LESTE": {"bg": "#DBEAFE", "text": "#1E40AF", "border": "#3B82F6"},
+        "GRU":   {"bg": "#D1FAE5", "text": "#065F46", "border": "#10B981"},
+        "ABCDM": {"bg": "#EDE9FE", "text": "#5B21B6", "border": "#8B5CF6"},
+        "OUTRAS": {"bg": "#F1F5F9", "text": "#475569", "border": "#94A3B8"},
+    }
+
+    badges = ""
+
+    for regiao in sorted(regioes):
+        regiao_str = str(regiao).strip().upper()
+
+        if not regiao_str or regiao_str in {"NAN", "NONE"}:
+            continue
+
+        cor = cores_regiao.get(regiao_str, cores_regiao["OUTRAS"])
+
+        badges += (
+            f'<span class="resultado-base-regiao" '
+            f'style="background:{cor["bg"]};'
+            f'color:{cor["text"]};'
+            f'border-color:{cor["border"]};">'
+            f"{escape(regiao_str)}"
+            f"</span>"
+        )
+
+    if not badges:
+        cor = cores_regiao["OUTRAS"]
+        badges = (
+            f'<span class="resultado-base-regiao" '
+            f'style="background:{cor["bg"]};'
+            f'color:{cor["text"]};'
+            f'border-color:{cor["border"]};">'
+            f"OUTRAS"
+            f"</span>"
+        )
+
+    total_fmt = f"{total:,}".replace(",", ".")
+
+    return (
+        f'<div class="resultado-base">'
+        f'<span class="resultado-base-label">📋 Resultado da Base:</span>'
+        f"{badges}"
+        f'<span class="resultado-base-count">{total_fmt} registros</span>'
+        f"</div>"
+    )
+
+
+def _render_topo_fixo_pme(regioes: List[str], total: int) -> None:
+    """Renderiza Hero PME + Resultado Base em um único bloco fixo."""
+    resultado_html = _html_resultado_base_pme(regioes, total)
+
+    st.markdown(
+        dedent(
+            f"""
+            <div class="topo-fixo-pme">
+                <div class="hero-pme">
+                    <h1>🏢 PME — Quebra de Agenda</h1>
+                    <p>Análise estratégica dedicada às Pequenas e Médias Empresas</p>
+                </div>
+                {resultado_html}
+            </div>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 # ====================================================
@@ -391,8 +600,6 @@ class PDFExecutivoPME:
             return tab
 
         # ── Wrapper de centralização ─────────────────────────────────────
-        # Envolve a tabela interna em uma tabela de largura total
-        # com célula única centralizada — garante alinhamento real.
         tabela_interna = _fazer_tabela_interna()
         wrapper_data: List[List[Any]] = [[tabela_interna]]
         wrapper = Table(
@@ -413,7 +620,7 @@ class PDFExecutivoPME:
             )
         )
         return wrapper
-    
+
     @classmethod
     def _calcular_larguras(cls, df: pd.DataFrame) -> List[float]:
         """
@@ -425,12 +632,9 @@ class PDFExecutivoPME:
 
         pesos: List[float] = []
         for col in df.columns:
-            # Comprimento do header
             max_len = len(str(col))
-            # Comprimento máximo dos dados (amostra de 50 linhas)
             for val in df[col].head(50):
                 max_len = max(max_len, len(cls._fmt(val, col)))
-            # Mínimo de 5 e máximo de 30 caracteres de peso
             pesos.append(min(max(max_len, 5), 30))
 
         total = sum(pesos)
@@ -453,11 +657,10 @@ class PDFExecutivoPME:
         canvas.line(x_esq, y_linha, x_dir, y_linha)
 
         # ── Logo à esquerda ──────────────────────────────────────────
-        x_txt = x_esq   # posição do texto (ajustada se logo existir)
+        x_txt = x_esq
         if cls.LOGO_PATH.exists():
             try:
                 logo_h = 0.50 * cm
-                # Lê dimensões reais para calcular largura proporcional
                 reader  = ImageReader(str(cls.LOGO_PATH))
                 iw, ih  = reader.getSize()
                 logo_w  = logo_h * (iw / ih) if ih > 0 else logo_h * 3.5
@@ -473,7 +676,7 @@ class PDFExecutivoPME:
                 )
                 x_txt = x_esq + logo_w + 0.25 * cm
             except Exception:
-                pass   # continua sem logo em caso de erro
+                pass
 
         # ── Texto central ────────────────────────────────────────────
         canvas.setFont("Helvetica", 6.5)
@@ -507,7 +710,6 @@ class PDFExecutivoPME:
                 logo_h  = 1.5 * cm
                 logo_w  = logo_h * (iw / ih) if ih > 0 else logo_h * 3.5
 
-                # Centraliza via tabela wrapper
                 logo_img = RLImage(str(cls.LOGO_PATH), width=logo_w, height=logo_h)
                 logo_wrapper_data: List[List[Any]] = [[logo_img]]
                 logo_wrapper = Table(
@@ -602,7 +804,6 @@ class PDFExecutivoPME:
 
         for i in range(0, len(kpis), 4):
             chunk = kpis[i : i + 4]
-            # Preenche com células vazias se chunk < 4
             while len(chunk) < 4:
                 chunk.append(("", "", cls.COR_SUBTEXTO))
 
@@ -640,7 +841,6 @@ class PDFExecutivoPME:
             ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
             ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
             ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-            # Linha de separação entre label e valor
             ("LINEBELOW",     (0, 0), (-1, 0),  0.5, colors.HexColor(cls.COR_LINHA)),
             ("LINEBELOW",     (0, 2), (-1, 2),  0.5, colors.HexColor(cls.COR_LINHA)),
         ]))
@@ -786,7 +986,6 @@ class PDFExecutivoPME:
 
         el.append(Spacer(1, 0.4 * cm))
 
-
         # ── SEÇÃO 3 — Causas de Quebra ────────────────────────────────
         el.append(Paragraph("3. Principais Causas de Quebra (Pareto)", s["PME_Secao"]))
         el.append(
@@ -795,7 +994,7 @@ class PDFExecutivoPME:
             )
         )
         el.append(Spacer(1, 0.15 * cm))
-        
+
         df_causa = Motor.causa_raiz_segmento(df_seg, TIPO, "_COL_BAIXA", top_n=8)
 
         el.append(
@@ -850,20 +1049,16 @@ class PDFExecutivoPME:
         )
         buf.seek(0)
         return buf.getvalue()
-    
+
+
 # ====================================================
 # UTILITÁRIO — DataFrame de Pendentes PME
 # ====================================================
-
 def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
     """
     Retorna um DataFrame com as OS pendentes do segmento PME,
     contendo as colunas: Contrato, Login, Técnico, Monitor e Qtde. de O.S.
-
-    Faz busca tolerante aos nomes de coluna reais do DataFrame.
     """
-
-    # ── Mapeamento tolerante de colunas ────────────────────────────
     MAPA_COLUNAS = {
         "Contrato": [
             "CONTRATO", "Nº CONTRATO", "NUM_CONTRATO",
@@ -888,20 +1083,17 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
     }
 
     def _encontrar_coluna(df: pd.DataFrame, candidatos: list[str]) -> str | None:
-        """Retorna o primeiro nome de coluna que existir no DataFrame."""
         cols_upper = {c.upper(): c for c in df.columns}
         for cand in candidatos:
             if cand.upper() in cols_upper:
                 return cols_upper[cand.upper()]
         return None
 
-    # ── Filtrar apenas pendentes ────────────────────────────────────
     if "Status Contrato" in df_seg.columns:
         mask_pend = df_seg["Status Contrato"].str.upper().isin(
             ["PENDENTE", "PENDING", "ABERTO", "EM ABERTO", "NÃO EXECUTADO"]
         )
     else:
-        # Fallback: usa classificar_status se disponível
         mask_pend = pd.Series([True] * len(df_seg), index=df_seg.index)
 
     df_pend = df_seg[mask_pend].copy()
@@ -911,7 +1103,6 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
             columns=["Contrato", "Login", "Técnico", "Monitor", "Qtde. de O.S."]
         )
 
-    # ── Montar DataFrame de saída ───────────────────────────────────
     df_out = pd.DataFrame(index=df_pend.index)
 
     for nome_saida, candidatos in MAPA_COLUNAS.items():
@@ -920,16 +1111,15 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
         if col_real:
             df_out[nome_saida] = df_pend[col_real].values
         else:
-            df_out[nome_saida] = "N/D"   # coluna não encontrada na base
-            
+            df_out[nome_saida] = "N/D"
+
     if "Qtde. O.S." in df_out.columns:
         df_out["Qtde. O.S."] = (
             pd.to_numeric(df_out["Qtde. O.S."], errors="coerce")
-            .fillna(0)                                                # NaN → 0
-            .astype(int)                                            # float → int
-    )
+            .fillna(0)
+            .astype(int)
+        )
 
-    # Remove duplicatas, ordena por Técnico
     df_out = (
         df_out
         .drop_duplicates()
@@ -937,7 +1127,6 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
         .reset_index(drop=True)
     )
 
-    # Índice começando em 1 para exibição
     df_out.index = df_out.index + 1
 
     return df_out
@@ -948,14 +1137,7 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
 # ====================================================
 def main():
     aplicar_estilo()
-
-    st.markdown(
-        '<div class="hero" style="background:linear-gradient(135deg,#4C1D95 0%,#7C3AED 100%);">'
-        "<h1>🏢 PME — Quebra de Agenda</h1>"
-        "<p>Análise estratégica dedicada às Pequenas e Médias Empresas</p>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    _injetar_css_topo_fixo_pme()
 
     # ── Guarda de estado ────────────────────────────────────────────
     if st.session_state.get("df_memoria") is None:
@@ -1019,8 +1201,19 @@ def main():
         st.warning("Nenhum dado para os filtros selecionados.")
         return
 
-    render_resultado_base(sorted(df[Config.COL_REGIAO].unique()), len(df))
+    # ── HERO + RESULTADO DA BASE FIXOS DURANTE A ROLAGEM ────────────
+    if Config.COL_REGIAO in df.columns:
+        regioes_pme = [
+            str(regiao).strip().upper()
+            for regiao in df[Config.COL_REGIAO].dropna().unique()
+            if str(regiao).strip()
+        ]
+    else:
+        regioes_pme = ["OUTRAS"]
 
+    _render_topo_fixo_pme(regioes_pme, len(df))
+
+    # ── Filtra somente PME ──────────────────────────────────────────
     df_seg = df[df["TIPO_SERVICO"] == TIPO].copy()
     if df_seg.empty:
         st.info("⚠️ Nenhum registro classificado como PME nos filtros atuais.")
@@ -1083,7 +1276,7 @@ def main():
 
     with sub4:
         _sub_plano_acao(df_seg, p_base, sla_meta)
-        
+
     with sub5:
         _sub_pendentes(df_seg, sla_meta)
 
@@ -1429,19 +1622,17 @@ def _sub_plano_acao(df_seg, p_base, sla_meta):
             key="dl_plano_pme",
         )
 
+
 def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
     """
     Exibe tabela de contratos pendentes com:
     Contrato · Login · Técnico · Monitor · Qtde. de O.S.
     + métricas rápidas + exportação Excel.
     """
-
     render_section(f"📋 Contratos Pendentes — {TIPO}")
 
-    # ── Gera o DataFrame ────────────────────────────────────────────
     df_pend = _build_df_pendentes(df_seg)
 
-    # ── Métricas rápidas ────────────────────────────────────────────
     total_pend = len(df_pend)
 
     m1, m2, m3 = st.columns(3)
@@ -1454,7 +1645,6 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
         tema="laranja" if total_pend > 0 else "verde",
     )
 
-    # Técnicos únicos com pendência
     tec_unicos = (
         df_pend["Técnico"]
         .replace("N/D", pd.NA)
@@ -1469,7 +1659,6 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
         tema="azul",
     )
 
-    # Monitores únicos
     mon_unicos = (
         df_pend["Monitor"]
         .replace("N/D", pd.NA)
@@ -1493,7 +1682,6 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
         )
         return
 
-    # ── Filtros rápidos dentro da aba ───────────────────────────────
     with st.expander("🔎 Filtros rápidos na tabela de pendentes", expanded=False):
         fc1, fc2 = st.columns(2)
 
@@ -1517,14 +1705,12 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
                 "Monitor", opts_mon, key="pend_f_mon"
             )
 
-    # Aplica filtros rápidos
     df_view = df_pend.copy()
     if f_tec != "Todos":
         df_view = df_view[df_view["Técnico"] == f_tec]
     if f_mon != "Todos":
         df_view = df_view[df_view["Monitor"] == f_mon]
 
-    # ── Exibição da tabela ──────────────────────────────────────────
     st.markdown(
         f"**Exibindo {len(df_view):,} de {total_pend:,} contratos pendentes**"
     )
@@ -1536,10 +1722,9 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
         height=480,
     )
 
-    # ── Gráficos auxiliares ─────────────────────────────────────────
     st.markdown("")
     render_section("📊 Distribuição das Pendências")
-    
+
     df_top_mon = (
         df_view[df_view["Monitor"] != "N/D"]
         .groupby("Monitor")
@@ -1549,48 +1734,47 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
     )
 
     if not df_top_mon.empty:
-            fig_mon = go.Figure(
-                go.Bar(
-                    x=df_top_mon["Pendentes"],
-                    y=df_top_mon["Monitor"],
-                    orientation="h",
-                    marker=dict(
-                        color=df_top_mon["Pendentes"],
-                        colorscale=[
-                            [0.0, "#FFF7ED"],   # laranja quase branco
-                            [0.2, "#FFEDD5"],   # pêssego claro
-                            [0.4, "#FDBA74"],   # laranja claro
-                            [0.6, "#FB923C"],   # laranja médio
-                            [0.8, "#EA580C"],   # laranja forte
-                            [1.0, "#9A3412"],   # laranja escuro (mais pendentes)
-                        ],
-                        showscale=True,
-                        colorbar=dict(
-                            title="Qtd.",
-                            thickness=12,
-                            len=0.6,
-                        ),
+        fig_mon = go.Figure(
+            go.Bar(
+                x=df_top_mon["Pendentes"],
+                y=df_top_mon["Monitor"],
+                orientation="h",
+                marker=dict(
+                    color=df_top_mon["Pendentes"],
+                    colorscale=[
+                        [0.0, "#FFF7ED"],
+                        [0.2, "#FFEDD5"],
+                        [0.4, "#FDBA74"],
+                        [0.6, "#FB923C"],
+                        [0.8, "#EA580C"],
+                        [1.0, "#9A3412"],
+                    ],
+                    showscale=True,
+                    colorbar=dict(
+                        title="Qtd.",
+                        thickness=12,
+                        len=0.6,
                     ),
-                    text=df_top_mon["Pendentes"],
-                    textposition="outside",
-                )
+                ),
+                text=df_top_mon["Pendentes"],
+                textposition="outside",
             )
-            fig_mon.update_layout(
-                title="Pendentes por Monitor",
-                xaxis_title="Qtd. Contratos Pendentes",
-                yaxis=dict(autorange="reversed"),
-                height=max(300, len(df_top_mon) * 38),
-                margin=dict(l=10, r=30, t=40, b=10),
-            )
-            st.plotly_chart(
-                fig_mon,
-                use_container_width=True,
-                config={"displayModeBar": False},
-            )
+        )
+        fig_mon.update_layout(
+            title="Pendentes por Monitor",
+            xaxis_title="Qtd. Contratos Pendentes",
+            yaxis=dict(autorange="reversed"),
+            height=max(300, len(df_top_mon) * 38),
+            margin=dict(l=10, r=30, t=40, b=10),
+        )
+        st.plotly_chart(
+            fig_mon,
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
     else:
         st.info("Sem dados de monitor para exibir.")
 
-    # ── Exportação ──────────────────────────────────────────────────
     st.markdown("")
     col_exp1, col_exp2, _ = st.columns([1, 1, 2])
 

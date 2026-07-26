@@ -14,6 +14,7 @@ _ROOT = _DIR.parent                      # .../projeto/
 from datetime import datetime
 from html import escape
 from io import BytesIO
+from textwrap import dedent
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -104,6 +105,241 @@ FMT_QUEBRA: Dict[str, str] = {
     "Fechamento Base":       "{:.2%}",
     "Fechamento Pessimista": "{:.2%}",
 }
+
+
+# ====================================================
+# TOPO FIXO — HERO + RESULTADO DA BASE
+# ====================================================
+def _injetar_css_topo_fixo_mig() -> None:
+    """CSS local para fixar Hero + Resultado da Base + tipografia KPI."""
+    st.markdown(
+        dedent(
+            """
+            <style>
+            /* Wrapper do elemento Streamlit que contém o topo */
+            div[data-testid="stElementContainer"]:has(.topo-fixo-mig) {
+                position: sticky !important;
+                top: 0.75rem !important;
+                z-index: 1000 !important;
+            }
+
+            /* Fundo sutil evita que o conteúdo atrás apareça ao rolar */
+            .topo-fixo-mig {
+                background: rgba(240, 249, 255, 0.96);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                padding: 0.5rem 0;
+                border-radius: 16px;
+            }
+
+            /* ── Hero Migração ──────────────────────────────── */
+            .topo-fixo-mig .hero-mig {
+                background: linear-gradient(
+                    135deg,
+                    #0C4A6E 0%,
+                    #0369A1 55%,
+                    #0284C7 100%
+                );
+                padding: 32px 40px;
+                border-radius: 16px;
+                color: white;
+                box-shadow: 0 10px 40px rgba(12, 74, 110, 0.25);
+                margin-bottom: 12px;
+                position: relative;
+                overflow: hidden;
+            }
+
+            .topo-fixo-mig .hero-mig::before {
+                content: "";
+                position: absolute;
+                top: -55%;
+                right: -8%;
+                width: 390px;
+                height: 390px;
+                background: rgba(255, 255, 255, 0.07);
+                border-radius: 50%;
+                pointer-events: none;
+            }
+
+            .topo-fixo-mig .hero-mig h1 {
+                position: relative;
+                z-index: 2;
+                color: white !important;
+                font-family: "Manrope", "Segoe UI", Arial, sans-serif !important;
+                font-size: 34px;
+                font-weight: 800;
+                margin: 0;
+                letter-spacing: -0.5px;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.28);
+            }
+
+            .topo-fixo-mig .hero-mig p {
+                position: relative;
+                z-index: 2;
+                color: rgba(255, 255, 255, 0.92) !important;
+                font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
+                font-size: 15px;
+                margin: 8px 0 0;
+                font-weight: 400;
+            }
+
+            /* ── Resultado da Base ─────────────────────────── */
+            .topo-fixo-mig .resultado-base {
+                margin-bottom: 0 !important;
+                background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
+                padding: 1rem 1.5rem;
+                border-radius: 0.75rem;
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 0.6rem;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            }
+
+            .topo-fixo-mig .resultado-base-label {
+                color: #94A3B8;
+                font-size: 0.8rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+            }
+
+            .topo-fixo-mig .resultado-base-regiao {
+                padding: 0.3rem 0.9rem;
+                border-radius: 999px;
+                font-size: 0.82rem;
+                font-weight: 700;
+                border: 2px solid;
+            }
+
+            .topo-fixo-mig .resultado-base-count {
+                color: #64748B;
+                font-size: 0.72rem;
+                margin-left: auto;
+                font-weight: 600;
+            }
+
+            /* ═══════════════════════════════════════════════════════
+               KPI CARDS — apenas fontes padronizadas
+               (mantém cores originais dos temas)
+               ═══════════════════════════════════════════════════════ */
+            /* ═══════════════════════════════════════════════════════
+               KPI CARDS — apenas fontes (com !important)
+               ═══════════════════════════════════════════════════════ */
+            .kpi-card * {
+                font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
+            }
+            .kpi-value {
+                font-family: "Manrope", "Segoe UI", Arial, sans-serif !important;
+                font-weight: 800 !important;
+                font-variant-numeric: tabular-nums !important;
+                letter-spacing: -0.3px !important;
+            }
+            .kpi-label {
+                font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
+                font-weight: 700 !important;
+                letter-spacing: 1.2px !important;
+                text-transform: uppercase !important;
+            }
+            .kpi-sub {
+                font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
+                font-weight: 500 !important;
+            }
+
+            /* Ajuste para telas menores */
+            @media (max-width: 768px) {
+                div[data-testid="stElementContainer"]:has(.topo-fixo-mig) {
+                    top: 0.25rem !important;
+                }
+
+                .topo-fixo-mig .hero-mig {
+                    padding: 22px 20px;
+                }
+
+                .topo-fixo-mig .hero-mig h1 {
+                    font-size: 25px;
+                }
+
+                .topo-fixo-mig .resultado-base-count {
+                    width: 100%;
+                    margin-left: 0;
+                }
+            }
+            </style>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _html_resultado_base_mig(regioes: List[str], total: int) -> str:
+    """Gera o HTML do Resultado da Base para uso dentro do topo fixo."""
+    cores_regiao = {
+        "LESTE": {"bg": "#DBEAFE", "text": "#1E40AF", "border": "#3B82F6"},
+        "GRU":   {"bg": "#D1FAE5", "text": "#065F46", "border": "#10B981"},
+        "ABCDM": {"bg": "#EDE9FE", "text": "#5B21B6", "border": "#8B5CF6"},
+        "OUTRAS": {"bg": "#F1F5F9", "text": "#475569", "border": "#94A3B8"},
+    }
+
+    badges = ""
+
+    for regiao in sorted(regioes):
+        regiao_str = str(regiao).strip().upper()
+
+        if not regiao_str or regiao_str in {"NAN", "NONE"}:
+            continue
+
+        cor = cores_regiao.get(regiao_str, cores_regiao["OUTRAS"])
+
+        badges += (
+            f'<span class="resultado-base-regiao" '
+            f'style="background:{cor["bg"]};'
+            f'color:{cor["text"]};'
+            f'border-color:{cor["border"]};">'
+            f"{escape(regiao_str)}"
+            f"</span>"
+        )
+
+    if not badges:
+        cor = cores_regiao["OUTRAS"]
+        badges = (
+            f'<span class="resultado-base-regiao" '
+            f'style="background:{cor["bg"]};'
+            f'color:{cor["text"]};'
+            f'border-color:{cor["border"]};">'
+            f"OUTRAS"
+            f"</span>"
+        )
+
+    total_fmt = f"{total:,}".replace(",", ".")
+
+    return (
+        f'<div class="resultado-base">'
+        f'<span class="resultado-base-label">📋 Resultado da Base:</span>'
+        f"{badges}"
+        f'<span class="resultado-base-count">{total_fmt} registros</span>'
+        f"</div>"
+    )
+
+
+def _render_topo_fixo_mig(regioes: List[str], total: int) -> None:
+    """Renderiza Hero Migração + Resultado Base em um único bloco fixo."""
+    resultado_html = _html_resultado_base_mig(regioes, total)
+
+    st.markdown(
+        dedent(
+            f"""
+            <div class="topo-fixo-mig">
+                <div class="hero-mig">
+                    <h1>🔄 Migração — Quebra de Agenda</h1>
+                    <p>Análise estratégica de Mudança de Pacote + GPON</p>
+                </div>
+                {resultado_html}
+            </div>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 # ====================================================
@@ -759,7 +995,7 @@ class PDFExecutivoMigracao:
 
         # ── SEÇÃO 3 — Causas de Quebra ────────────────────────────────
         cls._secao(el, "3 ─ Principais Causas de Quebra", s)
-        
+
         df_causa = Motor.causa_raiz_segmento(df_seg, TIPO, "_COL_BAIXA", top_n=8)
         el.append(cls._tab(df_causa, limite=8))
 
@@ -794,20 +1030,16 @@ class PDFExecutivoMigracao:
         doc.build(el, onFirstPage=cls._rodape, onLaterPages=cls._rodape)
         buf.seek(0)
         return buf.getvalue()
-    
+
+
 # ====================================================
 # UTILITÁRIO — DataFrame de Pendentes Migração
 # ====================================================
-
 def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
     """
     Retorna um DataFrame com as OS pendentes do segmento Migração,
     contendo as colunas: Contrato, Login, Técnico, Monitor e Qtde. de O.S.
-
-    Faz busca tolerante aos nomes de coluna reais do DataFrame.
     """
-
-    # ── Mapeamento tolerante de colunas ────────────────────────────
     MAPA_COLUNAS = {
         "Contrato": [
             "CONTRATO", "Nº CONTRATO", "NUM_CONTRATO",
@@ -832,20 +1064,17 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
     }
 
     def _encontrar_coluna(df: pd.DataFrame, candidatos: list[str]) -> str | None:
-        """Retorna o primeiro nome de coluna que existir no DataFrame."""
         cols_upper = {c.upper(): c for c in df.columns}
         for cand in candidatos:
             if cand.upper() in cols_upper:
                 return cols_upper[cand.upper()]
         return None
 
-    # ── Filtrar apenas pendentes ────────────────────────────────────
     if "Status Contrato" in df_seg.columns:
         mask_pend = df_seg["Status Contrato"].str.upper().isin(
             ["PENDENTE", "PENDING", "ABERTO", "EM ABERTO", "NÃO EXECUTADO"]
         )
     else:
-        # Fallback: usa classificar_status se disponível
         mask_pend = pd.Series([True] * len(df_seg), index=df_seg.index)
 
     df_pend = df_seg[mask_pend].copy()
@@ -855,7 +1084,6 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
             columns=["Contrato", "Login", "Técnico", "Monitor", "Qtde. de O.S."]
         )
 
-    # ── Montar DataFrame de saída ───────────────────────────────────
     df_out = pd.DataFrame(index=df_pend.index)
 
     for nome_saida, candidatos in MAPA_COLUNAS.items():
@@ -864,16 +1092,15 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
         if col_real:
             df_out[nome_saida] = df_pend[col_real].values
         else:
-            df_out[nome_saida] = "N/D"   # coluna não encontrada na base
-            
+            df_out[nome_saida] = "N/D"
+
     if "Qtde. O.S." in df_out.columns:
         df_out["Qtde. O.S."] = (
             pd.to_numeric(df_out["Qtde. O.S."], errors="coerce")
-            .fillna(0)                                                # NaN → 0
-            .astype(int)                                            # float → int
-    )
+            .fillna(0)
+            .astype(int)
+        )
 
-    # Remove duplicatas, ordena por Técnico
     df_out = (
         df_out
         .drop_duplicates()
@@ -881,7 +1108,6 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
         .reset_index(drop=True)
     )
 
-    # Índice começando em 1 para exibição
     df_out.index = df_out.index + 1
 
     return df_out
@@ -1181,20 +1407,18 @@ def _sub_plano_acao(
             f"plano_{TIPO.lower()}.xlsx",
             key="dl_plano_mig",
         )
-        
+
+
 def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
     """
     Exibe tabela de contratos pendentes com:
     Contrato · Login · Técnico · Monitor · Qtde. de O.S.
     + métricas rápidas + exportação Excel.
     """
-
     render_section(f"📋 Contratos Pendentes — {TIPO}")
 
-    # ── Gera o DataFrame ────────────────────────────────────────────
     df_pend = _build_df_pendentes(df_seg)
 
-    # ── Métricas rápidas ────────────────────────────────────────────
     total_pend = len(df_pend)
 
     m1, m2, m3 = st.columns(3)
@@ -1207,7 +1431,6 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
         tema="laranja" if total_pend > 0 else "verde",
     )
 
-    # Técnicos únicos com pendência
     tec_unicos = (
         df_pend["Técnico"]
         .replace("N/D", pd.NA)
@@ -1222,7 +1445,6 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
         tema="azul",
     )
 
-    # Monitores únicos
     mon_unicos = (
         df_pend["Monitor"]
         .replace("N/D", pd.NA)
@@ -1246,7 +1468,6 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
         )
         return
 
-    # ── Filtros rápidos dentro da aba ───────────────────────────────
     with st.expander("🔎 Filtros rápidos na tabela de pendentes", expanded=False):
         fc1, fc2 = st.columns(2)
 
@@ -1257,7 +1478,7 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
                 if str(x) not in {"N/D", "nan"}
             )
             f_tec = st.selectbox(
-                "Técnico", opts_tec, key="pend_f_tec"
+                "Técnico", opts_tec, key="pend_f_tec_mig"
             )
 
         with fc2:
@@ -1267,17 +1488,15 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
                 if str(x) not in {"N/D", "nan"}
             )
             f_mon = st.selectbox(
-                "Monitor", opts_mon, key="pend_f_mon"
+                "Monitor", opts_mon, key="pend_f_mon_mig"
             )
 
-    # Aplica filtros rápidos
     df_view = df_pend.copy()
     if f_tec != "Todos":
         df_view = df_view[df_view["Técnico"] == f_tec]
     if f_mon != "Todos":
         df_view = df_view[df_view["Monitor"] == f_mon]
 
-    # ── Exibição da tabela ──────────────────────────────────────────
     st.markdown(
         f"**Exibindo {len(df_view):,} de {total_pend:,} contratos pendentes**"
     )
@@ -1289,10 +1508,9 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
         height=480,
     )
 
-    # ── Gráficos auxiliares ─────────────────────────────────────────
     st.markdown("")
     render_section("📊 Distribuição das Pendências")
-    
+
     df_top_mon = (
         df_view[df_view["Monitor"] != "N/D"]
         .groupby("Monitor")
@@ -1307,7 +1525,7 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
                 x=df_top_mon["Pendentes"],
                 y=df_top_mon["Monitor"],
                 orientation="h",
-                marker_color="#7C3AED",
+                marker_color="#0369A1",
                 text=df_top_mon["Pendentes"],
                 textposition="outside",
             )
@@ -1327,7 +1545,6 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
     else:
         st.info("Sem dados de monitor para exibir.")
 
-    # ── Exportação ──────────────────────────────────────────────────
     st.markdown("")
     col_exp1, col_exp2, _ = st.columns([1, 1, 2])
 
@@ -1339,14 +1556,14 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
                 f"Pendentes_{TIPO[:20]}_filtrado",
             ),
             file_name=(
-                f"pendentes_pme_filtrado_"
+                f"pendentes_migracao_filtrado_"
                 f"{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
             ),
             mime=(
                 "application/vnd.openxmlformats-officedocument"
                 ".spreadsheetml.sheet"
             ),
-            key="dl_pend_pme_filtrado",
+            key="dl_pend_mig_filtrado",
         )
 
     with col_exp2:
@@ -1357,29 +1574,23 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
                 f"Pendentes_{TIPO[:20]}_completo",
             ),
             file_name=(
-                f"pendentes_pme_completo_"
+                f"pendentes_migracao_completo_"
                 f"{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
             ),
             mime=(
                 "application/vnd.openxmlformats-officedocument"
                 ".spreadsheetml.sheet"
             ),
-            key="dl_pend_pme_completo",
+            key="dl_pend_mig_completo",
         )
+
 
 # ====================================================
 # APLICAÇÃO PRINCIPAL
 # ====================================================
 def main() -> None:
     aplicar_estilo()
-
-    st.markdown(
-        '<div class="hero" style="background:linear-gradient(135deg,#0C4A6E 0%,#0369A1 100%);">'
-        "<h1>🔄 Migração — Quebra de Agenda</h1>"
-        "<p>Análise estratégica de Mudança de Pacote + GPON</p>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    _injetar_css_topo_fixo_mig()
 
     if st.session_state.get("df_memoria") is None:
         st.warning("⚠️ Nenhuma base carregada.")
@@ -1434,7 +1645,17 @@ def main() -> None:
         st.warning("Nenhum dado para os filtros selecionados.")
         return
 
-    render_resultado_base(sorted(df[Config.COL_REGIAO].unique()), len(df))
+    # ── HERO + RESULTADO DA BASE FIXOS DURANTE A ROLAGEM ────────────
+    if Config.COL_REGIAO in df.columns:
+        regioes_mig = [
+            str(regiao).strip().upper()
+            for regiao in df[Config.COL_REGIAO].dropna().unique()
+            if str(regiao).strip()
+        ]
+    else:
+        regioes_mig = ["OUTRAS"]
+
+    _render_topo_fixo_mig(regioes_mig, len(df))
 
     df_seg = df[df["TIPO_SERVICO"] == TIPO].copy()
     if df_seg.empty:
