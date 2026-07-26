@@ -1,0 +1,19 @@
+[theme]
+base = "light"
+primaryColor = "#012869"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F8FAFC"
+textColor = "#1F2937"
+
+# Fallback antes do CSS carregar
+font = "sans serif"
+
+[server]
+enableStaticServing = true
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = true

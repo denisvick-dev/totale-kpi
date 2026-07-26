@@ -21,3 +21,4 @@ pydeck
 pyarrow
 pillow
 matplotlib
+reportlab

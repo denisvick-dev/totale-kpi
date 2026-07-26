@@ -41,7 +41,6 @@ class Configuracoes:
             "titulo": "#64748B",
         },
     }
-    PAGINA = {"titulo": "📈 Central de Comando - Operação", "icon": "🚀"}
 
 
 # ====================================================
@@ -154,6 +153,74 @@ class ComponenteVisual:
         else:
             mensagem = f"⚠️ **Visão da IA:** Alerta de Performance! A média de {media:.1f} pontos está abaixo da linha de corte (300). Restam poucos dias para reverter a tendência."
             st.warning(mensagem)
+    
+    @staticmethod        
+    def aplicar_capa():
+        st.markdown(
+            """
+        <style>
+    /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
+            .hero-corp {
+            background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
+            padding: 32px 40px;
+            border-radius: 16px;
+            color: white;
+            box-shadow: 0 10px 40px rgba(1, 40, 105, 0.25);
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-corp::before {
+            content: '';
+            position: absolute;
+            top: -50%; right: -10%;
+            width: 400px; height: 400px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+        }
+        .hero-title {
+            font-size: 34px;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.5px;
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+        }
+        .hero-subtitle {
+            font-size: 15px;
+            opacity: 0.92;
+            margin: 6px 0 0 0;
+            font-weight: 400;
+        }
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.18);
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        
+            .kpi-card {
+                padding: 1.4rem 1.6rem; border-radius: 1rem; border-left: 5px solid;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+                min-height: 110px; display: flex; flex-direction: column; justify-content: center;
+            }
+            .kpi-val  { font-size: 1.85rem; font-weight: 800; line-height: 1.1; margin: 0.3rem 0; }
+            .kpi-lab  { font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
+            .kpi-sub  { font-size: 0.78rem; margin-top: 0.2rem; }
+            .section-header {
+                display: flex; align-items: center; gap: 0.6rem;
+                margin: 1.5rem 0 0.8rem; padding-bottom: 0.4rem;
+                border-bottom: 2px solid #E2E8F0;
+            }
+            .section-header h3 { margin: 0; font-size: 1.1rem; color: #0F172A; }
+        </style>
+        """,
+            unsafe_allow_html=True,
+        )
 
 
 # ====================================================
@@ -584,12 +651,20 @@ class Graficos:
 # ====================================================
 # BLOCO 6: INICIALIZAÇÃO E DADOS BRUTOS
 # ====================================================
-st.set_page_config(
-    page_title=Configuracoes.PAGINA["titulo"],
-    page_icon=Configuracoes.PAGINA["icon"],
-    layout="wide",
-)
-st.title(Configuracoes.PAGINA["titulo"])
+ComponenteVisual.aplicar_capa()
+st.markdown(
+        f"""
+        <div class="hero-corp">
+            <div style="position:relative;z-index:2;">
+                <h1 class="hero-title">📈 Central de Performance | Produção por Técnico</h1>
+                <p class="hero-subtitle">
+                    Acompanhamento individual de execução, produtividade e performance em campo
+                </p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 if "dados_prod" not in st.session_state:
     st.warning("⚠️ Carregue os dados na página principal primeiro.")

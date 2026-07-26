@@ -66,6 +66,72 @@ class ComponenteVisual:
         </div>
         """
 
+    @staticmethod
+    def aplicar_capa():
+           st.markdown(
+               """
+           <style>
+           /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
+               .hero-corp {
+               background: linear-gradient(135deg, #F37C04 0%, #1E40AF 50%, #012869 100%);
+               padding: 32px 40px;
+               border-radius: 16px;
+               color: white;
+               box-shadow: 0 10px 40px rgba(243, 124, 4, 0.25);
+               text-shadow:
+                   0 2px 4px rgba(0, 0, 0, 0.5),
+                   0 1px 2px rgba(0, 0, 0, 0.3),
+                   0 0 24px rgba(255, 255, 255, 0.12);
+               margin-bottom: 24px;
+               position: relative;
+               overflow: hidden;
+           }
+           .hero-corp::before {
+               content: '';
+               position: absolute;
+               top: -50%; right: -10%;
+               width: 400px; height: 400px;
+               background: rgba(255,255,255,0.05);
+               border-radius: 50%;
+           }
+           .hero-title {
+               font-size: 34px;
+               font-weight: 800;
+               margin: 0;
+               letter-spacing: -0.5px;
+               text-shadow:
+                   0 2px 4px rgba(0, 0, 0, 0.5),
+                   0 1px 2px rgba(0, 0, 0, 0.3),
+                   0 0 24px rgba(255, 255, 255, 0.12);
+               font-family: 'Segoe UI', -apple-system, sans-serif;
+           }
+           .hero-subtitle {
+               font-size: 14px;
+               opacity: 0.90;
+               margin: 8px 0 0 0;
+               font-weight: 400;
+               color: #F1F5F9;
+               text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+               position: relative;
+               z-index: 2;
+               letter-spacing: 0.3px;
+           }
+           .hero-badge {
+               display: inline-block;
+               background: rgba(255,255,255,0.18);
+               padding: 4px 14px;
+               border-radius: 20px;
+               font-size: 12px;
+               font-weight: 600;
+               margin-top: 12px;
+               letter-spacing: 0.5px;
+               text-transform: uppercase;
+            }
+       </style>
+       """,
+               unsafe_allow_html=True,
+       )
+
 
 # ====================================================
 # BLOCO 3: FUNÇÕES UTILITÁRIAS
@@ -195,10 +261,14 @@ def gerar_dados_teste():
 # BLOCO 6: INICIALIZAÇÃO DA PÁGINA E BASE
 # ====================================================
 st.set_page_config(page_title="Visão Consultivo", page_icon="🗣️", layout="wide")
-st.title("🗣️ Raio-X: Módulo Consultivo (Vendas)")
+ComponenteVisual.aplicar_capa()
 st.markdown(
-    "Auditoria de performance comercial, taxa de conversão e mix de produtos ofertados."
-)
+        '<div class="hero-corp">'
+        "<h1>🗣️ Raio-X: Módulo Consultivo (Vendas)</h1>"
+        "<p>Auditoria de performance comercial, taxa de conversão e mix de produtos ofertados</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 # Busca dados da Sessão
 df_cons = None

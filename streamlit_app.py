@@ -1,10 +1,21 @@
 import streamlit as st
 import pandas as pd
+from componentes import aplicar_estilo
 
-# Injeção de CSS para personalizar a aparência da Sidebar e dos widgets
+# ✅ SEMPRE O PRIMEIRO COMANDO STREAMLIT
+st.set_page_config(
+    page_title="Painéis de Produção TOTALE",
+    page_icon="assets/images/icons/totale.ico",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ✅ DEPOIS do set_page_config
+aplicar_estilo()
+
+# ✅ DEPOIS do set_page_config
 st.html("""
     <style>
-    
     /* CRIAÇÃO DE ESTILOS PARA A SIDEBAR */
     
     .stSidebar h2 {
@@ -132,18 +143,12 @@ st.html("""
     </style>
     """)
 
-st.set_page_config(
-    page_title="Painéis de Produção TOTALE",
-    page_icon="assets/images/icons/totale.ico",
-    layout="wide",
-)
-
 
 def main():
     # Logotipo
     st.logo("assets/images/novo-logo-totale.png", size="medium")
 
-    # Definição das páginas (sem o section)
+    # Definição das páginas
     home_page = st.Page("pages/home.py", title="Home", icon="🏠", default=True)
     envio_excel = st.Page(
         "pages/envio_excel.py", title="Atualização de Dados", icon="🔁"
@@ -159,25 +164,23 @@ def main():
         "pages/visao_tecnico_cons.py", title="Consultivo", icon="🗣️"
     )
     rota_inicial = st.Page("pages/rota_inicial.py", title="Rota Inicial", icon="🗺️")
-    quebra = st.Page("pages/quebra.py", title="Quebra de Agenda", icon="📉")
+    quebra = st.Page("pages/quebra.py", title="Geral", icon="📉")
     volumetria = st.Page("pages/volumetria.py", title="Volumetria", icon="📊")
+    quebra_pme = st.Page("pages/quebra_pme.py", title="Visão PME", icon="📉")
+    quebra_mig = st.Page("pages/quebra_migracao.py", title="Visão Migração", icon="📉")
+    quebra_resumo = st.Page("pages/quebra_resumo.py", title="Resumo", icon="📉")
 
-    # Criando o Dicionário para agrupar as seções
+    # Agrupamento das seções
     paginas_agrupadas = {
         "MENU PRINCIPAL": [home_page, envio_excel],
-        "PAINÉIS DE PROD. E CONS.": [
-            ranking_pontos,
-            qtde_os,
-            consultivo,
-            gestao_ativos,
-        ],
+        "CENTRAL DE PERFORMANCE": [ranking_pontos, qtde_os, consultivo],
         "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons],
-        "DISPAROS DIÁRIOS": [rota_inicial, quebra, volumetria],
+        "COMPILADO": [gestao_ativos],
+        "DISPAROS DIÁRIOS": [rota_inicial, volumetria],
+        "QUEBRA": [quebra, quebra_resumo, quebra_pme, quebra_mig],
     }
 
-    # Passando o dicionário para a navegação
     pg = st.navigation(paginas_agrupadas)
-
     pg.run()
 
 

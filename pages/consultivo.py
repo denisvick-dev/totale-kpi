@@ -13,7 +13,6 @@ from streamlit_gsheets import GSheetsConnection
 # ====================================================
 st.set_page_config(page_title="Total de Consultivos", page_icon="📋", layout="wide")
 
-
 class Configuracoes:
     url_ativos = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
     cores_grafico = ["#0EA5E9", "#22C55E", "#A855F7", "#F97316", "#EF4444", "#3B82F6"]
@@ -92,7 +91,92 @@ class ComponenteVisual:
             <p style="margin:0; font-size:13px; color:{cores['titulo']};"><b>{titulo}</b></p>
             <h2 style="margin:5px 0 0 0; color:{cores['texto']}; font-weight:900; font-size:28px;">{valor}{delta_html}</h2>
         </div>"""
+        
+    @staticmethod        
+    def aplicar_capa():
+        st.markdown(
+            """
+        <style>
+    /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
+            .hero-corp {
+            background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
+            padding: 32px 40px;
+            border-radius: 16px;
+            color: white;
+            box-shadow: 0 10px 40px rgba(1, 40, 105, 0.25);
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-corp::before {
+            content: '';
+            position: absolute;
+            top: -50%; right: -10%;
+            width: 400px; height: 400px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+        }
+        .hero-title {
+            font-size: 34px;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.5px;
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+        }
+        .hero-subtitle {
+            font-size: 15px;
+            opacity: 0.92;
+            margin: 6px 0 0 0;
+            font-weight: 400;
+        }
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.18);
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        
+            .kpi-card {
+                padding: 1.4rem 1.6rem; border-radius: 1rem; border-left: 5px solid;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+                min-height: 110px; display: flex; flex-direction: column; justify-content: center;
+            }
+            .kpi-val  { font-size: 1.85rem; font-weight: 800; line-height: 1.1; margin: 0.3rem 0; }
+            .kpi-lab  { font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
+            .kpi-sub  { font-size: 0.78rem; margin-top: 0.2rem; }
+            .section-header {
+                display: flex; align-items: center; gap: 0.6rem;
+                margin: 1.5rem 0 0.8rem; padding-bottom: 0.4rem;
+                border-bottom: 2px solid #E2E8F0;
+            }
+            .section-header h3 { margin: 0; font-size: 1.1rem; color: #0F172A; }
+        </style>
+        """,
+            unsafe_allow_html=True,
+        )
+        
+    @staticmethod
+    def colorir_metas(valor: Any) -> str:
+        """Destaca valores numéricos maiores que 350."""
+        try:
+            numero = pd.to_numeric(valor, errors="coerce")
 
+            if pd.notna(numero) and numero > 350:
+                return (
+                    "background-color: #BBF7D0; "
+                    "color: #166534; "
+                    "font-weight: bold;"
+                )
+        except (TypeError, ValueError):
+            pass
+
+        # Mantém a formatação original da coluna
+        return ""
 
 class Calculos:
     @staticmethod
@@ -208,7 +292,20 @@ def preparar_ranking(
 # ====================================================
 # BLOCO 3: CARREGAMENTO PRINCIPAL E TRATAMENTO
 # ====================================================
-st.title("📋 Painel de Consultivos e Produtos")
+ComponenteVisual.aplicar_capa()
+st.markdown(
+        f"""
+        <div class="hero-corp">
+            <div style="position:relative;z-index:2;">
+                <h1 class="hero-title">📋 Central de Performance | Painel de Consultivos e Produtos</h1>
+                <p class="hero-subtitle">
+                    Análise de mix de produtos, consultivos realizados e oportunidades comerciais
+                </p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 if (
     "dados_cons" not in st.session_state
@@ -427,19 +524,46 @@ colunas_reais = [
 ]
 todas_num = [c for c in df_exibir.columns if c not in ["Posição"] + grupo]
 
-style_df = df_exibir.style.format(formatter=cast(Any, {c: "{:,}" for c in todas_num}))
+style_df = df_exibir.style.format(
+    formatter=cast(Any, {c: "{:,}" for c in todas_num})
+)
+
+# Formatação das colunas realizadas
 if colunas_reais:
     style_df = style_df.set_properties(
-        **{"background-color": "#F8FAFC", "font-weight": "bold"},
+        **{
+            "background-color": "#F8FAFC",
+            "font-weight": "bold",
+        },
         subset=cast(Any, colunas_reais),
     )
+
+# Formatação das colunas projetadas
 if colunas_proj:
     style_df = style_df.set_properties(
-        **{"background-color": "#FEF9C3", "color": "#854D0E", "font-weight": "bold"},
+        **{
+            "background-color": "#FEF9C3",
+            "color": "#854D0E",
+            "font-weight": "bold",
+        },
         subset=cast(Any, colunas_proj),
     )
 
-st.dataframe(style_df, use_container_width=True, height=450, hide_index=True)
+# Colunas nas quais a meta de 350 será verificada
+coluna_meta = colunas_reais
+
+if coluna_meta:
+    style_df = style_df.map(
+        ComponenteVisual.colorir_metas,
+        subset=cast(Any, coluna_meta),
+    )
+
+st.dataframe(
+    style_df,
+    use_container_width=True,
+    height=450,
+    hide_index=True,
+)
 
 # Abas de Gráficos Rápidos e Alertas
 aba1, aba2 = st.tabs(["📈 Desempenho e Matriz", "🚫 Equipes sem Consultivos"])
