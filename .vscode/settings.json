@@ -1,6 +1,5 @@
 {
-    "editor.fontFamily": "Recursive Mono Linear Light",
-    "editor.fontSize": 16,
-    "editor.defaultFormatter": "shamanu4.django-intellisense",
+    "editor.fontFamily": "Fira Mono",
+    "editor.fontSize": 15,
     "editor.fontVariations": false
 }
