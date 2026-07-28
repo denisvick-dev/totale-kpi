@@ -7,6 +7,8 @@ Fórmula da Quebra:
     Quebra = Não Executados / (Executados + Não Executados)
     → Pendentes NÃO entram no denominador
 
+Métrica base: soma de "Total de Tarefas" (não contagem de linhas).
+
 Segmentos analisados:
     - Novos Domicílios
     - Migração
@@ -119,7 +121,6 @@ COL_CAND_DATA = [
 ]
 COL_CAND_STATUS_ATIV = [
     "STATUS ATIVIDADE",
-    "STATUS ATIVIDADE",
     "STATUS_ATIVIDADE",
     "STATUS DA ATIVIDADE",
     "STATUS_DA_ATIVIDADE",
@@ -134,6 +135,16 @@ COL_CAND_STATUS_ATIV = [
     "STATUS ASSINATURA",
     "STATUS_ASSINATURA",
     "STATUS CONTRATO ATIVIDADE",
+]
+
+# ✅ NOVO — Total de Tarefas
+COL_CAND_TOTAL_TAREFAS = [
+    "TOTAL DE TAREFAS",
+    "TOTAL TAREFAS",
+    "TOTAL_TAREFAS",
+    "QTD TAREFAS",
+    "QUANTIDADE DE TAREFAS",
+    "TAREFAS",
 ]
 
 COL_REGIAO = "REGIÃO"
@@ -163,14 +174,12 @@ def _injetar_css_corporativo() -> None:
            TOPO FIXO — HERO + RESULTADO DA BASE (agrupados)
            ═══════════════════════════════════════════════════════ */
 
-        /* Faz o container do Streamlit que contém .topo-fixo-quebra grudar */
         div[data-testid="stElementContainer"]:has(.topo-fixo-quebra) {
             position: sticky !important;
             top: 0.75rem !important;
             z-index: 1000 !important;
         }
 
-        /* Wrapper visual */
         .topo-fixo-quebra {
             background: rgba(248, 250, 252, 0.92);
             backdrop-filter: blur(10px);
@@ -179,15 +188,8 @@ def _injetar_css_corporativo() -> None:
             border-radius: 12px;
         }
 
-        /* Hero mantém curvas e sombra */
-        .topo-fixo-quebra .hero-corp {
-            margin-bottom: 12px !important;
-        }
-
-        /* Resultado da Base mantém curvas */
-        .topo-fixo-quebra .resultado-base {
-            margin-bottom: 0 !important;
-        }
+        .topo-fixo-quebra .hero-corp { margin-bottom: 12px !important; }
+        .topo-fixo-quebra .resultado-base { margin-bottom: 0 !important; }
 
         /* ═══════════════════════════════════════════════════════
            HERO CORPORATIVO
@@ -347,9 +349,7 @@ def _injetar_css_corporativo() -> None:
             font-size: 14px;
             color: #1E3A8A;
         }
-        .formula-box b {
-            color: #012869;
-        }
+        .formula-box b { color: #012869; }
     </style>
     """,
         unsafe_allow_html=True,
@@ -507,6 +507,7 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
     col_tipo = _encontrar_coluna(df, COL_CAND_TIPO)
     col_status = _encontrar_coluna(df, COL_CAND_STATUS)
     col_status_ativ = _encontrar_coluna(df, COL_CAND_STATUS_ATIV)
+    col_tarefas = _encontrar_coluna(df, COL_CAND_TOTAL_TAREFAS)  # ✅ NOVO
 
     if not col_mon or not col_status:
         return pd.DataFrame()
@@ -530,9 +531,24 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     df_work["_STATUS_CLASS"] = df_work[col_status].apply(_classificar_status_os)
-    df_work["_EXEC"] = df_work["_STATUS_CLASS"] == "EXECUTADO"
-    df_work["_NAO_EXEC"] = df_work["_STATUS_CLASS"] == "NAO_EXECUTADO"
-    df_work["_PEND"] = df_work["_STATUS_CLASS"] == "PENDENTE"
+
+    # ✅ NOVO — Total de tarefas por linha
+    if col_tarefas:
+        df_work["_TAREFAS"] = (
+            pd.to_numeric(
+                df_work[col_tarefas].astype(str).str.replace(",", "."),
+                errors="coerce",
+            )
+            .fillna(0)
+            .astype(int)
+        )
+    else:
+        df_work["_TAREFAS"] = 1
+
+    # ✅ Multiplica flags pela qtd de tarefas
+    df_work["_EXEC"] = (df_work["_STATUS_CLASS"] == "EXECUTADO") * df_work["_TAREFAS"]
+    df_work["_NAO_EXEC"] = (df_work["_STATUS_CLASS"] == "NAO_EXECUTADO") * df_work["_TAREFAS"]
+    df_work["_PEND"] = (df_work["_STATUS_CLASS"] == "PENDENTE") * df_work["_TAREFAS"]
 
     df_valid = df_work.dropna(subset=["_TIPO"]).copy()
     if df_valid.empty:
@@ -544,6 +560,7 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
             executados=("_EXEC", "sum"),
             nao_executados=("_NAO_EXEC", "sum"),
             pendentes=("_PEND", "sum"),
+            total_tarefas=("_TAREFAS", "sum"),
         )
         .reset_index()
     )
@@ -569,15 +586,19 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
 
     exec_por_mon = df_work.groupby("_MON")["_EXEC"].sum().rename("exec")
     ne_por_mon = df_work.groupby("_MON")["_NAO_EXEC"].sum().rename("nao_exec")
+    tar_por_mon = df_work.groupby("_MON")["_TAREFAS"].sum().rename("total_tarefas")
 
-    pivot = pivot.join(exec_por_mon).join(ne_por_mon)
+    pivot = pivot.join(exec_por_mon).join(ne_por_mon).join(tar_por_mon)
     denom_mon = pivot["exec"] + pivot["nao_exec"]
     pivot["Quebra Geral"] = np.where(
         denom_mon > 0,
         pivot["nao_exec"] / denom_mon,
         0.0,
     )
-    pivot = pivot.drop(columns=["exec", "nao_exec"])
+
+    # ✅ NOVO — coluna Total Tarefas visível
+    pivot["Total Tarefas"] = pivot["total_tarefas"].astype(int)
+    pivot = pivot.drop(columns=["exec", "nao_exec", "total_tarefas"])
 
     pivot = pivot.reset_index().rename(columns={"_MON": "Monitor"})
 
@@ -593,6 +614,7 @@ def build_matriz_desempenho(df: pd.DataFrame) -> pd.DataFrame:
     ne_tot = int(df_work["_NAO_EXEC"].sum())
     denom_tot = exec_tot + ne_tot
     total_row["Quebra Geral"] = ne_tot / denom_tot if denom_tot > 0 else 0.0
+    total_row["Total Tarefas"] = int(df_work["_TAREFAS"].sum())
 
     pivot = pd.concat([pivot, pd.DataFrame([total_row])], ignore_index=True)
 
@@ -613,6 +635,7 @@ def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     col_motivo = _encontrar_coluna(df, COL_CAND_MOTIVO)
     col_regiao = _encontrar_coluna(df, COL_CAND_REGIAO)
     col_data = _encontrar_coluna(df, COL_CAND_DATA)
+    col_tarefas = _encontrar_coluna(df, COL_CAND_TOTAL_TAREFAS)  # ✅ NOVO
 
     df_ext = pd.DataFrame(index=df.index)
 
@@ -631,6 +654,19 @@ def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     )
     df_ext["Motivo Baixa"] = df[col_motivo] if col_motivo else "—"
     df_ext["Período"] = df[col_data] if col_data else "—"
+
+    # ✅ NOVO — Total de Tarefas
+    if col_tarefas:
+        df_ext["Total Tarefas"] = (
+            pd.to_numeric(
+                df[col_tarefas].astype(str).str.replace(",", "."),
+                errors="coerce",
+            )
+            .fillna(0)
+            .astype(int)
+        )
+    else:
+        df_ext["Total Tarefas"] = 1
 
     if col_status:
         df_ext["Classificação"] = df[col_status].apply(_classificar_status_os)
@@ -694,7 +730,8 @@ def build_extracao_completa(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
 # ESTILO DA TABELA RESUMO
 # ====================================================
 def _estilizar_tabela(df: pd.DataFrame, meta: float):
-    cols_pct = [c for c in df.columns if c != "Monitor"]
+    cols_pct = [c for c in df.columns if c not in ("Monitor", "Total Tarefas")]
+    col_total = "Total Tarefas" if "Total Tarefas" in df.columns else None
 
     def _aplicar_cores(row: pd.Series) -> list[str]:
         estilos: list[str] = []
@@ -715,6 +752,19 @@ def _estilizar_tabela(df: pd.DataFrame, meta: float):
                         "font-size: 14px; font-weight: 700; "
                         "text-align: left; padding-left: 16px; "
                         "border-right: 2px solid #E2E8F0;"
+                    )
+            elif col == "Total Tarefas":
+                if is_total:
+                    estilos.append(
+                        "background: #1E3A8A; color: white; "
+                        "font-size: 15px; font-weight: 800; "
+                        "text-align: center; padding: 12px 8px;"
+                    )
+                else:
+                    estilos.append(
+                        "background-color: #EFF6FF; color: #1E3A8A; "
+                        "font-size: 14px; font-weight: 700; "
+                        "text-align: center; padding: 12px 8px;"
                     )
             else:
                 val = row[col]
@@ -740,7 +790,11 @@ def _estilizar_tabela(df: pd.DataFrame, meta: float):
         return estilos
 
     styler = df.style.apply(_aplicar_cores, axis=1)
-    format_dict = {col: _fmt_pct_br for col in cols_pct}
+
+    format_dict: dict[str, Any] = {col: _fmt_pct_br for col in cols_pct}
+    if col_total:
+        format_dict[col_total] = _fmt_int_br
+
     styler = styler.format(format_dict)  # type: ignore[arg-type]
 
     styler = styler.set_table_styles(
@@ -793,7 +847,8 @@ def plot_desempenho(df_matriz: pd.DataFrame, meta: float) -> go.Figure:
         return go.Figure()
 
     df_plot = df_matriz.copy()
-    cols_tipo = [c for c in df_plot.columns if c != "Monitor"]
+    # ✅ Ignora "Total Tarefas" nas barras
+    cols_tipo = [c for c in df_plot.columns if c not in ("Monitor", "Total Tarefas")]
 
     fig = go.Figure()
 
@@ -928,10 +983,6 @@ def _render_section_header(icon: str, title: str, badge: str = "") -> None:
 
 
 def html_resultado_base(regioes: List[str], total: int) -> str:
-    """
-    Retorna o HTML do bloco 'Resultado da Base' — sem quebras de linha
-    para evitar interpretação como bloco de código pelo Markdown.
-    """
     badges = ""
     for reg in sorted(regioes):
         c = CORES_REGIAO.get(reg, CORES_REGIAO["OUTRAS"])
@@ -969,7 +1020,7 @@ def main() -> None:
     data_ref = datetime.now().strftime("%d/%m/%Y")
     hora_ref = datetime.now().strftime("%H:%M")
 
-    # ── HERO SEM BASE (quando não há dados) ─────────────────────
+    # ── HERO SEM BASE ────────────────────────────────────────────
     if st.session_state.get("df_memoria") is None:
         st.markdown(
             f"""
@@ -995,8 +1046,7 @@ def main() -> None:
         else ["OUTRAS"]
     )
 
-    # ── ✅ HERO + RESULTADO DA BASE (BLOCO ÚNICO FIXO NA ROLAGEM) ──
-    # ⚠️ Sem indentação nas linhas HTML para o Markdown não interpretar como código
+    # ── HERO + RESULTADO DA BASE ────────────────────────────────
     st.markdown(
         f"""
 <div class="topo-fixo-quebra">
@@ -1108,15 +1158,32 @@ def main() -> None:
     total_row = df_matriz[df_matriz["Monitor"] == "Total Geral"].iloc[0]
 
     col_status_full = _encontrar_coluna(df_filt, COL_CAND_STATUS)
+    col_tarefas_full = _encontrar_coluna(df_filt, COL_CAND_TOTAL_TAREFAS)  # ✅
+
     if col_status_full:
         status_class = df_filt[col_status_full].apply(_classificar_status_os)
-        total_exec = int((status_class == "EXECUTADO").sum())
-        total_nao_exec = int((status_class == "NAO_EXECUTADO").sum())
-        total_pendente = int((status_class == "PENDENTE").sum())
+
+        # ✅ Total de Tarefas por linha (padrão 1 se coluna não existir)
+        if col_tarefas_full:
+            tarefas_por_linha = (
+                pd.to_numeric(
+                    df_filt[col_tarefas_full].astype(str).str.replace(",", "."),
+                    errors="coerce",
+                )
+                .fillna(0)
+                .astype(int)
+            )
+        else:
+            tarefas_por_linha = pd.Series(1, index=df_filt.index)
+
+        total_exec = int(tarefas_por_linha[status_class == "EXECUTADO"].sum())
+        total_nao_exec = int(tarefas_por_linha[status_class == "NAO_EXECUTADO"].sum())
+        total_pendente = int(tarefas_por_linha[status_class == "PENDENTE"].sum())
+        total_tarefas = int(tarefas_por_linha.sum())
         denom_geral = total_exec + total_nao_exec
         quebra_geral = total_nao_exec / denom_geral if denom_geral > 0 else 0.0
     else:
-        total_exec = total_nao_exec = total_pendente = 0
+        total_exec = total_nao_exec = total_pendente = total_tarefas = 0
         denom_geral = 0
         quebra_geral = 0.0
 
@@ -1124,31 +1191,39 @@ def main() -> None:
     acima_meta = int((df_sem_total["Quebra Geral"] > meta_slider_pct).sum())
     pior_tipo = max(ORDEM_TIPOS, key=lambda t: float(total_row.get(t, 0)))
 
-    k1, k2, k3, k4 = st.columns(4)
+    # ✅ Agora 5 colunas de KPIs
+    k1, k2, k3, k4, k5 = st.columns(5)
 
     _render_kpi(
         k1,
+        "Total de O.S.",
+        _fmt_int_br(total_tarefas),
+        "Base completa (sem suspensos)",
+        COR_PRIMARIA,
+    )
+    _render_kpi(
+        k2,
         "Quebra Consolidada",
         _fmt_pct_br(quebra_geral),
         f"NE: {_fmt_int_br(total_nao_exec)} / Base: {_fmt_int_br(denom_geral)}",
         COR_ALERTA if quebra_geral > meta_slider_pct else COR_SUCESSO,
     )
     _render_kpi(
-        k2,
+        k3,
         "Monitores Ativos",
         _fmt_int_br(total_monitores),
         f"{acima_meta} acima da meta",
         COR_PRIMARIA,
     )
     _render_kpi(
-        k3,
-        "Pendentes",
+        k4,
+        "O.S. Pendentes",
         _fmt_int_br(total_pendente),
         "Fora do cálculo de quebra",
         COR_NEUTRO,
     )
     _render_kpi(
-        k4,
+        k5,
         "Segmento Crítico",
         pior_tipo,
         f"Quebra: {_fmt_pct_br(total_row[pior_tipo])}",
@@ -1179,9 +1254,11 @@ def main() -> None:
                 = <b>{_fmt_int_br(total_nao_exec)} ÷ {_fmt_int_br(denom_geral)}
                 = {_fmt_pct_br(quebra_geral)}</b>
                 <br>
-                ℹ️ <b>{_fmt_int_br(total_pendente)}</b> registros pendentes
-                não entraram no cálculo. Meta de referência:
-                <b>{meta_slider_pct:.0%}</b>.
+                📊 <b>Total de O.S. analisadas:</b> {_fmt_int_br(total_tarefas)}
+                &nbsp;·&nbsp;
+                ℹ️ <b>{_fmt_int_br(total_pendente)}</b> pendentes fora do cálculo
+                &nbsp;·&nbsp;
+                Meta: <b>{meta_slider_pct:.0%}</b>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1224,42 +1301,52 @@ def main() -> None:
         _render_section_header("📋", "Extração Completa da Base", "Drill-down")
 
         total_os = len(df_extracao)
+        total_tarefas_ext = int(df_extracao["Total Tarefas"].sum())  # ✅
         total_os_original = len(df_filt)
         removidos_total = total_os_original - total_os
         removidos_vazio = max(0, removidos_total - qtd_suspensos)
 
-        ext_exec = int(df_extracao["É Executado"].sum())
-        ext_nao_exec = int(df_extracao["É Não Executado"].sum())
-        ext_pend = int(df_extracao["É Pendente"].sum())
+        # ✅ Soma tarefas (não linhas)
+        ext_exec = int(df_extracao.loc[df_extracao["É Executado"], "Total Tarefas"].sum())
+        ext_nao_exec = int(df_extracao.loc[df_extracao["É Não Executado"], "Total Tarefas"].sum())
+        ext_pend = int(df_extracao.loc[df_extracao["É Pendente"], "Total Tarefas"].sum())
         ext_denom = ext_exec + ext_nao_exec
         ext_pct = ext_nao_exec / ext_denom if ext_denom > 0 else 0.0
 
-        ek1, ek2, ek3, ek4 = st.columns(4)
+        # ✅ 5 KPIs
+        ek1, ek2, ek3, ek4, ek5 = st.columns(5)
 
         _render_kpi(
             ek1,
-            "OS Válidas",
+            "Total de O.S.",
+            _fmt_int_br(total_tarefas_ext),
+            f"em {_fmt_int_br(total_os)} contratos",
+            COR_PRIMARIA,
+        )
+        _render_kpi(
+            ek2,
+            "Contratos",
             _fmt_int_br(total_os),
             f"de {_fmt_int_br(total_os_original)} originais",
             COR_PRIMARIA,
         )
         _render_kpi(
-            ek2,
-            "Executadas",
+            ek3,
+            "O.S. Executadas",
             _fmt_int_br(ext_exec),
-            f"{_fmt_pct_br(ext_exec / total_os if total_os else 0)} do total",
+            f"{_fmt_pct_br(ext_exec / total_tarefas_ext if total_tarefas_ext else 0)} das tarefas",
             COR_SUCESSO,
         )
         _render_kpi(
-            ek3,
-            "Não Executadas",
+            ek4,
+            "O.S. Não Executadas",
             _fmt_int_br(ext_nao_exec),
             f"Quebra: {_fmt_pct_br(ext_pct)}",
             COR_ALERTA,
         )
         _render_kpi(
-            ek4,
-            "Pendentes",
+            ek5,
+            "O.S. Pendentes",
             _fmt_int_br(ext_pend),
             "Fora do cálculo",
             COR_NEUTRO,
@@ -1298,6 +1385,7 @@ def main() -> None:
                 <br>
                 <span style="color:#64748B;">
                     Suspensos e contratos vazios não entram em nenhum cálculo.
+                    Métrica em <b>ordens de serviço</b> (não em contagem de contratos).
                 </span>
             </div>
             """,
@@ -1366,8 +1454,11 @@ def main() -> None:
         elif f_status == "Somente Pendentes":
             df_view = df_view[df_view["É Pendente"] == True]
 
+        # ✅ Mostra também soma de tarefas do filtro
+        tarefas_view = int(df_view["Total Tarefas"].sum())
         st.markdown(
-            f"**Exibindo `{len(df_view):,}` de `{total_os:,}` registros**".replace(
+            f"**Exibindo `{len(df_view):,}` contratos · `{tarefas_view:,}` O.S.** "
+            f"(de `{total_os:,}` contratos totais / `{total_tarefas_ext:,}` O.S. totais)".replace(
                 ",", "."
             ),
         )
@@ -1382,6 +1473,12 @@ def main() -> None:
                     "📄 Contrato",
                     width="small",
                     help="Número do contrato",
+                ),
+                "Total Tarefas": st.column_config.NumberColumn(  # ✅ NOVO
+                    "📊 Total Tarefas",
+                    width="small",
+                    format="%d",
+                    help="Quantidade de tarefas por OS",
                 ),
                 "Status Atividade": st.column_config.TextColumn(
                     "🔒 Status Atividade",
@@ -1426,6 +1523,7 @@ def main() -> None:
             },
             column_order=[
                 "Contrato",
+                "Total Tarefas",   # ✅ NOVO
                 "Login",
                 "Técnico",
                 "Monitor",
@@ -1489,7 +1587,7 @@ def main() -> None:
             Gerado em {data_ref} às {hora_ref} · Dados sujeitos a atualização
             <br>
             <span style="font-family:monospace;font-size:11px;">
-                Fórmula: Quebra = Não Executadas ÷ (Executadas + Não Executadas)
+                Fórmula: Quebra = Não Executadas ÷ (Executadas + Não Executadas) · Base: Total de Tarefas
             </span>
         </div>
         """,

@@ -153,8 +153,8 @@ class ComponenteVisual:
         else:
             mensagem = f"⚠️ **Visão da IA:** Alerta de Performance! A média de {media:.1f} pontos está abaixo da linha de corte (300). Restam poucos dias para reverter a tendência."
             st.warning(mensagem)
-    
-    @staticmethod        
+
+    @staticmethod
     def aplicar_capa():
         st.markdown(
             """
@@ -202,7 +202,7 @@ class ComponenteVisual:
             letter-spacing: 0.5px;
             text-transform: uppercase;
         }
-        
+
             .kpi-card {
                 padding: 1.4rem 1.6rem; border-radius: 1rem; border-left: 5px solid;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.06);
@@ -221,6 +221,167 @@ class ComponenteVisual:
         """,
             unsafe_allow_html=True,
         )
+
+    # ═══════════════════════════════════════════════════════════
+    # DATAFRAME CORPORATIVO (NOVO)
+    # ═══════════════════════════════════════════════════════════
+    @staticmethod
+    def render_dataframe_corporativo(
+        df: pd.DataFrame,
+        titulo: str = "",
+        icone: str = "📊",
+        badge: str = "",
+        modo_diario: bool = False,
+    ):
+        """Renderiza DataFrame com visual corporativo executivo."""
+
+        # ── Header do wrapper ────────────────────────────────────
+        badge_txt = badge or f"{len(df)} equipes"
+        modo_txt = "📅 Meta Diária" if modo_diario else "📆 Acumulado do Mês"
+
+        st.markdown(
+            f"""
+        <div style="background:#FFFFFF;border-radius:12px 12px 0 0;
+             padding:14px 20px;box-shadow:0 -2px 8px rgba(0,0,0,0.03);
+             border:1px solid #E2E8F0;border-bottom:none;
+             display:flex;align-items:center;gap:12px;">
+            <span style="font-size:1.4rem;">{icone}</span>
+            <div style="flex:1;">
+                <div style="font-size:0.95rem;font-weight:800;color:#0F172A;
+                     letter-spacing:-0.01em;">{titulo}</div>
+                <div style="font-size:0.72rem;color:#64748B;
+                     text-transform:uppercase;letter-spacing:0.05em;
+                     font-weight:600;margin-top:2px;">{modo_txt}</div>
+            </div>
+            <span style="background:#EFF6FF;color:#1D4ED8;
+                 padding:5px 12px;border-radius:999px;
+                 font-size:0.75rem;font-weight:700;">
+                {badge_txt}
+            </span>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        # ── Prepara cópia e renomeia colunas para versão executiva
+        df_display = df.copy()
+
+        renomear = {
+            "Posição": "Rank",
+            "CódAuxEquipe": "Cód. Equipe",
+            "Nome Equipe": "Equipe",
+            "Supervisor": "Supervisor",
+            "Projeto": "Projeto",
+            "Pontos": "Pontos",
+            "Projeção": "Proj. Fechamento",
+        }
+        df_display = df_display.rename(
+            columns={k: v for k, v in renomear.items() if k in df_display.columns}
+        )
+
+        # Formata coluna Rank com medalhas
+        if "Rank" in df_display.columns:
+            df_display["Rank"] = df_display["Rank"].apply(Utilitarios.formatar_posicao)
+
+        # Descobre colunas numéricas
+        cols_meta = [c for c in df_display.columns if "Meta" in c]
+
+        formatos: dict[str, Any] = {c: "{:,.1f}" for c in cols_meta}
+        if "Pontos" in df_display.columns:
+            formatos["Pontos"] = "{:,.1f}"
+        if "Proj. Fechamento" in df_display.columns:
+            formatos["Proj. Fechamento"] = "{:,.1f}"
+
+        styler = df_display.style.format(formatter=formatos)  # type: ignore[arg-type]
+
+        # Aplica cores condicionais
+        if "Pontos" in df_display.columns:
+            styler = styler.map(
+                Utilitarios.colorir_metas,
+                subset=["Pontos"],  # type: ignore[arg-type]
+            )
+        if "Proj. Fechamento" in df_display.columns:
+            styler = styler.map(
+                Utilitarios.colorir_projecao,
+                subset=["Proj. Fechamento"],  # type: ignore[arg-type]
+            )
+
+        # Estilo corporativo do cabeçalho e células
+        styler = styler.set_table_styles(
+            [
+                {
+                    "selector": "thead th",
+                    "props": [
+                        ("background", "linear-gradient(180deg,#012869 0%,#1E3A8A 100%)"),
+                        ("color", "#FFFFFF"),
+                        ("font-weight", "700"),
+                        ("font-size", "0.72rem"),
+                        ("text-align", "center"),
+                        ("padding", "12px 10px"),
+                        ("letter-spacing", "0.04em"),
+                        ("text-transform", "uppercase"),
+                        ("border", "none"),
+                        ("border-right", "1px solid rgba(255,255,255,0.12)"),
+                        ("position", "sticky"),
+                        ("top", "0"),
+                        ("z-index", "10"),
+                    ],
+                },
+                {
+                    "selector": "tbody td",
+                    "props": [
+                        ("font-size", "0.82rem"),
+                        ("padding", "10px 12px"),
+                        ("border-bottom", "1px solid #F1F5F9"),
+                        ("font-variant-numeric", "tabular-nums"),
+                    ],
+                },
+                {
+                    "selector": "tbody tr:nth-child(even) td",
+                    "props": [("background-color", "#FAFBFC")],
+                },
+                {
+                    "selector": "tbody tr:nth-child(odd) td",
+                    "props": [("background-color", "#FFFFFF")],
+                },
+                {
+                    "selector": "tbody tr:hover td",
+                    "props": [
+                        ("background-color", "#EFF6FF !important"),
+                        ("cursor", "pointer"),
+                    ],
+                },
+                {
+                    "selector": "table",
+                    "props": [
+                        ("border-collapse", "separate"),
+                        ("border-spacing", "0"),
+                        ("width", "100%"),
+                        ("font-family", "'Segoe UI', -apple-system, sans-serif"),
+                    ],
+                },
+            ]
+        )
+
+        # Wrapper de fechamento
+        st.markdown(
+            """
+        <div style="background:#FFFFFF;border-radius:0 0 12px 12px;
+             padding:0;border:1px solid #E2E8F0;border-top:none;
+             overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);
+             margin-bottom:16px;">
+        """,
+            unsafe_allow_html=True,
+        )
+
+        st.dataframe(
+            styler,
+            use_container_width=True,
+            hide_index=True,
+            height=450,
+        )
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
@@ -266,23 +427,66 @@ class Utilitarios:
     def formatar_numero(valor: float) -> str:
         return f"{valor:,.0f}".replace(",", ".")
 
+    # ═══════════════════════════════════════════════════════════
+    # ESTILOS CORPORATIVOS DE DATAFRAME
+    # ═══════════════════════════════════════════════════════════
+    @staticmethod
+    def formatar_posicao(valor):
+        """Adiciona medalhas nos top 3."""
+        try:
+            v = int(valor)
+            if v == 1:
+                return f"🥇 {v}º"
+            if v == 2:
+                return f"🥈 {v}º"
+            if v == 3:
+                return f"🥉 {v}º"
+            return f"{v}º"
+        except (ValueError, TypeError):
+            return str(valor)
+
     @staticmethod
     def colorir_metas(valor):
-        if 275 <= valor < 300:
-            return "background-color: #FEF08A; color: #9A3412; font-weight: bold"
-        if 300 <= valor < 400:
-            return "background-color: #BBF7D0; color: #166534; font-weight: bold"
-        if valor >= 400:
-            return "background-color: #1E3A8A; color: #FFFFFF; font-weight: bold"
-        return "background-color: #F8FAFC"
+        """Cor gerencial nos pontos, respeitando os thresholds."""
+        try:
+            v = float(valor)
+        except (ValueError, TypeError):
+            return ""
+        if v >= 400:
+            return (
+                "background-color: #1E3A8A;"
+                "color:#FFFFFF;font-weight:800;"
+                "border-left:3px solid #0F172A;text-align:center;"
+            )
+        if v >= 300:
+            return (
+                "background-color:#DCFCE7;color:#166534;"
+                "font-weight:700;border-left:3px solid #22C55E;"
+                "text-align:center;"
+            )
+        if v >= 275:
+            return (
+                "background-color:#FEF9C3;color:#854D0E;"
+                "font-weight:700;border-left:3px solid #EAB308;"
+                "text-align:center;"
+            )
+        return (
+            "font-weight:700;border-left:3px solid #EF4444;"
+            "text-align:center;"
+        )
 
     @staticmethod
     def colorir_projecao(valor):
-        return "background-color: #334155; color: white; font-weight: bold"
+        """Coluna Projeção — visual escuro corporativo."""
+        return (
+            "background-color: #0F172A;"
+            "color:#FFFFFF;font-weight:800;text-align:center;"
+            "border-left:3px solid #64748B;"
+        )
 
     @staticmethod
     def negrito(valor):
-        return "font-weight: bold"
+        return "font-weight:700;"
 
     @staticmethod
     def calcular_dias_uteis(df: pd.DataFrame) -> tuple:
@@ -323,7 +527,7 @@ class Utilitarios:
             dataframe.to_excel(writer, index=False, sheet_name=sheet_name)
             ws = writer.sheets[sheet_name]
 
-            # --- 1. DEFINIÇÃO DE ESTILOS (CORES E FONTES) ---
+            # --- 1. DEFINIÇÃO DE ESTILOS ---
             cor_cabecalho = PatternFill(
                 start_color="012869", end_color="012869", fill_type="solid"
             )
@@ -336,21 +540,19 @@ class Utilitarios:
                 start_color="FFFFFF", end_color="FFFFFF", fill_type="solid"
             )
 
-            # -> CORES PARA COLUNAS ESPECÍFICAS <-
             cor_coluna_projecao = PatternFill(
                 start_color="303030", end_color="303030", fill_type="solid"
-            )  # Cinza
+            )
 
-            # -> CORES CONDICIONAIS PARA OS PONTOS <-
             cor_meta_alta = PatternFill(
                 start_color="1F497D", end_color="1F497D", fill_type="solid"
-            )  # Azul
+            )
             cor_meta_ok = PatternFill(
                 start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
-            )  # Verde
+            )
             cor_meta_proximo = PatternFill(
                 start_color="FFEB9C", end_color="FFEB9C", fill_type="solid"
-            )  # Amarelo
+            )
 
             f_branca_negrito = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
             f_preta_negrito = Font(name="Calibri", size=11, bold=True, color="000000")
@@ -376,7 +578,6 @@ class Utilitarios:
                 elif pd.api.types.is_numeric_dtype(dataframe[col_name]):
                     colunas_decimais.append(idx)
 
-            # Descobre o número exato da coluna que queremos pintar (Soma +1 porque openpyxl começa no 1)
             idx_projecao = (
                 colunas_lista.index("Projeção") + 1
                 if "Projeção" in colunas_lista
@@ -386,30 +587,27 @@ class Utilitarios:
                 colunas_lista.index("Pontos") + 1 if "Pontos" in colunas_lista else -1
             )
 
-            # --- 3. APLICAÇÃO DOS ESTILOS CÉLULA A CÉLULA ---
+            # --- 3. APLICAÇÃO DOS ESTILOS ---
             for row in ws.iter_rows(
                 min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column
             ):
                 for celula in row:
                     celula.border = borda
 
-                    if celula.row == 1:  # Cabeçalho
+                    if celula.row == 1:
                         celula.fill = cor_cabecalho
                         celula.font = f_cabecalho
                         celula.alignment = alin_centro
 
-                    else:  # Linhas de Dados
-                        # A. Aplica o Zebra Padrão (linhas alternadas)
+                    else:
                         celula.fill = (
                             cor_linha_par if celula.row % 2 == 0 else cor_linha_impar
                         )
 
-                        # B. COLORIR A COLUNA DE PROJEÇÃO (Cor fixa)
                         if celula.column == idx_projecao:
                             celula.fill = cor_coluna_projecao
                             celula.font = f_branca_negrito
 
-                        # C. COLORIR A COLUNA DE PONTOS (Cor Condicional)
                         elif celula.column == idx_pontos:
                             try:
                                 valor = (
@@ -431,13 +629,12 @@ class Utilitarios:
                             except ValueError:
                                 pass
 
-                        # D. Formatação Numérica (Casas decimais e vírgulas)
                         if celula.column in colunas_inteiras:
                             celula.number_format = "#,##0"
                         elif celula.column in colunas_decimais:
                             celula.number_format = "#,##0.0"
 
-            # --- 4. AUTO-AJUSTE DA LARGURA E FILTROS ---
+            # --- 4. AUTO-AJUSTE ---
             for col in ws.columns:
                 max_length = 0
                 column_letter = get_column_letter(col[0].column)
@@ -449,8 +646,8 @@ class Utilitarios:
                         pass
                 ws.column_dimensions[column_letter].width = max(max_length + 3, 12)
 
-            ws.freeze_panes = "A2"  # Congela a primeira linha
-            ws.auto_filter.ref = ws.dimensions  # Adiciona as setinhas de filtro no topo
+            ws.freeze_panes = "A2"
+            ws.auto_filter.ref = ws.dimensions
 
         return output.getvalue()
 
@@ -653,18 +850,18 @@ class Graficos:
 # ====================================================
 ComponenteVisual.aplicar_capa()
 st.markdown(
-        f"""
-        <div class="hero-corp">
-            <div style="position:relative;z-index:2;">
-                <h1 class="hero-title">📈 Central de Performance | Produção por Técnico</h1>
-                <p class="hero-subtitle">
-                    Acompanhamento individual de execução, produtividade e performance em campo
-                </p>
-            </div>
+    f"""
+    <div class="hero-corp">
+        <div style="position:relative;z-index:2;">
+            <h1 class="hero-title">📈 Central de Performance | Produção por Técnico</h1>
+            <p class="hero-subtitle">
+                Acompanhamento individual de execução, produtividade e performance em campo
+            </p>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 if "dados_prod" not in st.session_state:
     st.warning("⚠️ Carregue os dados na página principal primeiro.")
@@ -812,6 +1009,7 @@ st.divider()
 # BLOCO 9: ESTRUTURA DE ABAS MESTRES
 # ====================================================
 ranking = pd.DataFrame()
+ranking_dia = pd.DataFrame()
 if "Nome Equipe" in df.columns:
     ranking, ranking_dia = ProcessamentoDados.calcular_rankings(
         df, dias_brutos, dias_seguros, dias_passados
@@ -823,44 +1021,105 @@ aba_ranking, aba_executivo, aba_evolucao = st.tabs(
 
 # ----------------- ABA 1: RANKING E METAS -----------------
 with aba_ranking:
-    st.subheader("🥇 Pódio - Top 3 Equipes")
+    st.markdown(
+        """
+        <div class="section-header">
+            <h3>🥇 Pódio Corporativo — Top 3 Equipes</h3>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     ComponenteVisual.gerar_podio(ranking)
 
-    st.write("---")
+    st.write("")
+
     col_titulo, col_toggle = st.columns([3, 1])
     with col_titulo:
-        st.subheader("📊 Tabela Geral de Metas e Projeção")
+        st.markdown(
+            """
+            <div class="section-header">
+                <h3>📊 Ranking Geral · Metas & Projeção</h3>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     with col_toggle:
-        por_dia = st.toggle("Modo: Meta Diária", key="tg_meta_dia")
+        st.write("")
+        por_dia = st.toggle("📅 **Modo Meta Diária**", key="tg_meta_dia")
 
     df_exibir = ranking_dia if por_dia else ranking
-    formatos = {
-        c: "{:,.1f}"
-        for c in df_exibir.columns
-        if "Meta" in c or c in ["Pontos", "Projeção"]
-    }
+    modo_txt = "Meta Diária" if por_dia else "Meta Mensal"
 
-    st.dataframe(
-        df_exibir.style.format(formatter=formatos)
-        .map(Utilitarios.negrito, subset=["Pontos"])
-        .map(Utilitarios.colorir_metas, subset=["Pontos"])
-        .map(Utilitarios.colorir_projecao, subset=["Projeção"]),
-        use_container_width=True,
-        height=400,
-        hide_index=True,
+    # ✅ Usa o novo componente corporativo
+    ComponenteVisual.render_dataframe_corporativo(
+        df_exibir,
+        titulo=f"Performance por Equipe — {modo_txt}",
+        icone="🏆",
+        badge=f"{len(df_exibir)} equipes ativas",
+        modo_diario=por_dia,
     )
 
-    nome_arq = "ranking_diario.xlsx" if por_dia else "ranking_geral.xlsx"
-    st.download_button(
-        f"📥 Baixar Excel",
-        data=Utilitarios.exportar_excel(df_exibir),
-        file_name=nome_arq,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    # Botões de exportação
+    col_dl1, col_dl2, col_dl3 = st.columns([1.5, 1.5, 5])
+
+    with col_dl1:
+        nome_arq = "ranking_diario.xlsx" if por_dia else "ranking_geral.xlsx"
+        st.download_button(
+            "📥 **Exportar Excel**",
+            data=Utilitarios.exportar_excel(df_exibir),
+            file_name=nome_arq,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+
+    with col_dl2:
+        csv_bytes = df_exibir.to_csv(index=False, decimal=",").encode("utf-8-sig")
+        st.download_button(
+            "📄 **Exportar CSV**",
+            data=csv_bytes,
+            file_name=nome_arq.replace(".xlsx", ".csv"),
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    # Legenda de cores
+    st.markdown(
+        """
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;
+             padding:12px 16px;background:#F8FAFC;border-radius:8px;
+             border:1px solid #E2E8F0;font-size:0.78rem;">
+            <span style="font-weight:700;color:#64748B;
+                 text-transform:uppercase;letter-spacing:0.05em;">
+                🎨 Legenda:
+            </span>
+            <span style="background:#1E3A8A;color:white;padding:3px 10px;
+                 border-radius:6px;font-weight:700;">
+                🏆 400+ pts — Alta Performance
+            </span>
+            <span style="background:#DCFCE7;color:#166534;padding:3px 10px;
+                 border-radius:6px;font-weight:700;">
+                ✅ 300-399 — Na Meta
+            </span>
+            <span style="background:#FEF9C3;color:#854D0E;padding:3px 10px;
+                 border-radius:6px;font-weight:700;">
+                ⚠️ 275-299 — Próximo da Meta
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
 # ----------------- ABA 2: VISÃO EXECUTIVA -----------------
 with aba_executivo:
-    st.subheader("👔 Performance de Gestão")
+    st.markdown(
+        """
+        <div class="section-header">
+            <h3>👔 Performance de Gestão</h3>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     c_exec1, c_exec2 = st.columns([1, 2])
 
     with c_exec1:
@@ -883,10 +1142,18 @@ with aba_executivo:
             key="graf_sup",
         )
 
-# ----------------- ABA 4: EVOLUÇÃO TEMPORAL -----------------
+# ----------------- ABA 3: EVOLUÇÃO TEMPORAL -----------------
 with aba_evolucao:
     col_data = Utilitarios.encontrar_coluna_data(df)
-    st.subheader("📈 Curva de Tendência Diária")
+
+    st.markdown(
+        """
+        <div class="section-header">
+            <h3>📈 Curva de Tendência Diária</h3>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if col_data:
         top_equipes_lista = ranking.head(5)["Nome Equipe"].tolist()

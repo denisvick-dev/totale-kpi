@@ -178,6 +178,9 @@ COLUNAS_INTEIRAS = [
     "Pendente",
     "Alocado",
     "Considerado",
+    "Qtd Não Executadas",
+    "Volume",               
+    "Não Executadas",       
 ]
 
 
