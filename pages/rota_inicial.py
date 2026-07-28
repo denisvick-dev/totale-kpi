@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unicodedata
 from io import BytesIO
+from textwrap import dedent
 from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
@@ -25,6 +26,9 @@ st.set_page_config(
 
 if "df_master" not in st.session_state:
     st.session_state["df_master"] = None
+
+if "total_montados_manual" not in st.session_state:
+    st.session_state["total_montados_manual"] = 0
 
 # ====================================================
 # 2. CONFIGURAÇÕES GLOBAIS
@@ -112,7 +116,6 @@ CORES_REGIAO = {
 }
 
 RENOMEAR_COLUNAS: Dict[str, str] = {
-    # Rota Inicial
     "Monitor": "Monitor",
     "OS": "Volume de O.S.",
     "GPON": "GPON",
@@ -145,112 +148,220 @@ def aplicar_estilo():
     st.markdown(
         """
     <style>
-    /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
-            .hero-corp {
-            background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
-            padding: 32px 40px;
-            border-radius: 16px;
-            color: white;
-            box-shadow: 0 10px 40px rgba(1, 40, 105, 0.25);
-            margin-bottom: 24px;
-            position: relative;
-            overflow: hidden;
-        }
-        .hero-corp::before {
-            content: '';
-            position: absolute;
-            top: -50%; right: -10%;
-            width: 400px; height: 400px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 50%;
-        }
-        .hero-title {
-            font-size: 34px;
-            font-weight: 800;
-            margin: 0;
-            letter-spacing: -0.5px;
-            font-family: 'Segoe UI', -apple-system, sans-serif;
-        }
-        .hero-subtitle {
-            font-size: 15px;
-            opacity: 0.92;
-            margin: 6px 0 0 0;
-            font-weight: 400;
-        }
-        .hero-badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.18);
-            padding: 4px 14px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 12px;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-        }
-        
-        .kpi-card {
-            padding: 1.4rem 1.6rem; border-radius: 1rem;
-            border-left: 5px solid;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-            min-height: 110px;
-            display: flex; flex-direction: column; justify-content: center;
-        }
-        .kpi-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-        }
-        .kpi-val { font-size: 1.85rem; font-weight: 800; line-height: 1.1; margin: 0.3rem 0; }
-        .kpi-lab { font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
-        .kpi-sub { font-size: 0.78rem; margin-top: 0.2rem; }
+    .hero-corp {
+        background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 50%, #1E40AF 100%);
+        padding: 32px 40px; border-radius: 16px; color: white;
+        box-shadow: 0 10px 40px rgba(15, 23, 42, 0.15);
+        margin-bottom: 24px; position: relative; overflow: hidden;
+        border: 1px solid #334155;
+    }
+    .hero-corp::before {
+        content: ''; position: absolute; top: -50%; right: -10%;
+        width: 400px; height: 400px;
+        background: rgba(255,255,255,0.03); border-radius: 50%;
+    }
+    .hero-title {
+        font-size: 32px; font-weight: 800; margin: 0;
+        letter-spacing: -0.5px;
+        font-family: 'Segoe UI', -apple-system, sans-serif;
+    }
+    .hero-subtitle {
+        font-size: 15px; opacity: 0.90; margin: 6px 0 0 0; font-weight: 400;
+    }
+    .kpi-card {
+        padding: 1.4rem 1.6rem; border-radius: 1rem; border-left: 5px solid;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        min-height: 110px; display: flex; flex-direction: column; justify-content: center;
+        border: 1px solid #E2E8F0;
+    }
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.07);
+    }
+    .kpi-val { font-size: 1.85rem; font-weight: 800; line-height: 1.1; margin: 0.3rem 0; }
+    .kpi-lab { font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
+    .kpi-sub { font-size: 0.78rem; margin-top: 0.2rem; }
 
-        .resultado-base {
-            background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
-            padding: 1rem 1.5rem; border-radius: 0.75rem;
-            margin-bottom: 1.5rem;
-            display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem;
-        }
-        .resultado-base-label {
-            color: #94A3B8; font-size: 0.8rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.08em; margin-right: 0.3rem;
-        }
-        .resultado-base-regiao {
-            padding: 0.3rem 0.9rem; border-radius: 999px;
-            font-size: 0.82rem; font-weight: 700;
-            letter-spacing: 0.04em; border: 2px solid;
-        }
-        .resultado-base-count {
-            color: #64748B; font-size: 0.72rem;
-            margin-left: auto; font-weight: 600;
-        }
+    .resultado-base {
+        background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
+        padding: 1rem 1.5rem;
+        border-radius: 0.75rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        box-shadow: 0 6px 20px rgba(1, 40, 105, 0.20);
+        position: relative;
+        overflow: hidden;
+    }
+    .resultado-base::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -5%;
+        width: 250px;
+        height: 250px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+    .resultado-base-label {
+        color: #FFFFFF;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-right: 0.3rem;
+        position: relative;
+        z-index: 2;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    }
+    .resultado-base-regiao {
+        padding: 0.35rem 0.95rem;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        border: 2px solid rgba(255,255,255,0.4);
+        position: relative;
+        z-index: 2;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.10);
+    }
+    .resultado-base-count {
+        color: #FFFFFF;
+        font-size: 0.78rem;
+        margin-left: auto;
+        font-weight: 700;
+        opacity: 0.95;
+        position: relative;
+        z-index: 2;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    }
+    .styled-table-wrapper {
+        background: #FFFFFF; border-radius: 0.75rem;
+        padding: 1rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        margin-bottom: 0.5rem;
+    }
+    .styled-table-title {
+        font-size: 1rem; font-weight: 700; color: #0F172A;
+        margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .styled-table-badge {
+        font-size: 0.68rem; background: #E0F2FE; color: #0369A1;
+        padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600;
+    }
+    div[data-testid="stDataFrame"] > div { border-radius: 0.5rem; overflow: hidden; }
+    .section-header {
+        display: flex; align-items: center; gap: 0.6rem;
+        margin: 1.8rem 0 0.8rem; padding-bottom: 0.5rem;
+        border-bottom: 2px solid #E2E8F0;
+    }
+    .section-header h3 { margin: 0; font-size: 1.15rem; color: #0F172A; font-weight: 700; }
 
-        .styled-table-wrapper {
-            background: #FFFFFF; border-radius: 0.75rem;
-            padding: 1rem 1.2rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            margin-bottom: 0.5rem;
-        }
-        .styled-table-title {
-            font-size: 1rem; font-weight: 700; color: #0F172A;
-            margin-bottom: 0.4rem;
-            display: flex; align-items: center; gap: 0.5rem;
-        }
-        .styled-table-badge {
-            font-size: 0.68rem; background: #E0F2FE; color: #0369A1;
-            padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600;
-        }
+    /* ═══════════════════════════════════════════════════════════
+       TABELAS ROTA/TURNO — ESTILO PREMIUM CORPORATIVO (REDIZADO)
+       ═══════════════════════════════════════════════════════════ */
+    .rota-wrapper {
+        margin: 24px 0;
+        font-family: 'Segoe UI', -apple-system, sans-serif;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #E2E8F0;
+    }
 
-        div[data-testid="stDataFrame"] > div {
-            border-radius: 0.5rem; overflow: hidden;
-        }
+    .rota-titulo {
+        background: #0F172A; /* Slate 900 */
+        color: #F8FAFC;
+        font-weight: 700;
+        font-size: 14px;
+        text-align: left;
+        padding: 14px 20px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        border-bottom: 3px solid #312E81; /* Indigo Accent */
+    }
+    table.rota-tab {
+        width: 100%; border-collapse: separate; border-spacing: 0; background: white;
+        font-size: 13px;
+    }
+    table.rota-tab th {
+        background: #1E293B; /* Slate 800 */
+        color: #F1F5F9;
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 12px 14px;
+        text-align: center;
+        border-bottom: 1px solid #334155;
+    }
+    table.rota-tab th.th-os {
+        background: #2E2514; color: #FBBF24;
+    }
+    table.rota-tab th.th-equipe {
+        background: #064E3B; color: #6EE7B7;
+    }
+    table.rota-tab th.th-media {
+        background: #1E3A8A; color: #93C5FD;
+    }
+    table.rota-tab td {
+        padding: 10px 14px; text-align: center; border-bottom: 1px solid #F1F5F9;
+        color: #334155; font-variant-numeric: tabular-nums;
+    }
+    table.rota-tab td.col-monitor {
+        text-align: left; font-weight: 600; padding-left: 20px; color: #0F172A;
+    }
+    table.rota-tab td.col-os {
+        background: #FFFBEB; font-weight: 700; color: #92400E;
+        border-left: 1px solid #FEF3C7; border-right: 1px solid #FEF3C7;
+    }
+    table.rota-tab td.col-equipe {
+        background: #F0FDF4; font-weight: 700; color: #166534;
+        border-left: 1px solid #D1FAE5; border-right: 1px solid #D1FAE5;
+    }
+    table.rota-tab td.col-media {
+        background: #F8FAFC; font-weight: 700; color: #1E293B;
+    }
 
-        .section-header {
-            display: flex; align-items: center; gap: 0.6rem;
-            margin: 1.5rem 0 0.8rem; padding-bottom: 0.4rem;
-            border-bottom: 2px solid #E2E8F0;
-        }
-        .section-header h3 { margin: 0; font-size: 1.1rem; color: #0F172A; }
+    /* Linhas de Total Geral - Escalados */
+    table.rota-tab tr.total-escalados td {
+        background: #F1F5F9;
+        color: #0F172A; font-weight: 700; font-size: 13px;
+        border-top: 2px solid #CBD5E1;
+        border-bottom: 1px solid #CBD5E1;
+    }
+    table.rota-tab tr.total-escalados td.col-monitor { color: #0F172A; }
+    table.rota-tab tr.total-escalados td.col-os { background: #FEF3C7; color: #92400E; }
+    table.rota-tab tr.total-escalados td.col-equipe { background: #D1FAE5; color: #065F46; }
+    table.rota-tab tr.total-escalados td.col-media { background: #E2E8F0; color: #0F172A; }
+
+    /* Linhas de Total Geral - Montados */
+    table.rota-tab tr.total-montados td {
+        background: #E2E8F0;
+        color: #0F172A; font-weight: 800; font-size: 13px;
+        border-bottom: none;
+    }
+    table.rota-tab tr.total-montados td.col-monitor { color: #0F172A; }
+    table.rota-tab tr.total-montados td.col-os { background: #FDE68A; color: #78350F; }
+    table.rota-tab tr.total-montados td.col-equipe { background: #A7F3D0; color: #064E3B; }
+    table.rota-tab tr.total-montados td.col-media { background: #CBD5E1; color: #0F172A; }
+
+    /* Estilo de Linhas Alternadas */
+    table.rota-tab tbody tr:nth-child(even):not(.total-escalados):not(.total-montados) td {
+        background: #FAFAFA;
+    }
+    table.rota-tab tbody tr:nth-child(even):not(.total-escalados):not(.total-montados) td.col-os {
+        background: #FFFDF5;
+    }
+    table.rota-tab tbody tr:nth-child(even):not(.total-escalados):not(.total-montados) td.col-equipe {
+        background: #F4FDF7;
+    }
+    table.rota-tab tbody tr:hover:not(.total-escalados):not(.total-montados) td {
+        background: #F1F5F9;
+    }
     </style>
     """,
         unsafe_allow_html=True,
@@ -327,8 +438,6 @@ def render_dataframe(
     )
 
     df_display = df.copy()
-
-    # ── Renomear colunas para títulos amigáveis (sem duplicatas) ─────
     colunas_para_renomear = {}
     nomes_existentes = set(df_display.columns)
     nomes_ja_usados = set()
@@ -336,9 +445,7 @@ def render_dataframe(
     for col_original in df_display.columns:
         if col_original in RENOMEAR_COLUNAS:
             novo_nome = RENOMEAR_COLUNAS[col_original]
-            # Só renomeia se o novo nome não já existir como outra coluna
-            # e se não foi usado por outra renomeação anterior
-            if novo_nome == col_original or (  # mesmo nome, ignora
+            if novo_nome == col_original or (
                 novo_nome not in nomes_existentes and novo_nome not in nomes_ja_usados
             ):
                 colunas_para_renomear[col_original] = novo_nome
@@ -346,13 +453,11 @@ def render_dataframe(
 
     df_display = df_display.rename(columns=colunas_para_renomear)
 
-    # Atualizar referências de fmt e color_col com os novos nomes
     if fmt:
         fmt = {colunas_para_renomear.get(k, k): v for k, v in fmt.items()}
     if color_col:
         color_col = colunas_para_renomear.get(color_col, color_col)
 
-    # ── Converter colunas numéricas float → int ─────────────────────
     colunas_int_originais = [
         "Executada",
         "Não Executada",
@@ -372,7 +477,6 @@ def render_dataframe(
         "Equipe",
         "TOTAL_TAREFAS",
     ]
-    # Mapear nomes originais para renomeados
     colunas_int = [colunas_para_renomear.get(c, c) for c in colunas_int_originais]
     for c in colunas_int:
         if c in df_display.columns:
@@ -381,14 +485,11 @@ def render_dataframe(
             )
 
     styler = df_display.style
-
     if fmt:
         styler = styler.format(fmt)
 
-    # ── Cor condicional ─────────────────────────────────────────────
     if color_col and color_col in df_display.columns and color_meta is not None:
         colunas_condicionais = [c for c in [color_col] if c != "Quebra Atual"]
-
         if colunas_condicionais:
 
             def _cor(val):
@@ -411,7 +512,6 @@ def render_dataframe(
 
             styler = styler.map(_cor, subset=pd.Index(colunas_condicionais))
 
-    # ── Estilo fixo Quebra Atual ────────────────────────────────────
     if "Quebra Atual" in df_display.columns:
         styler = styler.map(
             lambda val: (
@@ -422,7 +522,6 @@ def render_dataframe(
             subset=pd.Index(["Quebra Atual"]),
         )
 
-    # ── Header estilizado ───────────────────────────────────────────
     styler = styler.set_table_styles(
         [
             {
@@ -517,7 +616,6 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     df = df_bruto.copy()
     df.columns = df.columns.astype(str).str.strip().str.upper()
 
-    # Mapeamento de colunas
     mapa = {
         "CONTRATO": ["CONTRATO"],
         "LOGIN_TECNICO": ["LOGIN DO TÉCNICO", "LOGIN DO TECNICO"],
@@ -538,7 +636,6 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
         else:
             df[padrao] = np.nan
 
-    # Contratos vazios
     contrato = (
         df["CONTRATO"]
         .astype("string")
@@ -554,12 +651,9 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     df = df.loc[~mask_vazio].copy()
     df["CONTRATO"] = contrato.loc[df.index].str.upper()
 
-    # ❌ REMOVIDO daqui: st.toast(...) — não pode existir em função cacheada
-
     if df.empty:
         return pd.DataFrame()
 
-    # Limpeza
     df["LOGIN_TECNICO"] = (
         df["LOGIN_TECNICO"]
         .astype(str)
@@ -576,7 +670,6 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     )
     df["STATUS_ATIVIDADE"] = df["STATUS_ATIVIDADE"].astype(str).str.strip().str.upper()
 
-    # Merge GSheets
     if isinstance(df_ativos, pd.DataFrame) and not df_ativos.empty:
         df = df.drop(
             columns=[
@@ -592,7 +685,6 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     )
     df["Monitor"] = df.get("Monitor", pd.Series(dtype=str)).fillna("SEM MONITOR")
 
-    # Flags premium
     hab = df["HABILIDADE"].astype(str).str.upper()
     tipo = df["TIPO_OS"].astype(str).str.upper()
     prod = df["PRODUTO"].astype(str).str.upper()
@@ -607,7 +699,6 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     df["Check_4K"] = prod.str.contains("4K", na=False)
     df["Check_Soundbox"] = prod.str.contains("SOUND", na=False)
 
-    # Período
     df["PERIODO_TRATADO"] = (
         df["INTERVALO"]
         .astype(str)
@@ -616,7 +707,6 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
         .fillna("Outros/Sem Período")
     )
 
-    # Regiões
     cidade = (
         df["CIDADE"]
         .fillna("")
@@ -659,33 +749,277 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
         default="OUTRAS",
     )
 
-    # ✅ Contagem transportada via attrs (seguro no cache)
     df.attrs["diagnostico"] = {"contrato_vazio": removidos}
     return df
 
 
 # ====================================================
-# 6. APLICAÇÃO PRINCIPAL
+# 6. TABELAS ROTA/TURNO (Rota Inicial, Manhã, Tarde I, Tarde II)
+# ====================================================
+def _fmt_num_br(v: Any) -> str:
+    try:
+        return f"{int(v):,}".replace(",", ".")
+    except (ValueError, TypeError):
+        return "0"
+
+
+def _fmt_media_br(v: Any) -> str:
+    try:
+        return f"{float(v):.2f}".replace(".", ",")
+    except (ValueError, TypeError):
+        return "0,00"
+
+
+def calcular_tabela_rota_turno(
+    df: pd.DataFrame,
+    turno: Optional[str] = None,
+    total_equipe_montada: Optional[int] = None,
+) -> pd.DataFrame:
+    """
+    Calcula tabela por Monitor com colunas:
+    Monitor · WO · GPON · OS · ND · Migração · Equipe · Média
+
+    - OS       = soma real de TOTAL_TAREFAS (alinhado com o KPI de Volume de O.S.)
+    - WO / ND  = quantidade de tarefas de Adesão (Check_ND)
+    - GPON     = quantidade de tarefas GPON
+    - Migração = quantidade de tarefas de Migração (MP GPON)
+    - Média    = OS / Equipe
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    df_work = df.copy()
+
+    if turno:
+        df_work = df_work[df_work["PERIODO_TRATADO"] == turno].copy()
+
+    if df_work.empty:
+        return pd.DataFrame()
+
+    df_work = df_work[
+        ~df_work["Monitor"]
+        .astype(str)
+        .str.upper()
+        .isin({"NAN", "SEM MONITOR", "NÃO MAPEADO", ""})
+    ].copy()
+
+    if df_work.empty:
+        return pd.DataFrame()
+
+    df_work["TOTAL_TAREFAS"] = (
+        pd.to_numeric(df_work["TOTAL_TAREFAS"], errors="coerce").fillna(1).astype(int)
+    )
+
+    monitores = sorted(df_work["Monitor"].unique())
+    linhas: List[Dict[str, Any]] = []
+
+    for mon in monitores:
+        df_mon = df_work[df_work["Monitor"] == mon]
+
+        total_os = int(df_mon["TOTAL_TAREFAS"].sum())
+        wo = int(df_mon["Check_ND"].sum())
+        gpon = int(df_mon["Check_GPON"].sum())
+        mig = int(df_mon["Check_Migracao"].sum())
+        nd = wo
+
+        equipe = int(df_mon["LOGIN_TECNICO"].nunique())
+        media = total_os / equipe if equipe > 0 else 0.0
+
+        linhas.append(
+            {
+                "Monitor": mon,
+                "WO": wo,
+                "GPON": gpon,
+                "OS": total_os,
+                "ND": nd,
+                "Migração": mig,
+                "Equipe": equipe,
+                "Média": media,
+            }
+        )
+
+    df_out = pd.DataFrame(linhas)
+
+    total_wo = int(df_out["WO"].sum())
+    total_gpon = int(df_out["GPON"].sum())
+    total_os = int(df_out["OS"].sum())
+    total_nd = int(df_out["ND"].sum())
+    total_mig = int(df_out["Migração"].sum())
+    total_eq_escalados = int(df_out["Equipe"].sum())
+
+    if total_equipe_montada is not None:
+        total_eq_montados = total_equipe_montada
+    else:
+        total_eq_montados = int(df_work["LOGIN_TECNICO"].nunique())
+
+    media_escalados = total_os / total_eq_escalados if total_eq_escalados > 0 else 0.0
+    media_montados = total_os / total_eq_montados if total_eq_montados > 0 else 0.0
+
+    df_out = pd.concat(
+        [
+            df_out,
+            pd.DataFrame(
+                [
+                    {
+                        "Monitor": "Total Geral | Escalados",
+                        "WO": total_wo,
+                        "GPON": total_gpon,
+                        "OS": total_os,
+                        "ND": total_nd,
+                        "Migração": total_mig,
+                        "Equipe": total_eq_escalados,
+                        "Média": media_escalados,
+                    },
+                    {
+                        "Monitor": "Total Geral | Montados",
+                        "WO": total_wo,
+                        "GPON": total_gpon,
+                        "OS": total_os,
+                        "ND": total_nd,
+                        "Migração": total_mig,
+                        "Equipe": total_eq_montados,
+                        "Média": media_montados,
+                    },
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+
+    return df_out
+
+
+def render_tabela_rota_turno(df: pd.DataFrame, titulo: str) -> str:
+    """
+    Gera HTML da tabela no padrão visual definido no CSS corporativo.
+    """
+    if df.empty:
+        return (
+            f'<div class="rota-wrapper">'
+            f'<div class="rota-titulo">{titulo}</div>'
+            f'<table class="rota-tab">'
+            f'<tr><td colspan="8" style="padding:20px;color:#64748B;text-align:center;">'
+            f"Sem dados disponíveis</td></tr>"
+            f"</table></div>"
+        )
+
+    linhas_html: List[str] = []
+    for _, row in df.iterrows():
+        monitor = str(row["Monitor"])
+        if "Escalados" in monitor:
+            classe_linha = "total-escalados"
+        elif "Montados" in monitor:
+            classe_linha = "total-montados"
+        else:
+            classe_linha = ""
+
+        linhas_html.append(
+            f'<tr class="{classe_linha}">'
+            f'<td class="col-monitor">{monitor}</td>'
+            f'<td>{_fmt_num_br(row["WO"])}</td>'
+            f'<td>{_fmt_num_br(row["GPON"])}</td>'
+            f'<td class="col-os">{_fmt_num_br(row["OS"])}</td>'
+            f'<td>{_fmt_num_br(row["ND"])}</td>'
+            f'<td>{_fmt_num_br(row["Migração"])}</td>'
+            f'<td class="col-equipe">{_fmt_num_br(row["Equipe"])}</td>'
+            f'<td class="col-media">{_fmt_media_br(row["Média"])}</td>'
+            f"</tr>"
+        )
+
+    html = (
+        f'<div class="rota-wrapper">'
+        f'<div class="rota-titulo">{titulo}</div>'
+        f'<table class="rota-tab">'
+        f"<thead><tr>"
+        f'<th style="width:32%;">Monitor</th>'
+        f"<th>WO</th>"
+        f"<th>GPON</th>"
+        f'<th class="th-os">OS</th>'
+        f"<th>ND</th>"
+        f"<th>Migração</th>"
+        f'<th class="th-equipe">Equipe</th>'
+        f'<th class="th-media">Média</th>'
+        f"</tr></thead>"
+        f'<tbody>{"".join(linhas_html)}</tbody>'
+        f"</table>"
+        f"</div>"
+    )
+    return html
+
+
+def render_bloco_rota_turno(df_master: pd.DataFrame, total_montados: int) -> None:
+    """
+    Renderiza as 4 tabelas: Rota Inicial + Manhã + Tarde I + Tarde II.
+
+    Parâmetros:
+        df_master: base de dados filtrada
+        total_montados: total de técnicos montados (informado manualmente pelo usuário)
+    """
+    from datetime import datetime
+
+    data_hoje = datetime.now().strftime("%d/%m/%Y")
+
+    # Se o usuário não informou (=0), usa a contagem automática
+    total_calc_auto = int(df_master["LOGIN_TECNICO"].nunique())
+    total_efetivo = total_montados if total_montados > 0 else total_calc_auto
+
+    # 1. Rota Inicial (dia todo)
+    df_rota = calcular_tabela_rota_turno(
+        df_master, turno=None, total_equipe_montada=total_efetivo
+    )
+    st.markdown(
+        render_tabela_rota_turno(df_rota, f"Rota Inicial - {data_hoje}"),
+        unsafe_allow_html=True,
+    )
+
+    # 2. Manhã
+    df_manha = calcular_tabela_rota_turno(
+        df_master, turno="Manhã", total_equipe_montada=total_efetivo
+    )
+    st.markdown(
+        render_tabela_rota_turno(df_manha, f"Manhã - {data_hoje}"),
+        unsafe_allow_html=True,
+    )
+
+    # 3. Tarde I
+    df_t1 = calcular_tabela_rota_turno(
+        df_master, turno="Tarde I", total_equipe_montada=total_efetivo
+    )
+    st.markdown(
+        render_tabela_rota_turno(df_t1, f"Tarde I - {data_hoje}"),
+        unsafe_allow_html=True,
+    )
+
+    # 4. Tarde II
+    df_t2 = calcular_tabela_rota_turno(
+        df_master, turno="Tarde II", total_equipe_montada=total_efetivo
+    )
+    st.markdown(
+        render_tabela_rota_turno(df_t2, f"Tarde II - {data_hoje}"),
+        unsafe_allow_html=True,
+    )
+
+
+# ====================================================
+# 7. APLICAÇÃO PRINCIPAL
 # ====================================================
 def main():
     aplicar_estilo()
 
-    # ── Hero ──────────────────────────────────────────
     st.markdown(
-        f"""
-        <div class="hero-corp">
-            <div style="position:relative;z-index:2;">
-                <h1 class="hero-title">🗺️ Gestão de Rota Inicial</h1>
-                <p class="hero-subtitle">
-                    Visão operacional de rotas, serviços premium e distribuição de equipes
-                </p>
+        dedent("""
+            <div class="hero-corp">
+                <div style="position:relative;z-index:2;">
+                    <h1 class="hero-title">🗺️ Gestão de Rota Inicial</h1>
+                    <p class="hero-subtitle">
+                        Visão operacional de rotas, serviços premium e distribuição de equipes
+                    </p>
+                </div>
             </div>
-        </div>
-        """,
+        """).strip(),
         unsafe_allow_html=True,
     )
 
-    # ── Sidebar ───────────────────────────────────────
     with st.sidebar:
         st.header("⚙️ Configurações")
         if st.button("🔄 Reiniciar Painel", use_container_width=True):
@@ -693,7 +1027,6 @@ def main():
             st.rerun()
         st.divider()
 
-    # ── Upload ────────────────────────────────────────
     if st.session_state["df_master"] is None:
         render_section("📁 Importação de Dados")
         arq = st.file_uploader("Selecione a base (Excel/CSV)", type=["xlsx", "csv"])
@@ -704,33 +1037,45 @@ def main():
                 df_proc = processar_base(raw, gs)
                 st.session_state["df_master"] = df_proc
 
-            # ✅ Toast fora da função cacheada
             diag = df_proc.attrs.get("diagnostico", {})
             if diag.get("contrato_vazio", 0) > 0:
                 st.toast(
                     f"🗑️ {diag['contrato_vazio']} linha(s) sem contrato removida(s).",
                     icon="⚠️",
                 )
-
             st.rerun()
         return
 
     df_master = st.session_state["df_master"].copy()
 
-    # ── Sidebar Filtros ───────────────────────────────
     with st.sidebar:
+        st.header("👥 Equipe Montada")
+        total_montados_input = st.number_input(
+            "Total de Técnicos Montados",
+            min_value=0,
+            max_value=999,
+            value=st.session_state["total_montados_manual"],
+            step=1,
+            help="Informe o total real de técnicos montados no dia. "
+            "Deixe em 0 para usar a contagem automática da base.",
+            key="input_total_montados",
+        )
+        st.session_state["total_montados_manual"] = total_montados_input
+
+        if total_montados_input > 0:
+            st.caption(
+                f"✅ Usando **{total_montados_input}** técnicos montados (manual)"
+            )
+        else:
+            auto_count = int(df_master["LOGIN_TECNICO"].nunique())
+            st.caption(f"🔄 Usando **{auto_count}** técnicos (automático da base)")
+
+        st.divider()
         st.header("🎯 Filtros")
 
         periodos = st.selectbox(
             "⏰ Período", ["Todos"] + sorted(df_master["PERIODO_TRATADO"].unique())
         )
-        if periodos != "Todos":
-            df_master = df_master[df_master["PERIODO_TRATADO"] == periodos]
-
-        monitores_lista = sorted(df_master["Monitor"].dropna().unique())
-        monitores = st.multiselect("👨‍💼 Monitor", monitores_lista)
-        if monitores:
-            df_master = df_master[df_master["Monitor"].isin(monitores)]
 
         st.divider()
         st.subheader("🎛️ Filtros Premium")
@@ -753,7 +1098,6 @@ def main():
         st.warning("Nenhum dado para os filtros selecionados.")
         return
 
-    # ── Subheader Resultado da Base ───────────────────
     regioes = (
         sorted(df_master["REGIÃO"].unique()) if "REGIÃO" in df_master.columns else []
     )
@@ -763,17 +1107,8 @@ def main():
     soma_os = int(df_master["TOTAL_TAREFAS"].sum())
     tecnicos = df_master["LOGIN_TECNICO"].nunique()
     monitores_qtd = df_master["Monitor"].nunique()
-    os_concluidas = int(
-        df_master[
-            df_master["STATUS_ATIVIDADE"].isin(
-                ["CONCLUÍDO", "CONCLUIDO", "EXECUTADA", "BAIXADA", "REALIZADA"]
-            )
-        ]["TOTAL_TAREFAS"].sum()
-    )
-    tx = os_concluidas / soma_os if soma_os > 0 else 0
-    tema_tx = "verde" if tx > 0.5 else "laranja" if tx > 0.2 else "vermelho"
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     render_kpi(c1, "Volume O.S.", f"{soma_os:,}", tema="azul")
     render_kpi(
         c2,
@@ -783,17 +1118,9 @@ def main():
         tema="escuro",
     )
     render_kpi(c3, "Monitores", f"{monitores_qtd}", tema="roxo")
-    render_kpi(
-        c4,
-        "Andamento do Dia",
-        f"{os_concluidas:,}",
-        sub=f"{tx:.1%} concluídas",
-        tema=tema_tx,
-    )
 
     st.markdown("")
 
-    # KPIs Premium
     s1, s2, s3, s4 = st.columns(4)
     render_kpi(s1, "GPON", f"{int(df_master['Check_GPON'].sum()):,}", tema="verde")
     render_kpi(s2, "Adesão (ND)", f"{int(df_master['Check_ND'].sum()):,}", tema="azul")
@@ -804,30 +1131,15 @@ def main():
 
     st.markdown("")
 
+    # ── ✅ BLOCO: Tabelas Rota Inicial + Turnos ──────────────
+    render_section("🗺️ Distribuição por Monitor e Turno")
+    render_bloco_rota_turno(df_master, st.session_state["total_montados_manual"])
+
     # ── Gráficos Executivos ───────────────────────────
     render_section("📈 Visão Executiva")
-    g1, g2, g3 = st.columns([1, 1, 1.2])
+    g1, g2 = st.columns([1, 1.2])
 
     with g1:
-        df_status = (
-            df_master.groupby("STATUS_ATIVIDADE")["TOTAL_TAREFAS"].sum().reset_index()
-        )
-        fig_stat = px.pie(
-            df_status,
-            names="STATUS_ATIVIDADE",
-            values="TOTAL_TAREFAS",
-            hole=0.5,
-            color_discrete_sequence=px.colors.qualitative.Prism,
-        )
-        fig_stat.update_layout(
-            showlegend=False,
-            margin=dict(t=30, b=0, l=0, r=0),
-            height=300,
-            title=dict(text="Status da Frota", font=dict(size=14)),
-        )
-        st.plotly_chart(fig_stat, use_container_width=True)
-
-    with g2:
         df_per = (
             df_master.groupby("PERIODO_TRATADO")["TOTAL_TAREFAS"].sum().reset_index()
         )
@@ -837,19 +1149,19 @@ def main():
             y="TOTAL_TAREFAS",
             text_auto=True,
             color="PERIODO_TRATADO",
-            color_discrete_sequence=["#0EA5E9", "#F59E0B", "#F97316", "#8B5CF6"],
+            color_discrete_sequence=["#1E3A8A", "#0EA5E9", "#F59E0B", "#10B981"],
         )
         fig_per.update_layout(
             showlegend=False,
             margin=dict(t=30, b=0, l=0, r=0),
-            height=300,
+            height=320,
             xaxis_title="",
             yaxis_title="",
             title=dict(text="Pico de Agendamento", font=dict(size=14)),
         )
         st.plotly_chart(fig_per, use_container_width=True)
 
-    with g3:
+    with g2:
         df_prem = pd.DataFrame(
             [
                 {"Serviço": "GPON", "Qtd": int(df_master["Check_GPON"].sum())},
@@ -874,7 +1186,7 @@ def main():
             fig_prem.update_layout(
                 showlegend=False,
                 margin=dict(t=30, b=0, l=0, r=0),
-                height=300,
+                height=320,
                 xaxis_title="",
                 yaxis_title="",
                 title=dict(text="Mix Premium", font=dict(size=14)),
@@ -884,48 +1196,9 @@ def main():
             st.info("Nenhum serviço premium identificado.")
 
     # ── Abas de Detalhamento ──────────────────────────
-    aba_mon, aba_tec, aba_mapa, aba_base, aba_contratos = st.tabs(
-        [
-            "📋 Monitores",
-            "🏆 Top Técnicos",
-            "🗺️ Mapa",
-            "🗃️ Base Completa",
-            "📄 Resumo Contratos",
-        ]
+    aba_tec, aba_mapa, aba_base, aba_contratos = st.tabs(
+        ["🏆 Top Técnicos", "🗺️ Mapa", "🗃️ Base Completa", "📄 Resumo Contratos"]
     )
-
-    with aba_mon:
-        df_resumo = (
-            df_master.groupby("Monitor")
-            .agg(
-                OS=("TOTAL_TAREFAS", "sum"),
-                GPON=("Check_GPON", "sum"),
-                ND=("Check_ND", "sum"),
-                Migração=("Check_Migracao", "sum"),
-                Qtd_4K=("Check_4K", "sum"),
-                Ultra=("Check_Ponto_Ultra", "sum"),
-                Soundbox=("Check_Soundbox", "sum"),
-                Equipe=("LOGIN_TECNICO", "nunique"),
-            )
-            .reset_index()
-        )
-        df_resumo["Média"] = np.where(
-            df_resumo["Equipe"] > 0, df_resumo["OS"] / df_resumo["Equipe"], 0
-        )
-        df_resumo = df_resumo.sort_values("OS", ascending=False).reset_index(drop=True)
-
-        render_dataframe(
-            df_resumo,
-            titulo="Volumetria por Monitor",
-            icone="📋",
-            fmt={"Média": "{:.1f}"},
-            height=150,
-        )
-        st.download_button(
-            "📥 Baixar Tabela Monitores",
-            gerar_excel(df_resumo, "Monitores"),
-            "monitores.xlsx",
-        )
 
     with aba_tec:
         prod_df = (
@@ -1003,8 +1276,6 @@ def main():
     with aba_contratos:
         render_section("📄 Resumo dos Contratos da Rota")
 
-        # ── Mapeamento das colunas necessárias ────────────────────────
-        # Os aliases devem refletir os nomes APÓS processar_base()
         COLUNAS_CONTRATOS: Dict[str, List[str]] = {
             "CONTRATO": ["CONTRATO"],
             "INTERVALO": ["PERIODO_TRATADO", "INTERVALO"],
@@ -1015,7 +1286,6 @@ def main():
             "MONITOR": ["Monitor"],
         }
 
-        # ── Montar DataFrame apenas com as colunas disponíveis ────────
         colunas_encontradas: Dict[str, str] = {}
         for nome_amigavel, aliases in COLUNAS_CONTRATOS.items():
             for alias in aliases:
@@ -1032,7 +1302,6 @@ def main():
                 .copy()
             )
 
-            # ── Filtros em cascata: Monitor → Técnico ─────────────────
             col_f1, col_f2, col_info = st.columns([2, 2, 3])
 
             with col_f1:
