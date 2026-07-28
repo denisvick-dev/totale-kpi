@@ -3,206 +3,28 @@ import pandas as pd
 import plotly.graph_objects as go
 from typing import Optional, List
 
-
-# ====================================================
-# BLOCO 1: CONFIGURAÇÕES GLOBAIS
-# ====================================================
-class Configuracoes:
-    TEMAS_CARD = {
-        "azul": {
-            "fundo": "#F0F9FF",
-            "texto": "#0369A1",
-            "borda": "#0EA5E9",
-            "titulo": "#075985",
-        },
-        "verde": {
-            "fundo": "#F0FDF4",
-            "texto": "#15803D",
-            "borda": "#22C55E",
-            "titulo": "#166534",
-        },
-        "laranja": {
-            "fundo": "#FFF7ED",
-            "texto": "#C2410C",
-            "borda": "#F97316",
-            "titulo": "#9A3412",
-        },
-        "cinza": {
-            "fundo": "#F8FAFC",
-            "texto": "#334155",
-            "borda": "#94A3B8",
-            "titulo": "#64748B",
-        },
-        "roxo": {
-            "fundo": "#FAF5FF",
-            "texto": "#7E22CE",
-            "borda": "#A855F7",
-            "titulo": "#581C87",
-        },
-    }
-
-
-# ====================================================
-# BLOCO 2: COMPONENTES VISUAIS (FRONT-END)
-# ====================================================
-class ComponenteVisual:
-
-    @staticmethod
-    def injetar_css():
-        """Injeta o CSS necessário para animar e estilizar os tooltips premium."""
-        st.markdown(
-            """
-        <style>
-        /* Container principal do card */
-        .card-premium {
-            position: relative;
-            cursor: help; /* Muda a setinha do mouse para interrogação */
-        }
-        
-        /* A caixa preta do tooltip */
-        .tooltip-premium {
-            visibility: hidden;
-            background-color: #1E293B; /* Fundo escuro elegante (Slate 800) */
-            color: #F8FAFC; /* Texto branco */
-            text-align: center;
-            border-radius: 8px;
-            padding: 8px 12px;
-            position: absolute;
-            z-index: 999;
-            bottom: 115%; /* Fica acima do card */
-            left: 50%;
-            transform: translateX(-50%);
-            opacity: 0;
-            transition: opacity 0.3s ease, bottom 0.3s ease; /* Animação suave */
-            font-size: 10px;
-            font-weight: 500;
-            min-width: 180px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-            pointer-events: none; /* Evita que o tooltip pisque ao passar o mouse nele */
-        }
-
-        /* A setinha (triângulo) apontando para baixo */
-        .tooltip-premium::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            margin-left: -6px;
-            border-width: 6px;
-            border-style: solid;
-            border-color: #1E293B transparent transparent transparent;
-        }
-
-        /* O que acontece quando passa o mouse no card */
-        .card-premium:hover .tooltip-premium {
-            visibility: visible;
-            opacity: 1;
-            bottom: 105%; /* Efeito de "deslizar para baixo" ao aparecer */
-        }
-        </style>
-        """,
-            unsafe_allow_html=True,
-        )
-
-    @staticmethod
-    def criar_card(
-        titulo: str,
-        valor: str,
-        tema: str = "azul",
-        subtitulo: str = "",
-        icone: str = "",
-        tooltip: str = "",
-    ) -> str:
-        cores = Configuracoes.TEMAS_CARD.get(tema, Configuracoes.TEMAS_CARD["azul"])
-        titulo_formatado = f"{icone} {titulo}" if icone else titulo
-
-        # Cria a div do tooltip apenas se um texto de tooltip for enviado
-        html_tooltip = (
-            f'<div class="tooltip-premium">{tooltip}</div>' if tooltip else ""
-        )
-
-        return f"""
-        <div class="card-premium" style="background-color: {cores['fundo']}; padding: 20px; border-radius: 10px; border-left: 6px solid {cores['borda']}; box-shadow: 0 4px 6px rgba(0,0,0,0.05); height: 100%; display: flex; flex-direction: column; justify-content: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-            <p style="margin: 0; font-size: 14px; color: {cores['titulo']}; font-weight: bold;">{titulo_formatado}</p>
-            <h2 style="margin: 5px 0 0 0; color: {cores['texto']}; font-weight: 900; font-size: 32px;">{valor}</h2>
-            <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748B; font-weight: 500;">{subtitulo}</p>
-            {html_tooltip}
-        </div>
-        """
-        
-    @staticmethod
-    def aplicar_capa():
-        st.markdown(
-            """
-        <style>
-        /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
-            .hero-corp {
-            background: linear-gradient(135deg, #F37C04 0%, #1E40AF 50%, #012869 100%);
-            padding: 32px 40px;
-            border-radius: 16px;
-            color: white;
-            box-shadow: 0 10px 40px rgba(243, 124, 4, 0.25);
-            text-shadow:
-                0 2px 4px rgba(0, 0, 0, 0.5),
-                0 1px 2px rgba(0, 0, 0, 0.3),
-                0 0 24px rgba(255, 255, 255, 0.12);
-            margin-bottom: 24px;
-            position: relative;
-            overflow: hidden;
-        }
-        .hero-corp::before {
-            content: '';
-            position: absolute;
-            top: -50%; right: -10%;
-            width: 400px; height: 400px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 50%;
-        }
-        .hero-title {
-            font-size: 34px;
-            font-weight: 800;
-            margin: 0;
-            letter-spacing: -0.5px;
-            text-shadow:
-                0 2px 4px rgba(0, 0, 0, 0.5),
-                0 1px 2px rgba(0, 0, 0, 0.3),
-                0 0 24px rgba(255, 255, 255, 0.12);
-            font-family: 'Segoe UI', -apple-system, sans-serif;
-        }
-        .hero-subtitle {
-            font-size: 14px;
-            opacity: 0.90;
-            margin: 8px 0 0 0;
-            font-weight: 400;
-            color: #F1F5F9;
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-            position: relative;
-            z-index: 2;
-            letter-spacing: 0.3px;
-        }
-        .hero-badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.18);
-            padding: 4px 14px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 12px;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-    </style>
-    """,
-            unsafe_allow_html=True,
+# ────────────────────────────────────────────────────────
+# IMPORTAÇÃO DO DESIGN SYSTEM CORPORATIVO
+# ────────────────────────────────────────────────────────
+try:
+    from componentes import (
+        aplicar_estilo,
+        render_hero,
+        render_kpi,
+        render_insight,
+        render_section_header,
     )
+except ImportError:
+    st.error("⚠️ Módulo 'componentes.py' não encontrado.")
+    st.stop()
 
 
 # ====================================================
-# BLOCO 3: FUNÇÕES UTILITÁRIAS
+# BLOCO 1: FUNÇÕES UTILITÁRIAS
 # ====================================================
 class Utilitarios:
     @staticmethod
     def buscar_coluna(df: pd.DataFrame, palavras_chave: List[str]) -> Optional[str]:
-        """Busca genérica de colunas baseada em palavras-chave."""
         cols_upper = {c.upper(): c for c in df.columns}
         for palavra in palavras_chave:
             if palavra in cols_upper:
@@ -211,15 +33,16 @@ class Utilitarios:
 
     @staticmethod
     def formatar_numero(valor: float, casas_decimais: int = 2) -> str:
-        """Formata número com casas decimais no padrão brasileiro (1.234,56)."""
         if pd.isna(valor):
-            return "0" + "," + "0" * casas_decimais
-        formatado = f"{valor:,.{casas_decimais}f}"
-        return formatado.replace(",", "X").replace(".", ",").replace("X", ".")
+            return "0," + "0" * casas_decimais
+        return (
+            f"{valor:,.{casas_decimais}f}".replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        )
 
     @staticmethod
     def formatar_dataframe_para_download(df: pd.DataFrame) -> bytes:
-        """Converte DataFrame para CSV com formato brasileiro (separador ; e decimais ,)."""
         df_export = df.copy()
         for col in df_export.select_dtypes(
             include=["float", "float64", "float32"]
@@ -233,17 +56,205 @@ class Utilitarios:
 
 
 # ====================================================
-# BLOCO 4: GRÁFICOS E VISUAIS
+# BLOCO 2: CSS EXCLUSIVO — TOOLTIP PREMIUM
+# (apenas o que o componentes.py não cobre)
+# ====================================================
+def _injetar_css_tooltip() -> None:
+    """
+    Injeta apenas o CSS do tooltip premium.
+    O restante (fontes, hero, KPIs) vem do componentes.py via aplicar_estilo().
+    """
+    st.markdown(
+        """
+        <style>
+        .card-premium          { position: relative; cursor: help; }
+
+        .tooltip-premium {
+            visibility: hidden;
+            background-color: #1E293B;
+            color: #F8FAFC;
+            text-align: center;
+            border-radius: 8px;
+            padding: 8px 12px;
+            position: absolute;
+            z-index: 999;
+            bottom: 115%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s ease, bottom 0.3s ease;
+            font-size: 10px;
+            font-weight: 500;
+            min-width: 180px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            pointer-events: none;
+        }
+        .tooltip-premium::after {
+            content: "";
+            position: absolute;
+            top: 100%; left: 50%;
+            margin-left: -6px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: #1E293B transparent transparent transparent;
+        }
+        .card-premium:hover .tooltip-premium {
+            visibility: visible;
+            opacity: 1;
+            bottom: 105%;
+        }
+        /* ─── HERO CORPORATIVO — GRADIENTE PRETO/CINZA/PRATA ─── */
+        .hero-corp {
+            background: linear-gradient(
+                135deg,
+                #0A0A0A   0%,    /* Preto profundo        */
+                #1C1C1E  18%,    /* Carvão                */
+                #2C2C2E  32%,    /* Grafite               */
+                #3A3A3C  45%,    /* Cinza escuro           */
+                #636366  58%,    /* Cinza médio            */
+                #8E8E93  72%,    /* Cinza claro            */
+                #AEAEB2  84%,    /* Prata                  */
+                #C7C7CC  92%,    /* Prata claro            */
+                #D1D1D6 100%     /* Prata luminoso         */
+            );
+            padding: 32px 48px;
+            border-radius: 12px;
+            color: white;
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.45),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12);
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            min-height: 110px;
+        }
+
+        .hero-corp::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -80px;
+            transform: translateY(-50%);
+            width: 380px;
+            height: 380px;
+            background: radial-gradient(
+                circle at center,
+                rgba(255, 255, 255, 0.10) 0%,
+                rgba(199, 199, 204, 0.08) 30%,
+                rgba(142, 142, 147, 0.04) 55%,
+                transparent 75%
+            );
+            border-radius: 50%;
+            pointer-events: none;
+            filter: blur(2px);
+        }
+
+        .hero-corp::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 35%;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0.04) 40%,
+                rgba(255, 255, 255, 0.08) 50%,
+                rgba(255, 255, 255, 0.04) 60%,
+                transparent 100%
+            );
+            transform: skewX(-15deg);
+            pointer-events: none;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+# ====================================================
+# BLOCO 3: CARD COM TOOLTIP
+# (componentes.py não tem tooltip — mantemos local)
+# ====================================================
+# Paleta local — espelha as variáveis CSS do componentes.py
+_TEMAS_CARD = {
+    "azul": {
+        "fundo": "#F0F9FF",
+        "texto": "#0369A1",
+        "borda": "#0EA5E9",
+        "titulo": "#075985",
+    },
+    "verde": {
+        "fundo": "#F0FDF4",
+        "texto": "#15803D",
+        "borda": "#22C55E",
+        "titulo": "#166534",
+    },
+    "laranja": {
+        "fundo": "#FFF7ED",
+        "texto": "#C2410C",
+        "borda": "#F97316",
+        "titulo": "#9A3412",
+    },
+    "cinza": {
+        "fundo": "#F8FAFC",
+        "texto": "#334155",
+        "borda": "#94A3B8",
+        "titulo": "#64748B",
+    },
+    "roxo": {
+        "fundo": "#FAF5FF",
+        "texto": "#7E22CE",
+        "borda": "#A855F7",
+        "titulo": "#581C87",
+    },
+}
+
+
+def _criar_card_tooltip(
+    titulo: str,
+    valor: str,
+    tema: str = "azul",
+    subtitulo: str = "",
+    icone: str = "",
+    tooltip: str = "",
+) -> str:
+    """
+    Card KPI com tooltip hover.
+    Utiliza a mesma paleta visual do componentes.py.
+    """
+    cores = _TEMAS_CARD.get(tema, _TEMAS_CARD["azul"])
+    titulo_fmt = f"{icone} {titulo}" if icone else titulo
+    html_tooltip = f'<div class="tooltip-premium">{tooltip}</div>' if tooltip else ""
+
+    return f"""
+    <div class="card-premium"
+         style="background:{cores['fundo']};padding:20px;border-radius:10px;
+                border-left:6px solid {cores['borda']};
+                box-shadow:0 4px 6px rgba(0,0,0,0.05);
+                height:100%;display:flex;flex-direction:column;
+                justify-content:center;transition:transform 0.2s;"
+         onmouseover="this.style.transform='scale(1.02)'"
+         onmouseout="this.style.transform='scale(1)'">
+        <p style="margin:0;font-size:14px;color:{cores['titulo']};font-weight:bold;">{titulo_fmt}</p>
+        <h2 style="margin:5px 0 0;color:{cores['texto']};font-weight:900;font-size:32px;">{valor}</h2>
+        <p style="margin:5px 0 0;font-size:13px;color:#64748B;font-weight:500;">{subtitulo}</p>
+        {html_tooltip}
+    </div>
+    """
+
+
+# ====================================================
+# BLOCO 4: GRÁFICOS
 # ====================================================
 class Graficos:
     @staticmethod
     def grafico_combo_raiox(
         df: pd.DataFrame, x_col: str, y_bar: str, y_line: str
     ) -> go.Figure:
-        """Gráfico Misto: Barras de OS e Linha de Pontos."""
         fig = go.Figure()
 
-        # Barras de Volume de O.S.
         fig.add_trace(
             go.Bar(
                 x=df[x_col],
@@ -255,23 +266,20 @@ class Graficos:
             )
         )
 
-        # Linha de Pontuação
         fig.add_trace(
             go.Scatter(
                 x=df[x_col],
                 y=df[y_line],
                 name="Pontos",
                 mode="lines+markers",
-                line=dict(color="#0EA5E9", width=3),
-                marker=dict(size=8, color="#0284C7"),
+                line=dict(color="#012869", width=3),  # cor-primaria do design system
+                marker=dict(size=8, color="#F37C04"),  # cor-secundaria como destaque
                 yaxis="y2",
                 hovertemplate="<b>%{x}</b><br>Pontos: %{y:.2f}<extra></extra>",
             )
         )
 
         fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=0, r=50, t=30, b=0),
             legend=dict(
                 orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
@@ -293,16 +301,14 @@ class Graficos:
 
 
 # ====================================================
-# BLOCO 5: MOCK DE DADOS (CACHE PARA PERFORMANCE)
+# BLOCO 5: MOCK DE DADOS
 # ====================================================
 @st.cache_data(show_spinner=False)
 def gerar_dados_teste() -> pd.DataFrame:
-    """Gera dados falsos para Production caso a sessão esteja vazia."""
     import numpy as np
 
     datas = pd.date_range(start="2023-10-01", periods=15, freq="D").tolist() * 3
     tecnicos = ["JOAO SILVA", "MARIA SOUZA", "CARLOS ALBERTO"] * 15
-
     return pd.DataFrame(
         {
             "Data": datas,
@@ -317,29 +323,33 @@ def gerar_dados_teste() -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def preparar_base_cache(df: pd.DataFrame) -> pd.DataFrame:
-    """Prepara e limpa a base de dados (executado apenas uma vez na memória)."""
     df = df.copy()
-
     if "Pontos" in df.columns:
         df["Pontos"] = pd.to_numeric(df["Pontos"], errors="coerce").fillna(0.0)
-
     return df
 
 
 # ====================================================
-# BLOCO 6: INICIALIZAÇÃO E TRATAMENTO DE BASES
+# BLOCO 6: INICIALIZAÇÃO DA PÁGINA
 # ====================================================
 st.set_page_config(page_title="Raio-X do Técnico", page_icon="🔍", layout="wide")
-ComponenteVisual.aplicar_capa()
-st.markdown(
-        '<div class="hero-corp">'
-        "<h1>🔍 Raio-X: Desempenho Operacional</h1>"
-        "<p>Auditoria detalhada de Execução Física (O.S. e Pontuação) por técnico/equipe</p>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
 
-# Carregamento Seguro da Base de Produção
+# ── Design system global (fontes, Plotly, CSS corporativo) ──
+aplicar_estilo()
+
+# ── CSS exclusivo desta página (apenas tooltip) ──
+_injetar_css_tooltip()
+
+# ── Hero corporativo via componentes.py ──
+render_hero(
+    titulo="🔍 Raio-X: Desempenho Operacional",
+    subtitulo="Auditoria detalhada de Execução Física (O.S. e Pontuação) por técnico/equipe",
+    badge="Produção de Campo",
+)
+
+# ====================================================
+# BLOCO 7: CARREGAMENTO DA BASE
+# ====================================================
 df_prod = pd.DataFrame()
 
 if "dados_prod" in st.session_state:
@@ -356,13 +366,14 @@ if "dados_prod" in st.session_state:
         pass
 
 if df_prod.empty:
-    st.warning("⚠️ Base de Produção não encontrada. Carregando dados de demonstração.")
+    render_insight(
+        "Base de Produção não encontrada. Carregando dados de demonstração.", "alerta"
+    )
     df_prod = gerar_dados_teste()
 
-# 🔥 APLICA O CACHE DE PREPARAÇÃO
 df_prod = preparar_base_cache(df_prod)
 
-# Identificação de colunas (genérico para qualquer nome deplanilha)
+# Identificação de colunas
 col_tec = Utilitarios.buscar_coluna(
     df_prod, ["TÉCNICO", "TECNICO", "VENDEDOR", "NOME EQUIPE", "NOME", "LOGIN"]
 )
@@ -377,91 +388,82 @@ col_data = Utilitarios.buscar_coluna(
 )
 
 if not col_tec:
-    st.error(
-        "❌ Não foi possível encontrar a coluna de Técnico/Equipe na base de dados."
+    render_insight(
+        "Não foi possível encontrar a coluna de Técnico/Equipe na base de dados.",
+        "critico",
     )
     st.stop()
 
-# Limpeza do nome do Técnico antes dos filtros
 df_prod[col_tec] = df_prod[col_tec].astype(str).str.strip().str.upper()
 
-# Preparação segura da coluna de data (se existir)
 if col_data:
     df_prod[col_data] = pd.to_datetime(df_prod[col_data], errors="coerce").dt.date
 
 # ====================================================
-# BLOCO 7: MOTOR DE BUSCA EM CASCATA COM FILTRO DE DATAS
+# BLOCO 8: MOTOR DE BUSCA EM CASCATA
 # ====================================================
 with st.container(border=True):
-    st.markdown("#### 🎯 Localizar Técnico/Equipe")
+    render_section_header("🎯", "Localizar Técnico / Equipe")
 
-    # 🔥 NOVO: Layout com 3 colunas incluindo Filtro de Período
     f_data, f_base, f_sup = st.columns([1.5, 1, 1])
     mask = pd.Series(True, index=df_prod.index)
 
-    # 1. Filtro de Período de Datas
+    # ── Filtro de período ──
     with f_data:
         if col_data and not df_prod[col_data].dropna().empty:
             min_date = df_prod[col_data].min()
             max_date = df_prod[col_data].max()
 
-            datas_selecionadas = st.date_input(
+            datas_sel = st.date_input(
                 "📅 Período:",
                 [min_date, max_date],
                 min_value=min_date,
                 max_value=max_date,
                 format="DD/MM/YYYY",
             )
-
-            if len(datas_selecionadas) == 2:
-                mask &= (df_prod[col_data] >= datas_selecionadas[0]) & (
-                    df_prod[col_data] <= datas_selecionadas[1]
+            if len(datas_sel) == 2:
+                mask &= (df_prod[col_data] >= datas_sel[0]) & (
+                    df_prod[col_data] <= datas_sel[1]
                 )
         else:
-            st.info("📅 Sem coluna de data")
+            render_insight("Sem coluna de data detectada na base.", "info")
 
-    # 2. Filtro de Base
+    # ── Filtro de base ──
     with f_base:
+        base_sel = "Todas"
         if col_base:
             bases = ["Todas"] + sorted(
-                [
-                    str(b)
-                    for b in df_prod.loc[mask, col_base].dropna().unique()
-                    if str(b).strip() != ""
-                ]
+                str(b)
+                for b in df_prod.loc[mask, col_base].dropna().unique()
+                if str(b).strip()
             )
             base_sel = st.selectbox("📍 Base:", bases)
             if base_sel != "Todas":
                 mask &= df_prod[col_base] == base_sel
-        else:
-            base_sel = "Todas"
 
-    # 3. Filtro de Supervisor
+    # ── Filtro de supervisor ──
     with f_sup:
+        sup_sel = "Todos"
         if col_sup:
             supervisores = ["Todos"] + sorted(
-                [
-                    str(s)
-                    for s in df_prod.loc[mask, col_sup].dropna().unique()
-                    if str(s).strip() != ""
-                ]
+                str(s)
+                for s in df_prod.loc[mask, col_sup].dropna().unique()
+                if str(s).strip()
             )
             sup_sel = st.selectbox("👤 Supervisor:", supervisores)
             if sup_sel != "Todos":
                 mask &= df_prod[col_sup] == sup_sel
-        else:
-            sup_sel = "Todos"
 
     st.divider()
 
-    # 🔥 PROTEÇÃO: Verifica se há técnicos após os filtros
     tecnicos_filtrados = sorted(
-        [t for t in df_prod.loc[mask, col_tec].unique() if t and t != "NAN"]
+        t for t in df_prod.loc[mask, col_tec].unique() if t and t != "NAN"
     )
 
     if not tecnicos_filtrados:
-        st.warning(
-            "⚠️ Nenhum técnico encontrado para o período/base/supervisor selecionados."
+        render_insight(
+            "Nenhum técnico encontrado para o período/base/supervisor selecionados.",
+            "alerta",
         )
         st.stop()
 
@@ -473,11 +475,10 @@ with st.container(border=True):
         )
 
     df_tec_prod = pd.DataFrame()
+
     if tec_selecionado:
-        # 🔥 USA A MÁSCARA PARA FILTRAR JÁ PELO PERÍODO SELECIONADO
         df_tec_prod = df_prod[(df_prod[col_tec] == tec_selecionado) & mask].copy()
 
-        # Usa .mode() para pegar o valor mais frequente (protege contra trocas de supervisor)
         sup_tec = (
             df_tec_prod[col_sup].mode()[0]
             if col_sup and not df_tec_prod[col_sup].empty
@@ -491,115 +492,111 @@ with st.container(border=True):
 
         with col_info:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.info(
-                f"**👤 Supervisor:** {sup_tec} ㅤ|ㅤ **📍 Projeto/Base:** {base_tec}"
+            render_insight(
+                f"<b>Supervisor:</b> {sup_tec} &nbsp;|&nbsp; <b>Base/Projeto:</b> {base_tec}",
+                "info",
             )
 
+
 # ====================================================
-# BLOCO 8: RENDERIZAÇÃO DO RELATÓRIO OPERACIONAL
+# BLOCO 9: DASHBOARD OPERACIONAL
 # ====================================================
 if tec_selecionado and not df_tec_prod.empty:
     st.divider()
 
     if "Pontos" not in df_tec_prod.columns:
-        st.error("Coluna 'Pontos' não encontrada na base de dados.")
+        render_insight("Coluna 'Pontos' não encontrada na base de dados.", "critico")
         st.stop()
 
     t_pontos = df_tec_prod["Pontos"].sum()
     t_os = len(df_tec_prod)
-    pontos_por_os = (t_pontos / t_os) if t_os > 0 else 0.0
+    pontos_por_os = t_pontos / t_os if t_os > 0 else 0.0
     media_pontos = df_tec_prod["Pontos"].mean()
 
-    # 1. CARDS DE KPI
-    st.markdown(f"### ⚙️ Execução Física de **{tec_selecionado}**")
+    # ── KPIs com tooltip ──
+    render_section_header("⚙️", f"Execução Física — {tec_selecionado}")
+
     kr1, kr2, kr3, kr4 = st.columns(4)
 
     with kr1:
         st.markdown(
-            ComponenteVisual.criar_card(
+            _criar_card_tooltip(
                 "O.S. Realizadas",
                 str(t_os),
                 "cinza",
                 "Total de visitas executadas",
                 "📋",
-                # tooltip="Quantidade total de Ordens de Serviço executadas no período selecionado",
+                tooltip="Quantidade total de O.S. executadas no período selecionado",
             ),
             unsafe_allow_html=True,
         )
-
     with kr2:
         st.markdown(
-            ComponenteVisual.criar_card(
+            _criar_card_tooltip(
                 "Pontuação Total",
                 Utilitarios.formatar_numero(t_pontos),
                 "azul",
                 "Soma dos pontos",
                 "🎯",
-                # tooltip="Soma de toda a pontuação acumulada no período",
+                tooltip="Soma de toda a pontuação acumulada no período",
             ),
             unsafe_allow_html=True,
         )
-
     with kr3:
         st.markdown(
-            ComponenteVisual.criar_card(
+            _criar_card_tooltip(
                 "Ticket Médio",
                 Utilitarios.formatar_numero(pontos_por_os),
                 "roxo",
                 "Pts médio por O.S.",
                 "🔌",
-                # tooltip="Média de pontos por cada Ordem de Serviço executada",
+                tooltip="Média de pontos por cada O.S. executada",
             ),
             unsafe_allow_html=True,
         )
-
     with kr4:
         st.markdown(
-            ComponenteVisual.criar_card(
+            _criar_card_tooltip(
                 "Média por O.S.",
                 Utilitarios.formatar_numero(media_pontos),
                 "verde",
                 "Pontos por visita",
                 "📊",
-                # tooltip="Média aritmética de pontos por visita executada",
+                tooltip="Média aritmética de pontos por visita",
             ),
             unsafe_allow_html=True,
         )
 
     st.write("---")
 
-    # 2. GRÁFICO DE PRODUÇÃO
+    # ── Gráfico de evolução diária ──
     if col_data:
-        st.markdown("#### 📊 Evolução Diária (Volume vs Qualidade)")
-
+        render_section_header("📊", "Evolução Diária — Volume vs Qualidade")
         df_grafico = df_tec_prod.dropna(subset=[col_data]).copy()
 
         if not df_grafico.empty:
-            df_tempo_prod = (
+            df_tempo = (
                 df_grafico.groupby(col_data)
                 .agg(Pontos=("Pontos", "sum"), Qtd_OS=("Pontos", "count"))
                 .reset_index()
             )
-
-            # 🔥 UI LIMPA: Remove a barra de ferramentas do Plotly
             st.plotly_chart(
-                Graficos.grafico_combo_raiox(
-                    df_tempo_prod, col_data, "Qtd_OS", "Pontos"
-                ),
+                Graficos.grafico_combo_raiox(df_tempo, col_data, "Qtd_OS", "Pontos"),
                 use_container_width=True,
                 config={"displayModeBar": False},
             )
         else:
-            st.info("⚠️ Nenhuma data válida encontrada para exibir o gráfico.")
+            render_insight(
+                "Nenhuma data válida encontrada para exibir o gráfico.", "alerta"
+            )
     else:
-        st.info("⚠️ Coluna de data não disponível para plotar o gráfico.")
+        render_insight("Coluna de data não disponível para plotar o gráfico.", "alerta")
 
     st.write("---")
 
-    # 3. TABELA DE EXTRATO OPERACIONAL
-    st.markdown("#### 🧾 Extrato Operacional Detalhado")
+    # ── Tabela de extrato ──
+    render_section_header("🧾", "Extrato Operacional Detalhado")
 
-    # Colunas a ignorar na exibição
     col_ignorar = {
         "lat",
         "lon",
@@ -609,65 +606,54 @@ if tec_selecionado and not df_tec_prod.empty:
         "Cidade",
         "Unnamed: 0",
     }
-    colunas_exibir = [c for c in df_tec_prod.columns if c not in col_ignorar]
-
-    # Preparação do DataFrame para exibição
-    df_exibir = df_tec_prod[colunas_exibir].copy()
+    colunas_exib = [c for c in df_tec_prod.columns if c not in col_ignorar]
+    df_exibir = df_tec_prod[colunas_exib].copy()
 
     if col_data:
         df_exibir = df_exibir.sort_values(by=col_data, ascending=False)
 
-    # Configuração das colunas da tabela
-    config_colunas = {}
+    config_cols = {}
 
     if "Pontos" in df_exibir.columns:
-        max_pontos = float(df_exibir["Pontos"].max()) if not df_exibir.empty else 100.0
-        config_colunas["Pontos"] = st.column_config.NumberColumn(
+        config_cols["Pontos"] = st.column_config.NumberColumn(
             "🎯 Pontos", format="%.2f", help="Pontuação obtida nesta O.S."
         )
-
     if col_data and col_data in df_exibir.columns:
-        config_colunas[col_data] = st.column_config.DateColumn(
+        config_cols[col_data] = st.column_config.DateColumn(
             "📅 Data", format="DD/MM/YYYY", help="Data de execução da O.S."
         )
-
     if col_tec and col_tec in df_exibir.columns:
-        config_colunas[col_tec] = st.column_config.TextColumn(
-            "👤 Técnico", help="Nome do técnico responsável"
-        )
-
+        config_cols[col_tec] = st.column_config.TextColumn("👤 Técnico")
     if col_sup and col_sup in df_exibir.columns:
-        config_colunas[col_sup] = st.column_config.TextColumn("👔 Supervisor")
-
+        config_cols[col_sup] = st.column_config.TextColumn("👔 Supervisor")
     if col_base and col_base in df_exibir.columns:
-        config_colunas[col_base] = st.column_config.TextColumn("📍 Base/Projeto")
+        config_cols[col_base] = st.column_config.TextColumn("📍 Base/Projeto")
 
     st.dataframe(
         df_exibir,
         use_container_width=True,
         hide_index=True,
-        column_config=config_colunas,
+        column_config=config_cols,
     )
 
-    # 🔥 BOTÃO DE DOWNLOAD (Exportação para Excel/CSV)
+    # ── Download + métricas de resumo ──
     if not df_exibir.empty:
-        csv_bytes = Utilitarios.formatar_dataframe_para_download(df_exibir)
-
         st.download_button(
             label="📥 Baixar Extrato Operacional",
-            data=csv_bytes,
+            data=Utilitarios.formatar_dataframe_para_download(df_exibir),
             file_name=f"extrato_operacional_{tec_selecionado.replace(' ', '_')}.csv",
             mime="text/csv",
             type="primary",
         )
 
-        # Métricas rápidas de resumo
+        st.write("")
         col_met1, col_met2, col_met3 = st.columns(3)
+
         with col_met1:
             st.metric(
                 "📅 Período",
                 (
-                    f"{df_exibir[col_data].min()} até {df_exibir[col_data].max()}"
+                    f"{df_exibir[col_data].min()} → {df_exibir[col_data].max()}"
                     if col_data
                     else "N/A"
                 ),
