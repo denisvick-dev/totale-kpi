@@ -192,7 +192,7 @@ def aplicar_estilo():
         """
     <style>
     /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
-                    .hero-corp {
+        .hero-corp {
             background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
             padding: 32px 40px;
             border-radius: 16px;
@@ -2631,7 +2631,7 @@ def main():
                     color_col="Fechamento Base",
                     color_meta=Config.SLA_QUEBRA_MAXIMA,
                     color_invertido=True,
-                    height=500,
+                    height="stretch",
                 )
                 st.download_button(
                     "📥 Baixar Ranking Monitores",
@@ -2815,7 +2815,7 @@ def main():
                                 color_col="Fechamento Base",
                                 color_meta=Config.SLA_QUEBRA_MAXIMA,
                                 color_invertido=True,
-                                height=400,
+                                height="stretch",
                             )
                             st.download_button(
                                 f"📥 Baixar {tipo}",

@@ -486,7 +486,7 @@ class Componentes:
             .map(EstiloTabela.cor_projecao, subset=["Projeção"]),
             use_container_width=True,
             hide_index=True,
-            height=400,
+            height="auto",
         )
 
     @staticmethod
@@ -507,7 +507,7 @@ class Componentes:
                 .map(EstiloTabela.cor_projecao, subset=["Projeção"]),
                 use_container_width=True,
                 hide_index=True,
-                height=350,
+                height="stretch",
             )
 
         with tab_grafico:

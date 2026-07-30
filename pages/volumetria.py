@@ -849,7 +849,7 @@ def main():
             fmt=fmt_padrao,
             color_col="Taxa Execução",
             color_meta=Config.META_EXECUCAO,
-            height=500,
+            height="stretch",
         )
         st.download_button(
             "📥 Baixar Tabela Equipes",

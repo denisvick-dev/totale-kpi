@@ -1,5 +1,6 @@
 {
     "editor.fontFamily": "Fira Mono",
     "editor.fontSize": 15,
-    "editor.fontVariations": false
+    "editor.fontVariations": false,
+    "editor.defaultFormatter": "ms-python.python"
 }

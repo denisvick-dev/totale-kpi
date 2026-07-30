@@ -658,13 +658,79 @@ if tec_selecionado and not df_tec_prod.empty:
                     else "N/A"
                 ),
             )
-        with col_met2:
-            st.metric(
-                "🏆 Maior Pontuação",
-                Utilitarios.formatar_numero(df_exibir["Pontos"].max()),
+        if col_data and "Pontos" in df_exibir.columns:
+
+            df_exec = df_exibir.copy()
+
+            # Garante datetime robusto
+            df_exec[col_data] = pd.to_datetime(
+                df_exec[col_data],
+                errors="coerce"
             )
-        with col_met3:
-            st.metric(
-                "📉 Menor Pontuação",
-                Utilitarios.formatar_numero(df_exibir["Pontos"].min()),
-            )
+
+            # Remove datas inválidas
+            df_exec = df_exec.dropna(subset=[col_data])
+
+            if not df_exec.empty:
+
+                # ── Consolidação diária ──
+                df_resumo_dia = (
+                    df_exec
+                    .groupby(col_data)["Pontos"]
+                    .sum()
+                    .reset_index()
+                    .sort_values(col_data)
+                )
+
+                # Melhor e pior dia
+                max_val = df_resumo_dia["Pontos"].max()
+                min_val = df_resumo_dia["Pontos"].min()
+
+                melhores_dias = df_resumo_dia[df_resumo_dia["Pontos"] == max_val]
+                piores_dias = df_resumo_dia[df_resumo_dia["Pontos"] == min_val]
+
+                # Seleciona o primeiro em caso de empate
+                dia_max = pd.to_datetime(melhores_dias.iloc[0][col_data])
+                dia_min = pd.to_datetime(piores_dias.iloc[0][col_data])
+
+                # Indicadores estratégicos
+                gap_absoluto = max_val - min_val
+                variacao_percentual = ((max_val - min_val) / min_val * 100) if min_val > 0 else 0
+
+                # ── MÉTRICAS EXECUTIVAS ──
+                with col_met2:
+                    st.metric(
+                        "📈 Pico de Performance",
+                        dia_max.strftime("%d/%m/%Y"),
+                        f"{Utilitarios.formatar_numero(max_val)} pts",
+                    )
+
+                with col_met3:
+                    st.metric(
+                        "📉 Vale Operacional",
+                        dia_min.strftime("%d/%m/%Y"),
+                        f"{Utilitarios.formatar_numero(min_val)} pts",
+                    )
+
+                # ── Linha estratégica adicional ──
+                st.write("")
+                col_gap1, col_gap2 = st.columns(2)
+
+                with col_gap1:
+                    st.metric(
+                        "📊 Gap de Produtividade",
+                        Utilitarios.formatar_numero(gap_absoluto),
+                        "Diferença entre melhor e pior dia",
+                    )
+
+                with col_gap2:
+                    delta_cor = "normal"
+                    st.metric(
+                        "🚀 Variação Percentual",
+                        f"{Utilitarios.formatar_numero(variacao_percentual)}%",
+                        "Oscilação entre extremos do período",
+                        delta_color=delta_cor,
+                    )
+
+            else:
+                render_insight("Sem dados válidos para análise executiva diária.", "alerta")

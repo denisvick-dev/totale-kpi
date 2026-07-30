@@ -17,7 +17,22 @@ try:
 except ImportError:
     st.error("⚠️ Módulo 'componentes.py' não encontrado.")
     st.stop()
+    
+# ────────────────────────────────────────────────────────
+# FORÇAR LOCALE PARA PORTUGUÊS (BRASIL)
+# ────────────────────────────────────────────────────────
+import locale
 
+def configurar_locale():
+    try:
+        locale.setlocale(locale.LC_TIME, "pt_BR.UTF-8")  # Linux / Streamlit Cloud
+    except:
+        try:
+            locale.setlocale(locale.LC_TIME, "Portuguese_Brazil.1252")  # Windows
+        except:
+            pass  # Continua mesmo se não conseguir
+
+configurar_locale()
 
 # ====================================================
 # CSS LOCAL — HERO PRETO/CINZA/PRATA (só nesta página)
@@ -118,7 +133,7 @@ class Graficos:
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=df[x_col], y=df[y_cons],
-            name="Oportunidades",
+            name="Consultivos",
             mode="lines+markers",
             line=dict(color="#94A3B8", width=2),
         ))
@@ -279,7 +294,7 @@ if tec_selecionado and not df_tec.empty:
     st.markdown(f"### 🎯 Funil de Abordagem de **{tec_selecionado}**")
 
     vc1, vc2, vc3 = st.columns(3)
-    render_kpi(vc1, "Oportunidades", str(t_cons), "🗣️ Tentativas realizadas", "azul")
+    render_kpi(vc1, "Consultivos", str(t_cons), "🗣️ Tentativas realizadas", "azul")
     render_kpi(vc2, "Vendas Fechadas", str(t_prod), "🚀 Produtos convertidos", "laranja")
 
     cor_win = "verde" if taxa_conversao >= 0.1 else "laranja"
@@ -292,8 +307,13 @@ if tec_selecionado and not df_tec.empty:
     with g_linha:
         st.markdown("#### 📉 Ritmo de Ofertas Diárias")
         if col_data:
-            df_tec[col_data] = pd.to_datetime(df_tec[col_data], errors="coerce").dt.date
-            df_tec_grafico = df_tec.dropna(subset=[col_data])
+            df_tec[col_data] = pd.to_datetime(
+                df_tec[col_data],
+                errors="coerce",
+                dayfirst=True  # ✅ garante padrão brasileiro
+            )
+            df_tec_grafico = df_tec.dropna(subset=[col_data]).copy()
+            df_tec_grafico[col_data] = df_tec_grafico[col_data].dt.date
 
             if not df_tec_grafico.empty:
                 df_tempo = df_tec_grafico.groupby(col_data)[["CONSULTIVOS", "VENDAS"]].sum().reset_index()
@@ -330,6 +350,12 @@ if tec_selecionado and not df_tec.empty:
         c for c in [col_data, col_tec, "CONSULTIVOS", "VENDAS", "MESH", "TV", "VIRTUA"]
         if c is not None and c in df_tec.columns
     ]
+    if col_data and col_data in df_tec.columns:
+        df_tec[col_data] = pd.to_datetime(
+        df_tec[col_data],
+        errors="coerce",
+        dayfirst=True
+    )
     df_exibir = df_tec[colunas_exibir].copy()
 
     if col_data:
@@ -338,14 +364,14 @@ if tec_selecionado and not df_tec.empty:
     max_vendas = int(df_exibir["VENDAS"].max()) if not df_exibir.empty else 10
 
     configs_tabela = {
-        "CONSULTIVOS": st.column_config.NumberColumn("🗣️ Oportunidades", help="Total de abordagens"),
+        "CONSULTIVOS": st.column_config.NumberColumn("🗣️ Consultivos", help="Total de abordagens"),
         "VENDAS": st.column_config.ProgressColumn("💰 Vendas", format="%d", min_value=0, max_value=max_vendas),
         "MESH": st.column_config.NumberColumn("📶 Mesh"),
         "TV": st.column_config.NumberColumn("📺 TV"),
         "VIRTUA": st.column_config.NumberColumn("🌐 Virtua"),
     }
     if col_data is not None:
-        configs_tabela[col_data] = st.column_config.DateColumn("Data", format="DD/MM/YYYY")
+        configs_tabela[col_data] = st.column_config.DateColumn("📅 Data", format="DD/MM/YYYY")
     if col_tec is not None:
         configs_tabela[col_tec] = st.column_config.TextColumn("Técnico")
 

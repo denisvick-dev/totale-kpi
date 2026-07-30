@@ -169,6 +169,9 @@ def main():
     quebra_pme = st.Page("pages/quebra_pme.py", title="Visão PME", icon="📉")
     quebra_mig = st.Page("pages/quebra_migracao.py", title="Visão Migração", icon="📉")
     quebra_resumo = st.Page("pages/quebra_resumo.py", title="Resumo", icon="📉")
+    # teste = st.Page("old/diagnostico_abas.py", title="Teste")
+    assinatura = st.Page("pages/assinatura.py", title="Assinatura", icon="✉️")
+    # toml = st.Page("old/convert_toml.py", title="TOML")
 
     # Agrupamento das seções
     paginas_agrupadas = {
@@ -178,6 +181,7 @@ def main():
         "COMPILADO": [gestao_ativos],
         "DISPAROS DIÁRIOS": [rota_inicial, volumetria],
         "QUEBRA": [quebra, quebra_resumo, quebra_pme, quebra_mig],
+        "UTILITÁRIOS": [assinatura],
     }
 
     pg = st.navigation(paginas_agrupadas)
