@@ -10,6 +10,8 @@ if str(_DIR) not in sys.path:
 
 # ── Raiz do projeto (um nível acima de pages/) ───────────────────────
 _ROOT = _DIR.parent                      # .../projeto/
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 from datetime import datetime
 from html import escape
@@ -39,16 +41,32 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+# ────────────────────────────────────────────────────────────────
+# 🎨 DESIGN SYSTEM CORPORATIVO
+# ⚠️ Cards KPI, insights e o tipo TemaKPI vêm DIRETO do
+# componentes.py — garante visual corporativo global (fontes
+# Manrope/Inter, gradientes, sombras) e type-safety consistente.
+# ────────────────────────────────────────────────────────────────
+from componentes import (
+    aplicar_estilo as _aplicar_estilo_global,
+    render_kpi,
+    render_kpi_sm,
+    render_insight,
+    TemaKPI,          # ← Literal["azul","verde","vermelho","laranja","cinza"]
+)
+
+# ────────────────────────────────────────────────────────────────
+# 🧠 LÓGICA DE DOMÍNIO — quebra de agenda
+# Apenas componentes EXCLUSIVOS deste dashboard (segmento-header,
+# alerta-sla, dataframe com styler condicional).
+# ────────────────────────────────────────────────────────────────
 from quebra import (
     Config,
     Motor,
     Utils,
-    aplicar_estilo,
+    aplicar_estilo,             # CSS de classes de domínio
     render_alerta_sla,
     render_dataframe,
-    render_insight,
-    render_kpi,
-    render_kpi_sm,
     render_resultado_base,
     render_section,
     render_segmento_header,
@@ -62,6 +80,13 @@ st.set_page_config(
     page_icon="🔄",
     layout="wide",
 )
+
+# ⚠️ Aplica AMBAS as camadas de estilo:
+# 1) Design system global (fontes, KPI cards, tema Plotly)
+# 2) Classes de domínio (segmento-header, alerta-sla, styled-table-wrapper)
+_aplicar_estilo_global()
+aplicar_estilo()
+
 st.session_state.setdefault("df_memoria", None)
 
 # ====================================================
@@ -108,164 +133,135 @@ FMT_QUEBRA: Dict[str, str] = {
 
 
 # ====================================================
-# TOPO FIXO — HERO + RESULTADO DA BASE
+# TOPO FIXO — HERO AZUL MIGRAÇÃO + RESULTADO DA BASE
+# ────────────────────────────────────────────────────
+# ⚠️ Hero Migração PRESERVADO na cor azul-petróleo original
+# (identidade visual do segmento). NÃO substituir pelo hero
+# azul-laranja global — cada segmento (PME, Migração) tem
+# cor própria definida em Config.SEGMENTOS_CONFIG.
 # ====================================================
 def _injetar_css_topo_fixo_mig() -> None:
-    """CSS local para fixar Hero + Resultado da Base + tipografia KPI."""
+    """CSS local para fixar Hero + Resultado da Base durante a rolagem."""
     st.markdown(
         dedent(
             """
-            <style>
-            /* Wrapper do elemento Streamlit que contém o topo */
-            div[data-testid="stElementContainer"]:has(.topo-fixo-mig) {
-                position: sticky !important;
-                top: 0.75rem !important;
-                z-index: 1000 !important;
-            }
+<style>
+/* Wrapper do elemento Streamlit que contém o topo */
+div[data-testid="stElementContainer"]:has(.topo-fixo-mig) {
+    position: sticky !important;
+    top: 0.75rem !important;
+    z-index: 1000 !important;
+}
 
-            /* Fundo sutil evita que o conteúdo atrás apareça ao rolar */
-            .topo-fixo-mig {
-                background: rgba(240, 249, 255, 0.96);
-                backdrop-filter: blur(10px);
-                -webkit-backdrop-filter: blur(10px);
-                padding: 0.5rem 0;
-                border-radius: 16px;
-            }
+/* Fundo sutil evita que o conteúdo atrás apareça ao rolar */
+.topo-fixo-mig {
+    background: rgba(240, 249, 255, 0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 0.5rem 0;
+    border-radius: 16px;
+}
 
-            /* ── Hero Migração ──────────────────────────────── */
-            .topo-fixo-mig .hero-mig {
-                background: linear-gradient(
-                    135deg,
-                    #0C4A6E 0%,
-                    #0369A1 55%,
-                    #0284C7 100%
-                );
-                padding: 32px 40px;
-                border-radius: 16px;
-                color: white;
-                box-shadow: 0 10px 40px rgba(12, 74, 110, 0.25);
-                margin-bottom: 12px;
-                position: relative;
-                overflow: hidden;
-            }
+/* ── Hero Migração (AZUL-PETRÓLEO — IDENTIDADE DO SEGMENTO) ─── */
+.topo-fixo-mig .hero-mig {
+    background: linear-gradient(
+        135deg,
+        #0C4A6E 0%,
+        #0369A1 55%,
+        #0284C7 100%
+    );
+    padding: 32px 40px;
+    border-radius: 16px;
+    color: white;
+    box-shadow: 0 10px 40px rgba(12, 74, 110, 0.25);
+    margin-bottom: 12px;
+    position: relative;
+    overflow: hidden;
+}
 
-            .topo-fixo-mig .hero-mig::before {
-                content: "";
-                position: absolute;
-                top: -55%;
-                right: -8%;
-                width: 390px;
-                height: 390px;
-                background: rgba(255, 255, 255, 0.07);
-                border-radius: 50%;
-                pointer-events: none;
-            }
+.topo-fixo-mig .hero-mig::before {
+    content: "";
+    position: absolute;
+    top: -55%;
+    right: -8%;
+    width: 390px;
+    height: 390px;
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 50%;
+    pointer-events: none;
+}
 
-            .topo-fixo-mig .hero-mig h1 {
-                position: relative;
-                z-index: 2;
-                color: white !important;
-                font-family: "Manrope", "Segoe UI", Arial, sans-serif !important;
-                font-size: 34px;
-                font-weight: 800;
-                margin: 0;
-                letter-spacing: -0.5px;
-                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.28);
-            }
+.topo-fixo-mig .hero-mig h1 {
+    position: relative;
+    z-index: 2;
+    color: white !important;
+    font-family: "Manrope", "Segoe UI", Arial, sans-serif !important;
+    font-size: 34px;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -0.5px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.28);
+}
 
-            .topo-fixo-mig .hero-mig p {
-                position: relative;
-                z-index: 2;
-                color: rgba(255, 255, 255, 0.92) !important;
-                font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
-                font-size: 15px;
-                margin: 8px 0 0;
-                font-weight: 400;
-            }
+.topo-fixo-mig .hero-mig p {
+    position: relative;
+    z-index: 2;
+    color: rgba(255, 255, 255, 0.92) !important;
+    font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
+    font-size: 15px;
+    margin: 8px 0 0;
+    font-weight: 400;
+}
 
-            /* ── Resultado da Base ─────────────────────────── */
-            .topo-fixo-mig .resultado-base {
-                margin-bottom: 0 !important;
-                background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
-                padding: 1rem 1.5rem;
-                border-radius: 0.75rem;
-                display: flex;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 0.6rem;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            }
+/* ── Resultado da Base (fica sob o hero) ─────────────── */
+.topo-fixo-mig .resultado-base {
+    margin-bottom: 0 !important;
+    background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
+    padding: 1rem 1.5rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
 
-            .topo-fixo-mig .resultado-base-label {
-                color: #94A3B8;
-                font-size: 0.8rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-            }
+.topo-fixo-mig .resultado-base-label {
+    color: #94A3B8;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
 
-            .topo-fixo-mig .resultado-base-regiao {
-                padding: 0.3rem 0.9rem;
-                border-radius: 999px;
-                font-size: 0.82rem;
-                font-weight: 700;
-                border: 2px solid;
-            }
+.topo-fixo-mig .resultado-base-regiao {
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    border: 2px solid;
+}
 
-            .topo-fixo-mig .resultado-base-count {
-                color: #64748B;
-                font-size: 0.72rem;
-                margin-left: auto;
-                font-weight: 600;
-            }
+.topo-fixo-mig .resultado-base-count {
+    color: #64748B;
+    font-size: 0.72rem;
+    margin-left: auto;
+    font-weight: 600;
+}
 
-            /* ═══════════════════════════════════════════════════════
-               KPI CARDS — apenas fontes padronizadas
-               (mantém cores originais dos temas)
-               ═══════════════════════════════════════════════════════ */
-            /* ═══════════════════════════════════════════════════════
-               KPI CARDS — apenas fontes (com !important)
-               ═══════════════════════════════════════════════════════ */
-            .kpi-card * {
-                font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
-            }
-            .kpi-value {
-                font-family: "Manrope", "Segoe UI", Arial, sans-serif !important;
-                font-weight: 800 !important;
-                font-variant-numeric: tabular-nums !important;
-                letter-spacing: -0.3px !important;
-            }
-            .kpi-label {
-                font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
-                font-weight: 700 !important;
-                letter-spacing: 1.2px !important;
-                text-transform: uppercase !important;
-            }
-            .kpi-sub {
-                font-family: "Inter", "Segoe UI", Arial, sans-serif !important;
-                font-weight: 500 !important;
-            }
-
-            /* Ajuste para telas menores */
-            @media (max-width: 768px) {
-                div[data-testid="stElementContainer"]:has(.topo-fixo-mig) {
-                    top: 0.25rem !important;
-                }
-
-                .topo-fixo-mig .hero-mig {
-                    padding: 22px 20px;
-                }
-
-                .topo-fixo-mig .hero-mig h1 {
-                    font-size: 25px;
-                }
-
-                .topo-fixo-mig .resultado-base-count {
-                    width: 100%;
-                    margin-left: 0;
-                }
-            }
-            </style>
+/* Ajuste para telas menores */
+@media (max-width: 768px) {
+    div[data-testid="stElementContainer"]:has(.topo-fixo-mig) {
+        top: 0.25rem !important;
+    }
+    .topo-fixo-mig .hero-mig { padding: 22px 20px; }
+    .topo-fixo-mig .hero-mig h1 { font-size: 25px; }
+    .topo-fixo-mig .resultado-base-count {
+        width: 100%;
+        margin-left: 0;
+    }
+}
+</style>
             """
         ),
         unsafe_allow_html=True,
@@ -275,22 +271,18 @@ def _injetar_css_topo_fixo_mig() -> None:
 def _html_resultado_base_mig(regioes: List[str], total: int) -> str:
     """Gera o HTML do Resultado da Base para uso dentro do topo fixo."""
     cores_regiao = {
-        "LESTE": {"bg": "#DBEAFE", "text": "#1E40AF", "border": "#3B82F6"},
-        "GRU":   {"bg": "#D1FAE5", "text": "#065F46", "border": "#10B981"},
-        "ABCDM": {"bg": "#EDE9FE", "text": "#5B21B6", "border": "#8B5CF6"},
+        "LESTE":  {"bg": "#DBEAFE", "text": "#1E40AF", "border": "#3B82F6"},
+        "GRU":    {"bg": "#D1FAE5", "text": "#065F46", "border": "#10B981"},
+        "ABCDM":  {"bg": "#EDE9FE", "text": "#5B21B6", "border": "#8B5CF6"},
         "OUTRAS": {"bg": "#F1F5F9", "text": "#475569", "border": "#94A3B8"},
     }
 
     badges = ""
-
     for regiao in sorted(regioes):
         regiao_str = str(regiao).strip().upper()
-
         if not regiao_str or regiao_str in {"NAN", "NONE"}:
             continue
-
         cor = cores_regiao.get(regiao_str, cores_regiao["OUTRAS"])
-
         badges += (
             f'<span class="resultado-base-regiao" '
             f'style="background:{cor["bg"]};'
@@ -329,13 +321,13 @@ def _render_topo_fixo_mig(regioes: List[str], total: int) -> None:
     st.markdown(
         dedent(
             f"""
-            <div class="topo-fixo-mig">
-                <div class="hero-mig">
-                    <h1>🔄 Migração — Quebra de Agenda</h1>
-                    <p>Análise estratégica de Mudança de Pacote + GPON</p>
-                </div>
-                {resultado_html}
-            </div>
+<div class="topo-fixo-mig">
+    <div class="hero-mig">
+        <h1>🔄 Migração — Quebra de Agenda</h1>
+        <p>Análise estratégica de Mudança de Pacote + GPON</p>
+    </div>
+    {resultado_html}
+</div>
             """
         ),
         unsafe_allow_html=True,
@@ -343,7 +335,7 @@ def _render_topo_fixo_mig(regioes: List[str], total: int) -> None:
 
 
 # ====================================================
-# PDF EXECUTIVO MIGRAÇÃO
+# PDF EXECUTIVO MIGRAÇÃO (INTOCADO)
 # ====================================================
 class PDFExecutivoMigracao:
     """Relatório executivo em PDF dedicado ao segmento Migração."""
@@ -359,25 +351,18 @@ class PDFExecutivoMigracao:
     COR_LINHA:      str = "#E5E7EB"
     COR_LINHA_ALT:  str = "#F0F9FF"
 
-    # ── Dimensões (landscape A4) ─────────────────────────────────────
     LARGURA_UTIL: float = 27.7
     MARGEM_H:     float = 0.8
     MARGEM_TOP:   float = 0.8
     MARGEM_BOT:   float = 1.3
 
-    # ── Caminho do logo ──────────────────────────────────────────────
     LOGO_PATH: Path = (
         Path(__file__).resolve().parent.parent
         / "assets" / "images" / "novo-logo-totale.png"
     )
 
-    # ================================================================
-    # HELPERS PRIVADOS
-    # ================================================================
-
     @classmethod
     def _fmt(cls, v: Any, col: str = "") -> str:
-        """Formata um valor para exibição em célula de tabela PDF."""
         if pd.isna(v):
             return "—"
         col_u    = str(col).upper()
@@ -400,10 +385,6 @@ class PDFExecutivoMigracao:
 
     @classmethod
     def _calcular_larguras(cls, df: pd.DataFrame) -> List[float]:
-        """
-        Calcula larguras proporcionais em cm pelo conteúdo real.
-        A soma sempre resulta em LARGURA_UTIL cm.
-        """
         if df.empty:
             return [cls.LARGURA_UTIL]
 
@@ -419,7 +400,6 @@ class PDFExecutivoMigracao:
 
     @classmethod
     def _estilos(cls) -> Any:
-        """Cria e retorna o stylesheet ReportLab do relatório."""
         s = getSampleStyleSheet()
 
         defs = [
@@ -471,13 +451,7 @@ class PDFExecutivoMigracao:
         cor_col_quebra: Optional[str] = None,
         sla_meta: float = 0.25,
     ) -> Table:
-        """
-        Constrói Table ReportLab centralizada e auto-ajustada.
-        Usa wrapper de largura total para garantir centralização real.
-        """
-
         def _interna() -> Table:
-            # ── Vazio ────────────────────────────────────────────────
             if df is None or df.empty:
                 vazio: List[List[Any]] = [["Sem dados disponíveis"]]
                 t = Table(vazio, colWidths=[cls.LARGURA_UTIL * cm])
@@ -493,7 +467,6 @@ class PDFExecutivoMigracao:
                 ]))
                 return t
 
-            # ── Dados ────────────────────────────────────────────────
             base = df.head(limite) if limite else df.copy()
 
             st_h = ParagraphStyle(
@@ -521,7 +494,6 @@ class PDFExecutivoMigracao:
                 ]
                 dados.append(linha)
 
-            # ── Larguras ─────────────────────────────────────────────
             if larguras:
                 col_widths = [w * cm for w in larguras]
             else:
@@ -553,12 +525,10 @@ class PDFExecutivoMigracao:
                 ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
             ]
 
-            # Zebra
             for i in range(1, len(dados)):
                 bg = colors.white if i % 2 == 1 else colors.HexColor(cls.COR_LINHA_ALT)
                 style.append(("BACKGROUND", (0, i), (-1, i), bg))
 
-            # Coloração condicional
             if cor_col_quebra and cor_col_quebra in base.columns:
                 col_idx = list(base.columns).index(cor_col_quebra)
                 for row_i, (_, row) in enumerate(base.iterrows(), start=1):
@@ -584,7 +554,6 @@ class PDFExecutivoMigracao:
             tab.setStyle(TableStyle(style))
             return tab
 
-        # ── Wrapper de centralização ──────────────────────────────────
         wrapper_data: List[List[Any]] = [[_interna()]]
         wrapper = Table(
             wrapper_data,
@@ -603,7 +572,6 @@ class PDFExecutivoMigracao:
 
     @classmethod
     def _tab_acoes(cls, acoes_pdf: List[tuple], s: Any) -> Table:
-        """Tabela de plano de ação com coloração por prioridade."""
         header: List[Any] = ["#", "Prioridade", "Ação Recomendada"]
         dados: List[List[Any]] = [header]
 
@@ -676,7 +644,6 @@ class PDFExecutivoMigracao:
 
     @classmethod
     def _secao(cls, el: List[Any], titulo: str, s: Any, espessa: bool = False) -> None:
-        """Adiciona cabeçalho de seção com linha HR."""
         el.append(HRFlowable(
             width="100%",
             thickness=1.5 if espessa else 0.5,
@@ -687,7 +654,6 @@ class PDFExecutivoMigracao:
 
     @classmethod
     def _rodape(cls, canvas: Any, doc: Any) -> None:
-        """Rodapé com logo, linha, texto e paginação."""
         canvas.saveState()
 
         page_w, _ = landscape(A4)
@@ -735,10 +701,8 @@ class PDFExecutivoMigracao:
         sla_meta: float,
         total_registros: int,
     ) -> List[Any]:
-        """Capa: logo + banner azul + badge SLA + KPIs."""
         el: List[Any] = []
 
-        # ── Logo ─────────────────────────────────────────────────────
         if cls.LOGO_PATH.exists():
             try:
                 reader = ImageReader(str(cls.LOGO_PATH))
@@ -765,7 +729,6 @@ class PDFExecutivoMigracao:
             except Exception:
                 pass
 
-        # ── Banner azul ───────────────────────────────────────────────
         banner_data: List[List[Any]] = [
             [Paragraph("RELATÓRIO EXECUTIVO — MIGRAÇÃO", s["MIG_Titulo"])],
             [Paragraph(
@@ -795,7 +758,6 @@ class PDFExecutivoMigracao:
         el.append(tab_banner)
         el.append(Spacer(1, 0.3 * cm))
 
-        # ── Badge SLA ────────────────────────────────────────────────
         dentro_sla = m["quebra_atual"] <= sla_meta
         status_txt = "DENTRO DO SLA" if dentro_sla else "FORA DO SLA"
         icone      = "✅" if dentro_sla else "❌"
@@ -821,7 +783,6 @@ class PDFExecutivoMigracao:
         el.append(tab_badge)
         el.append(Spacer(1, 0.3 * cm))
 
-        # ── KPIs 4 × 2 ───────────────────────────────────────────────
         kpis: List[tuple] = [
             ("Alocado",      cls._fmt(m["alocado"]),        cls.COR_PRIMARIA),
             ("Executadas",   cls._fmt(m["exec"]),           cls.COR_OK),
@@ -883,9 +844,6 @@ class PDFExecutivoMigracao:
         el.append(tab_kpi)
         return el
 
-    # ================================================================
-    # GERADOR PRINCIPAL
-    # ================================================================
     @classmethod
     def gerar(
         cls,
@@ -897,7 +855,6 @@ class PDFExecutivoMigracao:
         min_aloc: float = 1.0,
         top_n: int = 10,
     ) -> bytes:
-        """Gera o PDF completo e retorna bytes para st.download_button."""
         buf = BytesIO()
         doc = SimpleDocTemplate(
             buf,
@@ -914,7 +871,6 @@ class PDFExecutivoMigracao:
         folga  = Motor.folga_sla(df_seg, sla_meta)
         el: List[Any] = []
 
-        # ── CAPA ────────────────────────────────────────────────────
         el += cls._capa(s, m, sla_meta, len(df_seg))
         el.append(Spacer(1, 0.35 * cm))
 
@@ -1033,13 +989,10 @@ class PDFExecutivoMigracao:
 
 
 # ====================================================
-# UTILITÁRIO — DataFrame de Pendentes Migração
+# UTILITÁRIO — DataFrame de Pendentes Migração (INTOCADO)
 # ====================================================
 def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
-    """
-    Retorna um DataFrame com as OS pendentes do segmento Migração,
-    contendo as colunas: Contrato, Login, Técnico, Monitor e Qtde. de O.S.
-    """
+    """Retorna DataFrame com OS pendentes do segmento Migração."""
     MAPA_COLUNAS = {
         "Contrato": [
             "CONTRATO", "Nº CONTRATO", "NUM_CONTRATO",
@@ -1055,12 +1008,9 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
             "NOME_TECNICO", "NOME DO TÉCNICO",
         ],
         "Monitor": [
-            "MONITOR", "SUPERVISOR", "NOME MONITOR",
-            "NOME_MONITOR",
+            "MONITOR", "SUPERVISOR", "NOME MONITOR", "NOME_MONITOR",
         ],
-        "Qtde. O.S.": [
-            "TOTAL DE TAREFAS"
-        ],
+        "Qtde. O.S.": ["TOTAL DE TAREFAS"],
     }
 
     def _encontrar_coluna(df: pd.DataFrame, candidatos: list[str]) -> str | None:
@@ -1085,31 +1035,22 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
         )
 
     df_out = pd.DataFrame(index=df_pend.index)
-
     for nome_saida, candidatos in MAPA_COLUNAS.items():
         col_real = _encontrar_coluna(df_pend, candidatos)
-
-        if col_real:
-            df_out[nome_saida] = df_pend[col_real].values
-        else:
-            df_out[nome_saida] = "N/D"
+        df_out[nome_saida] = df_pend[col_real].values if col_real else "N/D"
 
     if "Qtde. O.S." in df_out.columns:
         df_out["Qtde. O.S."] = (
             pd.to_numeric(df_out["Qtde. O.S."], errors="coerce")
-            .fillna(0)
-            .astype(int)
+            .fillna(0).astype(int)
         )
 
     df_out = (
-        df_out
-        .drop_duplicates()
+        df_out.drop_duplicates()
         .sort_values(["Técnico"], na_position="last")
         .reset_index(drop=True)
     )
-
     df_out.index = df_out.index + 1
-
     return df_out
 
 
@@ -1126,15 +1067,20 @@ def _sub_visao_geral(
 ) -> None:
     render_section(f"📊 Resumo Operacional — {TIPO}")
 
+    # ✅ Tema anotado como TemaKPI resolve o erro do Pyright
+    tema_quebra: TemaKPI = (
+        "vermelho" if m_seg["quebra_atual"] > sla_meta else "verde"
+    )
+
     c1, c2, c3, c4, c5 = st.columns(5)
     render_kpi(c1, "Alocado",    f"{int(m_seg['alocado']):,}", tema="azul")
-    render_kpi(c2, "Executadas", f"{int(m_seg['exec']):,}",   tema="verde")
-    render_kpi(c3, "Não Exec.",  f"{int(m_seg['naoexec']):,}",tema="laranja")
-    render_kpi(c4, "Pendentes",  f"{int(m_seg['pend']):,}",   tema="cinza")
+    render_kpi(c2, "Executadas", f"{int(m_seg['exec']):,}",    tema="verde")
+    render_kpi(c3, "Não Exec.",  f"{int(m_seg['naoexec']):,}", tema="laranja")
+    render_kpi(c4, "Pendentes",  f"{int(m_seg['pend']):,}",    tema="cinza")
     render_kpi(
         c5, "Quebra Atual", f"{m_seg['quebra_atual']:.2%}",
         sub=f"Meta: {sla_meta:.0%}",
-        tema="vermelho" if m_seg["quebra_atual"] > sla_meta else "verde",
+        tema=tema_quebra,
     )
 
     st.markdown("")
@@ -1148,10 +1094,13 @@ def _sub_visao_geral(
     c_cen, c_gauge = st.columns([2, 3])
     with c_cen:
         for nome, cd in cen.items():
+            cor_proj: TemaKPI = (
+                "vermelho" if cd["fechamento_proj"] > sla_meta else "verde"
+            )
             render_kpi_sm(
                 st, nome, f"{cd['fechamento_proj']:.2%}",
                 sub=f"Não Exec. proj.: {int(cd['naoexec_proj']):,}",
-                tema="vermelho" if cd["fechamento_proj"] > sla_meta else "verde",
+                tema=cor_proj,
             )
 
     with c_gauge:
@@ -1190,7 +1139,9 @@ def _sub_visao_geral(
 
     folga = Motor.folga_sla(df_seg, sla_meta)
     f1, f2, f3 = st.columns(3)
-    cor_f = (
+
+    # ✅ Anotação evita erro do Pyright na expressão ternária
+    cor_f: TemaKPI = (
         "vermelho" if folga["estourado"]
         else ("verde" if folga["folga_ne_pendente"] > 0 else "laranja")
     )
@@ -1261,10 +1212,11 @@ def _sub_causa_raiz(df_seg: pd.DataFrame) -> None:
 
     if len(df_c) >= 2:
         t1, t2 = df_c.iloc[0], df_c.iloc[1]
+        # ✅ Markdown **bold** em vez de <strong></strong>
         render_insight(
-            f"Os 2 principais motivos (<strong>{t1['Motivo de Baixa']}</strong> e "
-            f"<strong>{t2['Motivo de Baixa']}</strong>) respondem por "
-            f"<strong>{t2['Acumulado']:.1%}</strong> das quebras em {TIPO}.",
+            f"Os 2 principais motivos (**{t1['Motivo de Baixa']}** e "
+            f"**{t2['Motivo de Baixa']}**) respondem por "
+            f"**{t2['Acumulado']:.1%}** das quebras em {TIPO}.",
             tipo="acao",
         )
 
@@ -1319,19 +1271,20 @@ def _sub_tecnicos(
 
     acima = int((df_tec["Fechamento Base"] > sla_meta).sum())
     pct   = acima / len(df_tec) if len(df_tec) > 0 else 0
+    # ✅ Markdown **bold**
     if pct > 0.5:
         render_insight(
-            f"<strong>{acima} de {len(df_tec)}</strong> técnicos ({pct:.0%}) "
+            f"**{acima} de {len(df_tec)}** técnicos ({pct:.0%}) "
             f"estão acima da meta. Avalie redistribuição de carteira.",
             tipo="critico",
         )
     elif acima > 0:
         render_insight(
-            f"<strong>{acima} técnico(s)</strong> com quebra acima da meta.",
+            f"**{acima} técnico(s)** com quebra acima da meta.",
             tipo="alerta",
         )
     else:
-        render_insight(f"Todos os técnicos dentro da meta em {TIPO}. ✅", tipo="ok")
+        render_insight(f"Todos os técnicos dentro da meta em {TIPO}.", tipo="ok")
 
 
 def _sub_plano_acao(
@@ -1350,21 +1303,30 @@ def _sub_plano_acao(
 
     with col_d:
         render_section("📋 Diagnóstico")
+
+        # ✅ Temas anotados
+        tema_excesso: TemaKPI = "vermelho" if excesso > 0 else "verde"
         render_kpi_sm(
             st, "Excesso de NE", f"{int(excesso):,}",
             sub="OS além do permitido pela meta",
-            tema="vermelho" if excesso > 0 else "verde",
+            tema=tema_excesso,
         )
+
         render_kpi_sm(
             st, "Pendentes a Executar", f"{int(np.ceil(pend_exec)):,}",
             sub=f"Mínimo para meta {sla_meta:.0%}",
             tema="azul",
         )
+
+        tema_proj: TemaKPI = (
+            "vermelho" if cen["fechamento_proj"] > sla_meta else "verde"
+        )
         render_kpi_sm(
             st, "Proj. Base", f"{cen['fechamento_proj']:.2%}",
             sub=f"c/ {p_base:.0%} de quebra nos pendentes",
-            tema="vermelho" if cen["fechamento_proj"] > sla_meta else "verde",
+            tema=tema_proj,
         )
+
         st.markdown("")
         if folga["pend"] > 0:
             tx = 1.0 - (folga["folga_ne_pendente"] / folga["pend"])
@@ -1393,8 +1355,9 @@ def _sub_plano_acao(
         for pri, ac, tp in ACOES_MIGRACAO:
             acoes.append((f"🔵 {pri}", ac, tp))
 
+        # ✅ Markdown **bold**
         for pri, ac, tp in acoes:
-            render_insight(f"<strong>{pri}</strong> — {ac}", tipo=tp)
+            render_insight(f"**{pri}** — {ac}", tipo=tp)
 
     st.markdown("")
     df_plano = pd.DataFrame(
@@ -1418,8 +1381,10 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
     render_section(f"📋 Contratos Pendentes — {TIPO}")
 
     df_pend = _build_df_pendentes(df_seg)
-
     total_pend = len(df_pend)
+
+    # ✅ Tema anotado
+    tema_total: TemaKPI = "laranja" if total_pend > 0 else "verde"
 
     m1, m2, m3 = st.columns(3)
 
@@ -1428,7 +1393,7 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
         "Total Pendentes",
         f"{total_pend:,}",
         sub="contratos sem execução",
-        tema="laranja" if total_pend > 0 else "verde",
+        tema=tema_total,
     )
 
     tec_unicos = (
@@ -1463,7 +1428,7 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
 
     if df_pend.empty:
         render_insight(
-            "✅ Nenhum contrato pendente encontrado para os filtros atuais.",
+            "Nenhum contrato pendente encontrado para os filtros atuais.",
             tipo="ok",
         )
         return
@@ -1543,7 +1508,7 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
             config={"displayModeBar": False},
         )
     else:
-        st.info("Sem dados de monitor para exibir.")
+        render_insight("Sem dados de monitor para exibir.", tipo="info")
 
     st.markdown("")
     col_exp1, col_exp2, _ = st.columns([1, 1, 2])
@@ -1589,12 +1554,14 @@ def _sub_pendentes(df_seg: pd.DataFrame, sla_meta: float) -> None:
 # APLICAÇÃO PRINCIPAL
 # ====================================================
 def main() -> None:
-    aplicar_estilo()
     _injetar_css_topo_fixo_mig()
 
     if st.session_state.get("df_memoria") is None:
-        st.warning("⚠️ Nenhuma base carregada.")
-        st.info("👈 Volte ao **Dashboard Geral** no menu lateral e faça o upload.")
+        render_insight(
+            "Nenhuma base carregada. Volte ao **Dashboard Geral** no menu "
+            "lateral e faça o upload.",
+            tipo="alerta",
+        )
         return
 
     df_full: pd.DataFrame = st.session_state["df_memoria"].copy()
@@ -1640,12 +1607,11 @@ def main() -> None:
         min_aloc: float = 1.0
         top_n: int      = 999_999
 
-    # ── Validações ──────────────────────────────────────────────────
     if df.empty:
-        st.warning("Nenhum dado para os filtros selecionados.")
+        render_insight("Nenhum dado para os filtros selecionados.", tipo="alerta")
         return
 
-    # ── HERO + RESULTADO DA BASE FIXOS DURANTE A ROLAGEM ────────────
+    # ── HERO AZUL + RESULTADO DA BASE (topo fixo) ────────────────────
     if Config.COL_REGIAO in df.columns:
         regioes_mig = [
             str(regiao).strip().upper()
@@ -1659,7 +1625,10 @@ def main() -> None:
 
     df_seg = df[df["TIPO_SERVICO"] == TIPO].copy()
     if df_seg.empty:
-        st.info(f"⚠️ Nenhum registro classificado como {TIPO} nos filtros atuais.")
+        render_insight(
+            f"Nenhum registro classificado como {TIPO} nos filtros atuais.",
+            tipo="info",
+        )
         return
 
     m_seg = Motor.projetar(df_seg, p_base)
@@ -1691,11 +1660,13 @@ def main() -> None:
         )
 
     with col_desc:
-        st.info(
-            "**Conteúdo do PDF:**  \n"
-            "Capa com KPIs executivos · Cenários Otimista / Base / Pessimista "
-            "· Plano de ação com coloração por prioridade · Top 15 Técnicos Críticos "
-            "· Performance Regional · Pareto de Causas · Ranking de Monitores"
+        render_insight(
+            "**Conteúdo do PDF:** Capa com KPIs executivos · "
+            "Cenários Otimista / Base / Pessimista · "
+            "Plano de ação com coloração por prioridade · "
+            "Top 15 Técnicos Críticos · Performance Regional · "
+            "Pareto de Causas · Ranking de Monitores",
+            tipo="info",
         )
 
     st.divider()

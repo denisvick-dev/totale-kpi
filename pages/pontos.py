@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 from plotly.graph_objects import Figure
@@ -6,225 +7,184 @@ import numpy as np
 import datetime
 import calendar
 from io import BytesIO
-from typing import Any, Optional, Literal, cast
+from typing import Any, Optional
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+from componentes import (
+    aplicar_estilo,
+    render_hero,
+    render_kpi,
+    render_insight,
+    render_section_header,
+    FONTE_TEXTO,
+    COR_TEXTO_3,
+)
 
-# ====================================================
-# BLOCO 1: CONFIGURAÇÕES GLOBAIS
-# ====================================================
-class Configuracoes:
-    TEMAS_CARD = {
-        "azul": {
-            "fundo": "#F0F9FF",
-            "texto": "#0369A1",
-            "borda": "#0EA5E9",
-            "titulo": "#075985",
-        },
-        "verde": {
-            "fundo": "#F0FDF4",
-            "texto": "#15803D",
-            "borda": "#22C55E",
-            "titulo": "#166534",
-        },
-        "laranja": {
-            "fundo": "#FFF7ED",
-            "texto": "#C2410C",
-            "borda": "#F97316",
-            "titulo": "#9A3412",
-        },
-        "cinza": {
-            "fundo": "#F8FAFC",
-            "texto": "#334155",
-            "borda": "#94A3B8",
-            "titulo": "#64748B",
-        },
-    }
+# ⚠️ set_page_config DEVE ser a primeira chamada Streamlit
+st.set_page_config(
+    page_title="Central de Performance",
+    page_icon="📈",
+    layout="wide",
+)
+
+# Aplica CSS/tema/fontes ANTES de qualquer outro st.*
+aplicar_estilo()
 
 
 # ====================================================
-# BLOCO 2: COMPONENTES VISUAIS (FRONT-END)
+# BLOCO 2: COMPONENTES VISUAIS
 # ====================================================
 class ComponenteVisual:
     @staticmethod
-    def criar_card(
-        titulo: str, valor: str, tema: str = "azul", delta: Optional[str] = None
-    ) -> str:
-        cores = Configuracoes.TEMAS_CARD.get(tema, Configuracoes.TEMAS_CARD["azul"])
-        delta_html = ""
-        if delta:
-            if delta.startswith("+") or delta.startswith("▲"):
-                cor_delta, simbolo = "#22c55e", "▲"
-            elif delta.startswith("-") or delta.startswith("▼"):
-                cor_delta, simbolo = "#ef4444", "▼"
-            elif "do Total" in delta:
-                cor_delta, simbolo = "#0ea5e9", "◴"
-            else:
-                cor_delta, simbolo = "#94a3b8", "■"
-            delta_html = f'<span style="font-size: 13px; color: {cor_delta}; margin-left: 10px;">{simbolo} {delta}</span>'
-
-        return f"""
-        <div style="background-color: {cores['fundo']}; padding: 20px; border-radius: 10px; border-left: 6px solid {cores['borda']}; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-            <p style="margin: 0; font-size: 14px; color: {cores['titulo']};"><b>{titulo}</b></p>
-            <h2 style="margin: 5px 0 0 0; color: {cores['texto']}; font-weight: 900;">{valor}{delta_html}</h2>
-        </div>
-        """
-
-    @staticmethod
-    def exibir_ticker(dados: list) -> str:
+    def exibir_ticker(dados: list) -> None:
+        """Renderiza ticker animado via components.html (isolado em iframe)."""
         if not dados:
-            return ""
+            return
+
         html_itens = ""
         for item in dados:
-            if item.get("variacao") == "positiva":
+            variacao = item.get("variacao", "")
+            if variacao == "positiva":
                 cor, simbolo = "#22c55e", "▲"
-            elif item.get("variacao") == "negativa":
+            elif variacao == "negativa":
                 cor, simbolo = "#ef4444", "▼"
-            elif item.get("variacao") == "share":
+            elif variacao == "share":
                 cor, simbolo = "#38bdf8", "◴"
             else:
                 cor, simbolo = "#94a3b8", "■"
-            html_itens += f'<span style="margin: 0 40px; font-family: \'Roboto\', sans-serif; font-size: 15px; white-space: nowrap;"><span style="color: #94a3b8; font-weight: 500;">{item.get("label", "")}:</span><span style="font-weight: 700; color: #FFFFFF; margin-left: 8px;">{item.get("valor", "")}</span><span style="color: {cor}; font-weight: 700; margin-left: 6px; font-size: 13px;">{simbolo} {item.get("delta", "")}</span></span><span style="color: #334155; margin: 0 15px;">|</span>'
 
-        return f"""<style>.ticker-wrapper {{ width: 100%; overflow: hidden; background: linear-gradient(90deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); padding: 12px 0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-bottom: 25px; position: relative; }} .ticker-wrapper::before, .ticker-wrapper::after {{ content: ''; position: absolute; top: 0; bottom: 0; width: 60px; z-index: 2; }} .ticker-wrapper::before {{ left: 0; background: linear-gradient(90deg, #0f172a, transparent); }} .ticker-wrapper::after {{ right: 0; background: linear-gradient(90deg, transparent, #0f172a); }} .ticker-content {{ display: flex; width: max-content; animation: scroll 35s linear infinite; }} .ticker-wrapper:hover .ticker-content {{ animation-play-state: paused; }} @keyframes scroll {{ 0% {{ transform: translate3d(0, 0, 0); }} 100% {{ transform: translate3d(-50%, 0, 0); }} }} </style> <div class="ticker-wrapper"><div class="ticker-content">{html_itens}{html_itens}</div></div>"""
+            html_itens += (
+                f'<span class="ticker-item">'
+                f'<span class="ticker-label">{item.get("label", "")}:</span>'
+                f'<span class="ticker-valor">{item.get("valor", "")}</span>'
+                f'<span class="ticker-delta" style="color:{cor};">'
+                f'{simbolo} {item.get("delta", "")}</span>'
+                f'</span>'
+                f'<span class="ticker-sep">|</span>'
+            )
+
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    background: transparent;
+    font-family: 'Inter', -apple-system, sans-serif;
+    overflow: hidden;
+  }}
+  .ticker-wrapper {{
+    width: 100%;
+    overflow: hidden;
+    background: linear-gradient(90deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);
+    padding: 12px 0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    position: relative;
+  }}
+  .ticker-wrapper::before, .ticker-wrapper::after {{
+    content: ''; position: absolute; top: 0; bottom: 0;
+    width: 60px; z-index: 2; pointer-events: none;
+  }}
+  .ticker-wrapper::before {{
+    left: 0; background: linear-gradient(90deg,#0f172a,transparent);
+  }}
+  .ticker-wrapper::after {{
+    right: 0; background: linear-gradient(90deg,transparent,#0f172a);
+  }}
+  .ticker-content {{
+    display: flex; width: max-content;
+    animation: scroll 35s linear infinite;
+  }}
+  .ticker-wrapper:hover .ticker-content {{ animation-play-state: paused; }}
+  @keyframes scroll {{
+    0%   {{ transform: translate3d(0,0,0); }}
+    100% {{ transform: translate3d(-50%,0,0); }}
+  }}
+  .ticker-item   {{ margin: 0 40px; font-size: 15px; white-space: nowrap; }}
+  .ticker-label  {{ color: #94a3b8; font-weight: 500; }}
+  .ticker-valor  {{ font-weight: 700; color: #FFFFFF; margin-left: 8px; }}
+  .ticker-delta  {{ font-weight: 700; margin-left: 6px; font-size: 13px; }}
+  .ticker-sep    {{ color: #334155; margin: 0 15px; }}
+</style>
+</head>
+<body>
+  <div class="ticker-wrapper">
+    <div class="ticker-content">{html_itens}{html_itens}</div>
+  </div>
+</body>
+</html>
+"""
+        components.html(html, height=60, scrolling=False)
 
     @staticmethod
-    def gerar_podio(ranking_df: pd.DataFrame):
+    def gerar_podio(ranking_df: pd.DataFrame) -> None:
         if len(ranking_df) < 3:
+            render_insight("Necessário ao menos 3 equipes para o pódio.", tipo="alerta")
             return
-        top3 = ranking_df.head(3).reset_index()
 
+        top3 = ranking_df.head(3).reset_index(drop=True)
         c2, c1, c3 = st.columns([1, 1.2, 1])
 
-        def medalha_html(nome, pontos, pos, cor_fundo, cor_borda, icone):
-            return f"""<div style="background-color: {cor_fundo}; border: 2px solid {cor_borda}; border-radius: 10px; padding: 15px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                <h1 style="margin:0; font-size: 30px;">{icone}</h1>
-                <h4 style="margin: 5px 0; color: #334155;">{nome}</h4>
-                <h3 style="margin: 0; color: {cor_borda};">{pontos:,.1f} pts</h3>
-            </div>"""
+        def _medalha_html(nome: str, pontos: float, fundo: str, borda: str, icone: str) -> str:
+            return (
+                f'<div style="background-color:{fundo};border:2px solid {borda};'
+                f'border-radius:10px;padding:15px;text-align:center;'
+                f'box-shadow:0 4px 8px rgba(0,0,0,0.1);">'
+                f'<h1 style="margin:0;font-size:30px;">{icone}</h1>'
+                f'<h4 style="margin:5px 0;color:#334155;">{nome}</h4>'
+                f'<h3 style="margin:0;color:{borda};">{pontos:,.1f} pts</h3>'
+                f'</div>'
+            )
 
-        with c1:
-            st.markdown(
-                medalha_html(
-                    top3.iloc[0]["Nome Equipe"],
-                    top3.iloc[0]["Pontos"],
-                    1,
-                    "#FEF9C3",
-                    "#EAB308",
-                    "🥇 1º Lugar",
-                ),
-                unsafe_allow_html=True,
-            )
-        with c2:
-            st.markdown(
-                medalha_html(
-                    top3.iloc[1]["Nome Equipe"],
-                    top3.iloc[1]["Pontos"],
-                    2,
-                    "#F1F5F9",
-                    "#94A3B8",
-                    "🥈 2º Lugar",
-                ),
-                unsafe_allow_html=True,
-            )
-        with c3:
-            st.markdown(
-                medalha_html(
-                    top3.iloc[2]["Nome Equipe"],
-                    top3.iloc[2]["Pontos"],
-                    3,
-                    "#FFEDD5",
-                    "#F97316",
-                    "🥉 3º Lugar",
-                ),
-                unsafe_allow_html=True,
-            )
+        medalhas = [
+            (c1, 0, "#FEF9C3", "#EAB308", "🥇 1º Lugar"),
+            (c2, 1, "#F1F5F9", "#94A3B8", "🥈 2º Lugar"),
+            (c3, 2, "#FFEDD5", "#F97316", "🥉 3º Lugar"),
+        ]
+        for col, idx, fundo, borda, icone in medalhas:
+            with col:
+                st.markdown(
+                    _medalha_html(
+                        top3.iloc[idx]["Nome Equipe"],
+                        top3.iloc[idx]["Pontos"],
+                        fundo, borda, icone,
+                    ),
+                    unsafe_allow_html=True,
+                )
 
     @staticmethod
-    def gerar_insight_ia(media: float, dias_brutos: int, var_pontos: tuple):
-        mensagem = ""
-        if media >= 400:
-            mensagem = f"🚀 **Visão da IA:** Operação em Alta Performance! A média de {media:.1f} pontos por equipe ultrapassa o teto máximo. Mantenha o ritmo para fechar o mês com recorde."
-            st.success(mensagem)
-        elif media >= 300:
-            mensagem = f"✅ **Visão da IA:** Operação Estável. Média de {media:.1f} pontos garante o atingimento da meta base. Foco em puxar os retardatários para garantir a projeção."
-            st.info(mensagem)
-        else:
-            mensagem = f"⚠️ **Visão da IA:** Alerta de Performance! A média de {media:.1f} pontos está abaixo da linha de corte (300). Restam poucos dias para reverter a tendência."
-            st.warning(mensagem)
-
-    @staticmethod
-    def aplicar_capa():
-        st.markdown(
-            """
-        <style>
-    /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
-            .hero-corp {
-            background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
-            padding: 32px 40px;
-            border-radius: 16px;
-            color: white;
-            box-shadow: 0 10px 40px rgba(1, 40, 105, 0.25);
-            margin-bottom: 24px;
-            position: relative;
-            overflow: hidden;
-        }
-        .hero-corp::before {
-            content: '';
-            position: absolute;
-            top: -50%; right: -10%;
-            width: 400px; height: 400px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 50%;
-        }
-        .hero-title {
-            font-size: 34px;
-            font-weight: 800;
-            margin: 0;
-            letter-spacing: -0.5px;
-            font-family: 'Segoe UI', -apple-system, sans-serif;
-        }
-        .hero-subtitle {
-            font-size: 15px;
-            opacity: 0.92;
-            margin: 6px 0 0 0;
-            font-weight: 400;
-        }
-        .hero-badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.18);
-            padding: 4px 14px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 12px;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-        }
-
-            .kpi-card {
-                padding: 1.4rem 1.6rem; border-radius: 1rem; border-left: 5px solid;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-                min-height: 110px; display: flex; flex-direction: column; justify-content: center;
-            }
-            .kpi-val  { font-size: 1.85rem; font-weight: 800; line-height: 1.1; margin: 0.3rem 0; }
-            .kpi-lab  { font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
-            .kpi-sub  { font-size: 0.78rem; margin-top: 0.2rem; }
-            .section-header {
-                display: flex; align-items: center; gap: 0.6rem;
-                margin: 1.5rem 0 0.8rem; padding-bottom: 0.4rem;
-                border-bottom: 2px solid #E2E8F0;
-            }
-            .section-header h3 { margin: 0; font-size: 1.1rem; color: #0F172A; }
-        </style>
-        """,
-            unsafe_allow_html=True,
+    def gerar_insight_ia(media: float, dias_brutos: int) -> None:
+        dias_txt = (
+            f"Restam {dias_brutos} dia(s) útil(is) para o fechamento. "
+            if dias_brutos > 0
+            else "Último dia do período. "
         )
+        if media >= 400:
+            render_insight(
+                f"**Visão da IA:** Operação em Alta Performance! "
+                f"A média de {media:.1f} pts/equipe ultrapassa o teto máximo. "
+                f"{dias_txt}Mantenha o ritmo para fechar o mês com recorde.",
+                tipo="ok",
+            )
+        elif media >= 300:
+            render_insight(
+                f"**Visão da IA:** Operação Estável. "
+                f"Média de {media:.1f} pts garante o atingimento da meta base. "
+                f"{dias_txt}Foco em puxar os retardatários para garantir a projeção.",
+                tipo="info",
+            )
+        else:
+            render_insight(
+                f"**Visão da IA:** Alerta de Performance! "
+                f"A média de {media:.1f} pts está abaixo da linha de corte (300). "
+                f"{dias_txt}Ação imediata necessária para reverter a tendência.",
+                tipo="alerta",
+            )
 
-    # ═══════════════════════════════════════════════════════════
-    # DATAFRAME CORPORATIVO (NOVO)
-    # ═══════════════════════════════════════════════════════════
     @staticmethod
     def render_dataframe_corporativo(
         df: pd.DataFrame,
@@ -232,60 +192,52 @@ class ComponenteVisual:
         icone: str = "📊",
         badge: str = "",
         modo_diario: bool = False,
-    ):
-        """Renderiza DataFrame com visual corporativo executivo."""
+    ) -> None:
+        if df.empty:
+            render_insight("Nenhum dado disponível.", tipo="info")
+            return
 
-        # ── Header do wrapper ────────────────────────────────────
         badge_txt = badge or f"{len(df)} equipes"
         modo_txt = "📅 Meta Diária" if modo_diario else "📆 Acumulado do Mês"
 
         st.markdown(
             f"""
-        <div style="background:#FFFFFF;border-radius:12px 12px 0 0;
-             padding:14px 20px;box-shadow:0 -2px 8px rgba(0,0,0,0.03);
-             border:1px solid #E2E8F0;border-bottom:none;
-             display:flex;align-items:center;gap:12px;">
-            <span style="font-size:1.4rem;">{icone}</span>
-            <div style="flex:1;">
-                <div style="font-size:0.95rem;font-weight:800;color:#0F172A;
-                     letter-spacing:-0.01em;">{titulo}</div>
-                <div style="font-size:0.72rem;color:#64748B;
-                     text-transform:uppercase;letter-spacing:0.05em;
-                     font-weight:600;margin-top:2px;">{modo_txt}</div>
+            <div style="background:#FFFFFF;border-radius:12px 12px 0 0;
+                 padding:14px 20px;border:1px solid #E2E8F0;border-bottom:none;
+                 display:flex;align-items:center;gap:12px;">
+                <span style="font-size:1.4rem;">{icone}</span>
+                <div style="flex:1;">
+                    <div style="font-size:0.95rem;font-weight:800;color:#0F172A;">{titulo}</div>
+                    <div style="font-size:0.72rem;color:#64748B;
+                         text-transform:uppercase;letter-spacing:0.05em;
+                         font-weight:600;margin-top:2px;">{modo_txt}</div>
+                </div>
+                <span style="background:#EFF6FF;color:#1D4ED8;
+                     padding:5px 12px;border-radius:999px;
+                     font-size:0.75rem;font-weight:700;">{badge_txt}</span>
             </div>
-            <span style="background:#EFF6FF;color:#1D4ED8;
-                 padding:5px 12px;border-radius:999px;
-                 font-size:0.75rem;font-weight:700;">
-                {badge_txt}
-            </span>
-        </div>
-        """,
+            """,
             unsafe_allow_html=True,
         )
 
-        # ── Prepara cópia e renomeia colunas para versão executiva
         df_display = df.copy()
-
         renomear = {
-            "Posição": "Rank",
+            "Posição":      "Rank",
             "CódAuxEquipe": "Cód. Equipe",
-            "Nome Equipe": "Equipe",
-            "Supervisor": "Supervisor",
-            "Projeto": "Projeto",
-            "Pontos": "Pontos",
-            "Projeção": "Proj. Fechamento",
+            "Nome Equipe":  "Equipe",
+            "Supervisor":   "Supervisor",
+            "Projeto":      "Projeto",
+            "Pontos":       "Pontos",
+            "Projeção":     "Proj. Fechamento",
         }
         df_display = df_display.rename(
             columns={k: v for k, v in renomear.items() if k in df_display.columns}
         )
 
-        # Formata coluna Rank com medalhas
         if "Rank" in df_display.columns:
             df_display["Rank"] = df_display["Rank"].apply(Utilitarios.formatar_posicao)
 
-        # Descobre colunas numéricas
         cols_meta = [c for c in df_display.columns if "Meta" in c]
-
         formatos: dict[str, Any] = {c: "{:,.1f}" for c in cols_meta}
         if "Pontos" in df_display.columns:
             formatos["Pontos"] = "{:,.1f}"
@@ -294,270 +246,152 @@ class ComponenteVisual:
 
         styler = df_display.style.format(formatter=formatos)  # type: ignore[arg-type]
 
-        # Aplica cores condicionais
         if "Pontos" in df_display.columns:
-            styler = styler.map(
-                Utilitarios.colorir_metas,
-                subset=["Pontos"],  # type: ignore[arg-type]
-            )
+            styler = styler.map(Utilitarios.colorir_metas, subset=["Pontos"])  # type: ignore[arg-type]
         if "Proj. Fechamento" in df_display.columns:
-            styler = styler.map(
-                Utilitarios.colorir_projecao,
-                subset=["Proj. Fechamento"],  # type: ignore[arg-type]
-            )
+            styler = styler.map(Utilitarios.colorir_projecao, subset=["Proj. Fechamento"])  # type: ignore[arg-type]
 
-        # Estilo corporativo do cabeçalho e células
-        styler = styler.set_table_styles(
-            [
-                {
-                    "selector": "thead th",
-                    "props": [
-                        ("background", "linear-gradient(180deg,#012869 0%,#1E3A8A 100%)"),
-                        ("color", "#FFFFFF"),
-                        ("font-weight", "700"),
-                        ("font-size", "0.72rem"),
-                        ("text-align", "center"),
-                        ("padding", "12px 10px"),
-                        ("letter-spacing", "0.04em"),
-                        ("text-transform", "uppercase"),
-                        ("border", "none"),
-                        ("border-right", "1px solid rgba(255,255,255,0.12)"),
-                        ("position", "sticky"),
-                        ("top", "0"),
-                        ("z-index", "10"),
-                    ],
-                },
-                {
-                    "selector": "tbody td",
-                    "props": [
-                        ("font-size", "0.82rem"),
-                        ("padding", "10px 12px"),
-                        ("border-bottom", "1px solid #F1F5F9"),
-                        ("font-variant-numeric", "tabular-nums"),
-                    ],
-                },
-                {
-                    "selector": "tbody tr:nth-child(even) td",
-                    "props": [("background-color", "#FAFBFC")],
-                },
-                {
-                    "selector": "tbody tr:nth-child(odd) td",
-                    "props": [("background-color", "#FFFFFF")],
-                },
-                {
-                    "selector": "tbody tr:hover td",
-                    "props": [
-                        ("background-color", "#EFF6FF !important"),
-                        ("cursor", "pointer"),
-                    ],
-                },
-                {
-                    "selector": "table",
-                    "props": [
-                        ("border-collapse", "separate"),
-                        ("border-spacing", "0"),
-                        ("width", "100%"),
-                        ("font-family", "'Segoe UI', -apple-system, sans-serif"),
-                    ],
-                },
-            ]
-        )
+        styler = styler.set_table_styles([
+            {"selector": "thead th", "props": [
+                ("background", "linear-gradient(180deg,#012869 0%,#1E3A8A 100%)"),
+                ("color", "#FFFFFF"), ("font-weight", "700"),
+                ("font-size", "0.72rem"), ("text-align", "center"),
+                ("padding", "12px 10px"), ("letter-spacing", "0.04em"),
+                ("text-transform", "uppercase"), ("border", "none"),
+                ("border-right", "1px solid rgba(255,255,255,0.12)"),
+            ]},
+            {"selector": "tbody td", "props": [
+                ("font-size", "0.82rem"), ("padding", "10px 12px"),
+                ("border-bottom", "1px solid #F1F5F9"),
+                ("font-variant-numeric", "tabular-nums"),
+            ]},
+            {"selector": "tbody tr:nth-child(even) td", "props": [("background-color", "#FAFBFC")]},
+            {"selector": "tbody tr:hover td", "props": [("background-color", "#EFF6FF !important")]},
+            {"selector": "table", "props": [
+                ("border-collapse", "separate"), ("border-spacing", "0"),
+                ("width", "100%"), ("font-family", FONTE_TEXTO),
+            ]},
+        ])
 
-        # Wrapper de fechamento
         st.markdown(
-            """
-        <div style="background:#FFFFFF;border-radius:0 0 12px 12px;
-             padding:0;border:1px solid #E2E8F0;border-top:none;
-             overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);
-             margin-bottom:16px;">
-        """,
+            '<div style="background:#FFFFFF;border-radius:0 0 12px 12px;'
+            'border:1px solid #E2E8F0;border-top:none;overflow:hidden;'
+            'box-shadow:0 4px 12px rgba(0,0,0,0.05);margin-bottom:16px;">',
             unsafe_allow_html=True,
         )
-
-        st.dataframe(
-            styler,
-            use_container_width=True,
-            hide_index=True,
-            height=450,
-        )
-
+        st.dataframe(styler, use_container_width=True, hide_index=True, height=450)
         st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
-# BLOCO 3: FUNÇÕES UTILITÁRIAS E ESTILOS
+# BLOCO 3: UTILITÁRIOS
 # ====================================================
 class Utilitarios:
     @staticmethod
     def encontrar_coluna_data(df: pd.DataFrame) -> Optional[str]:
-        possiveis = [
-            "Data Agendamento",
-            "Data Conclusão",
-            "Data",
-            "Date",
-            "Data_Execucao",
-        ]
-        for col in possiveis:
-            if col in df.columns:
-                return col
+        for c in ["Data Agendamento", "Data Conclusão", "Data", "Date", "Data_Execucao"]:
+            if c in df.columns:
+                return c
         return None
 
     @staticmethod
-    def calcular_variacao(valor_filtrado, valor_geral) -> tuple:
-        if valor_geral == 0 or pd.isna(valor_geral):
+    def calcular_variacao(vf: float, vg: float) -> tuple[str, str]:
+        if vg == 0 or pd.isna(vg):
             return "neutra", "S/D"
-        if abs(valor_filtrado - valor_geral) < 0.0001:
+        if abs(vf - vg) < 0.0001:
             return "neutra", "Visão Geral"
-        percentual = ((valor_filtrado - valor_geral) / valor_geral) * 100
-        if percentual > 0:
-            return "positiva", f"+{percentual:.1f}%"
-        elif percentual < 0:
-            return "negativa", f"{percentual:.1f}%"
+        p = ((vf - vg) / vg) * 100
+        if p > 0:
+            return "positiva", f"+{p:.1f}%"
+        if p < 0:
+            return "negativa", f"{p:.1f}%"
         return "neutra", "0%"
 
     @staticmethod
-    def calcular_share(valor_filtrado, valor_geral) -> tuple:
-        if valor_geral == 0 or pd.isna(valor_geral):
+    def calcular_share(vf: float, vg: float) -> tuple[str, str]:
+        if vg == 0 or pd.isna(vg):
             return "neutra", "0%"
-        if abs(valor_filtrado - valor_geral) < 0.0001:
+        if abs(vf - vg) < 0.0001:
             return "neutra", "Visão Geral"
-        return "share", f"{(valor_filtrado / valor_geral) * 100:.1f}% do Total"
+        return "share", f"{(vf / vg) * 100:.1f}% do Total"
 
     @staticmethod
-    def formatar_numero(valor: float) -> str:
-        return f"{valor:,.0f}".replace(",", ".")
+    def formatar_numero(v: float) -> str:
+        return f"{v:,.0f}".replace(",", ".")
 
-    # ═══════════════════════════════════════════════════════════
-    # ESTILOS CORPORATIVOS DE DATAFRAME
-    # ═══════════════════════════════════════════════════════════
     @staticmethod
-    def formatar_posicao(valor):
-        """Adiciona medalhas nos top 3."""
+    def formatar_posicao(valor: Any) -> str:
         try:
             v = int(valor)
-            if v == 1:
-                return f"🥇 {v}º"
-            if v == 2:
-                return f"🥈 {v}º"
-            if v == 3:
-                return f"🥉 {v}º"
-            return f"{v}º"
+            return {1: f"🥇 {v}º", 2: f"🥈 {v}º", 3: f"🥉 {v}º"}.get(v, f"{v}º")
         except (ValueError, TypeError):
             return str(valor)
 
     @staticmethod
-    def colorir_metas(valor):
-        """Cor gerencial nos pontos, respeitando os thresholds."""
+    def colorir_metas(valor: Any) -> str:
         try:
             v = float(valor)
         except (ValueError, TypeError):
             return ""
         if v >= 400:
-            return (
-                "background-color: #1E3A8A;"
-                "color:#FFFFFF;font-weight:800;"
-                "border-left:3px solid #0F172A;text-align:center;"
-            )
+            return ("background-color:#1E3A8A;color:#FFFFFF;font-weight:800;"
+                    "border-left:3px solid #0F172A;text-align:center;")
         if v >= 300:
-            return (
-                "background-color:#DCFCE7;color:#166534;"
-                "font-weight:700;border-left:3px solid #22C55E;"
-                "text-align:center;"
-            )
+            return ("background-color:#DCFCE7;color:#166534;font-weight:700;"
+                    "border-left:3px solid #22C55E;text-align:center;")
         if v >= 275:
-            return (
-                "background-color:#FEF9C3;color:#854D0E;"
-                "font-weight:700;border-left:3px solid #EAB308;"
-                "text-align:center;"
-            )
-        return (
-            "font-weight:700;border-left:3px solid #EF4444;"
-            "text-align:center;"
-        )
+            return ("background-color:#FEF9C3;color:#854D0E;font-weight:700;"
+                    "border-left:3px solid #EAB308;text-align:center;")
+        return "font-weight:700;border-left:3px solid #EF4444;text-align:center;"
 
     @staticmethod
-    def colorir_projecao(valor):
-        """Coluna Projeção — visual escuro corporativo."""
-        return (
-            "background-color: #0F172A;"
-            "color:#FFFFFF;font-weight:800;text-align:center;"
-            "border-left:3px solid #64748B;"
-        )
+    def colorir_projecao(valor: Any) -> str:
+        return ("background-color:#0F172A;color:#FFFFFF;font-weight:800;"
+                "text-align:center;border-left:3px solid #64748B;")
 
     @staticmethod
-    def negrito(valor):
-        return "font-weight:700;"
-
-    @staticmethod
-    def calcular_dias_uteis(df: pd.DataFrame) -> tuple:
+    def calcular_dias_uteis(df: pd.DataFrame) -> tuple[int, int, Any, int]:
         col_data = Utilitarios.encontrar_coluna_data(df)
-
-        if col_data and pd.notna(df[col_data].max()):
-            data_maxima = pd.to_datetime(df[col_data].max()).date()
-        else:
-            data_maxima = datetime.date.today()
-
-        ano_ref, mes_ref = data_maxima.year, data_maxima.month
-
-        primeiro_dia = datetime.date(ano_ref, mes_ref, 1)
-        _, ultimo_dia_num = calendar.monthrange(ano_ref, mes_ref)
-        ultimo_dia = datetime.date(ano_ref, mes_ref, ultimo_dia_num)
-
-        primeiro_dia_np = np.datetime64(primeiro_dia)
-        data_maxima_np = np.datetime64(data_maxima)
-        ultimo_dia_np = np.datetime64(ultimo_dia)
-
-        total_dias_mes = np.busday_count(
-            primeiro_dia_np, ultimo_dia_np + np.timedelta64(1, "D"), weekmask="1111110"
+        data_max: datetime.date = (
+            pd.to_datetime(df[col_data].max()).date()
+            if col_data and pd.notna(df[col_data].max())
+            else datetime.date.today()
         )
-        dias_passados = np.busday_count(
-            primeiro_dia_np, data_maxima_np + np.timedelta64(1, "D"), weekmask="1111110"
-        )
+        ano, mes = data_max.year, data_max.month
+        primeiro = datetime.date(ano, mes, 1)
+        _, ult = calendar.monthrange(ano, mes)
+        ultimo = datetime.date(ano, mes, ult)
 
-        dias_brutos = max(0, total_dias_mes - dias_passados)
-        dias_seguros = max(1, dias_brutos)
+        p_np = np.datetime64(primeiro)
+        m_np = np.datetime64(data_max)
+        u_np = np.datetime64(ultimo)
 
-        return dias_brutos, dias_seguros, data_maxima, dias_passados
+        total = int(np.busday_count(p_np, u_np + np.timedelta64(1, "D"), weekmask="1111110"))
+        passados = int(np.busday_count(p_np, m_np + np.timedelta64(1, "D"), weekmask="1111110"))
+        brutos = max(0, total - passados)
+        seguros = max(1, brutos)
+        return brutos, seguros, data_max, passados
 
     @staticmethod
     def exportar_excel(dataframe: pd.DataFrame) -> bytes:
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            sheet_name = "Ranking"
-            dataframe.to_excel(writer, index=False, sheet_name=sheet_name)
-            ws = writer.sheets[sheet_name]
+            dataframe.to_excel(writer, index=False, sheet_name="Ranking")
+            ws = writer.sheets["Ranking"]
 
-            # --- 1. DEFINIÇÃO DE ESTILOS ---
-            cor_cabecalho = PatternFill(
-                start_color="012869", end_color="012869", fill_type="solid"
-            )
-            f_cabecalho = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            cor_cab      = PatternFill("solid", fgColor="012869")
+            cor_par      = PatternFill("solid", fgColor="F8FAFC")
+            cor_impar    = PatternFill("solid", fgColor="FFFFFF")
+            cor_proj     = PatternFill("solid", fgColor="303030")
+            cor_alta     = PatternFill("solid", fgColor="1F497D")
+            cor_ok       = PatternFill("solid", fgColor="C6EFCE")
+            cor_proximo  = PatternFill("solid", fgColor="FFEB9C")
 
-            cor_linha_par = PatternFill(
-                start_color="F8FAFC", end_color="F8FAFC", fill_type="solid"
-            )
-            cor_linha_impar = PatternFill(
-                start_color="FFFFFF", end_color="FFFFFF", fill_type="solid"
-            )
-
-            cor_coluna_projecao = PatternFill(
-                start_color="303030", end_color="303030", fill_type="solid"
-            )
-
-            cor_meta_alta = PatternFill(
-                start_color="1F497D", end_color="1F497D", fill_type="solid"
-            )
-            cor_meta_ok = PatternFill(
-                start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
-            )
-            cor_meta_proximo = PatternFill(
-                start_color="FFEB9C", end_color="FFEB9C", fill_type="solid"
-            )
-
-            f_branca_negrito = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-            f_preta_negrito = Font(name="Calibri", size=11, bold=True, color="000000")
-            f_verde_negrito = Font(name="Calibri", size=11, bold=True, color="006100")
-            f_amarela_negrito = Font(name="Calibri", size=11, bold=True, color="9C5700")
+            f_cab     = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            f_branca  = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            f_preta   = Font(name="Calibri", size=11, bold=True, color="000000")
+            f_verde   = Font(name="Calibri", size=11, bold=True, color="006100")
+            f_amarela = Font(name="Calibri", size=11, bold=True, color="9C5700")
 
             borda = Border(
                 left=Side(style="thin", color="D9D9D9"),
@@ -565,86 +399,54 @@ class Utilitarios:
                 top=Side(style="thin", color="D9D9D9"),
                 bottom=Side(style="thin", color="D9D9D9"),
             )
-            alin_centro = Alignment(horizontal="center", vertical="center")
+            centro = Alignment(horizontal="center", vertical="center")
 
-            # --- 2. IDENTIFICAÇÃO DE COLUNAS ---
-            colunas_lista = list(dataframe.columns)
-            colunas_inteiras = []
-            colunas_decimais = []
+            cols = list(dataframe.columns)
+            col_int = [i + 1 for i, c in enumerate(cols) if c.lower() in ("posição", "posicao")]
+            col_dec = [i + 1 for i, c in enumerate(cols)
+                       if c.lower() not in ("posição", "posicao")
+                       and pd.api.types.is_numeric_dtype(dataframe[c])]
+            idx_proj   = cols.index("Projeção") + 1 if "Projeção" in cols else -1
+            idx_pontos = cols.index("Pontos") + 1 if "Pontos" in cols else -1
 
-            for idx, col_name in enumerate(colunas_lista, start=1):
-                if col_name.lower() in ["posição", "posicao"]:
-                    colunas_inteiras.append(idx)
-                elif pd.api.types.is_numeric_dtype(dataframe[col_name]):
-                    colunas_decimais.append(idx)
+            for row in ws.iter_rows(min_row=1, max_row=ws.max_row,
+                                    min_col=1, max_col=ws.max_column):
+                for cel in row:
+                    cel.border = borda
+                    if cel.row == 1:
+                        cel.fill = cor_cab
+                        cel.font = f_cab
+                        cel.alignment = centro
+                        continue
 
-            idx_projecao = (
-                colunas_lista.index("Projeção") + 1
-                if "Projeção" in colunas_lista
-                else -1
-            )
-            idx_pontos = (
-                colunas_lista.index("Pontos") + 1 if "Pontos" in colunas_lista else -1
-            )
+                    cel.fill = cor_par if cel.row % 2 == 0 else cor_impar
 
-            # --- 3. APLICAÇÃO DOS ESTILOS ---
-            for row in ws.iter_rows(
-                min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column
-            ):
-                for celula in row:
-                    celula.border = borda
+                    if cel.column == idx_proj:
+                        cel.fill = cor_proj
+                        cel.font = f_branca
+                    elif cel.column == idx_pontos:
+                        try:
+                            v = float(cel.value or 0)
+                            if v >= 400:
+                                cel.fill = cor_alta; cel.font = f_branca
+                            elif v >= 300:
+                                cel.fill = cor_ok; cel.font = f_verde
+                            elif v >= 275:
+                                cel.fill = cor_proximo; cel.font = f_amarela
+                            else:
+                                cel.font = f_preta
+                        except (ValueError, TypeError):
+                            pass
 
-                    if celula.row == 1:
-                        celula.fill = cor_cabecalho
-                        celula.font = f_cabecalho
-                        celula.alignment = alin_centro
+                    if cel.column in col_int:
+                        cel.number_format = "#,##0"
+                    elif cel.column in col_dec:
+                        cel.number_format = "#,##0.0"
 
-                    else:
-                        celula.fill = (
-                            cor_linha_par if celula.row % 2 == 0 else cor_linha_impar
-                        )
-
-                        if celula.column == idx_projecao:
-                            celula.fill = cor_coluna_projecao
-                            celula.font = f_branca_negrito
-
-                        elif celula.column == idx_pontos:
-                            try:
-                                valor = (
-                                    float(celula.value)
-                                    if celula.value is not None
-                                    else 0
-                                )
-                                if valor >= 400:
-                                    celula.fill = cor_meta_alta
-                                    celula.font = f_branca_negrito
-                                elif valor >= 300:
-                                    celula.fill = cor_meta_ok
-                                    celula.font = f_verde_negrito
-                                elif valor >= 275:
-                                    celula.fill = cor_meta_proximo
-                                    celula.font = f_amarela_negrito
-                                else:
-                                    celula.font = f_preta_negrito
-                            except ValueError:
-                                pass
-
-                        if celula.column in colunas_inteiras:
-                            celula.number_format = "#,##0"
-                        elif celula.column in colunas_decimais:
-                            celula.number_format = "#,##0.0"
-
-            # --- 4. AUTO-AJUSTE ---
             for col in ws.columns:
-                max_length = 0
-                column_letter = get_column_letter(col[0].column)
-                for cell in col:
-                    try:
-                        if cell.value:
-                            max_length = max(max_length, len(str(cell.value)))
-                    except:
-                        pass
-                ws.column_dimensions[column_letter].width = max(max_length + 3, 12)
+                letra = get_column_letter(col[0].column)
+                max_len = max((len(str(c.value)) for c in col if c.value), default=0)
+                ws.column_dimensions[letra].width = max(max_len + 3, 12)
 
             ws.freeze_panes = "A2"
             ws.auto_filter.ref = ws.dimensions
@@ -653,143 +455,105 @@ class Utilitarios:
 
 
 # ====================================================
-# BLOCO 4: PROCESSAMENTO DE NEGÓCIO E MATEMÁTICA
+# BLOCO 4: PROCESSAMENTO
 # ====================================================
 class ProcessamentoDados:
     @staticmethod
     def calcular_rankings(
         df: pd.DataFrame, dias_brutos: int, dias_seguros: int, dias_passados: int
-    ) -> tuple:
-        base_ranking = (
-            df.groupby(["CódAuxEquipe", "Nome Equipe", "Supervisor", "Projeto"])[
-                "Pontos"
-            ]
-            .sum()
-            .reset_index()
-            .sort_values("Pontos", ascending=False)
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        base = (
+            df.groupby(["CódAuxEquipe", "Nome Equipe", "Supervisor", "Projeto"])["Pontos"]
+            .sum().reset_index().sort_values("Pontos", ascending=False)
         )
 
         if "Dias Trab Tecnico" in df.columns:
-            dias_trabalhados = (
-                base_ranking["Nome Equipe"]
+            dias_trab = (
+                base["Nome Equipe"]
                 .map(df.groupby("Nome Equipe")["Dias Trab Tecnico"].max())
-                .fillna(dias_passados)
-                .astype(int)
+                .fillna(dias_passados).astype(int)
             )
         else:
-            dias_trabalhados = pd.Series(dias_passados, index=base_ranking.index)
+            dias_trab = pd.Series(dias_passados, index=base.index)
 
-        dias_trabalhados = dias_trabalhados.replace(0, 1)
+        dias_trab = dias_trab.replace(0, 1)
+        media_pts = base["Pontos"] / dias_trab
+        projecao = base["Pontos"] + (media_pts * dias_brutos)
 
-        media_pontos = base_ranking["Pontos"] / dias_trabalhados
+        def _montar(modo_dia: bool) -> pd.DataFrame:
+            r = base.copy()
+            r.insert(0, "Posição", range(1, len(r) + 1))
+            for m in [300, 350, 375, 400]:
+                label = f"Meta Dia | {m}" if modo_dia else f"Meta | {m}"
+                r[label] = (r["Pontos"] - m) / dias_seguros if modo_dia else r["Pontos"] - m
+            r["Projeção"] = projecao.values
+            return r
 
-        projecao = base_ranking["Pontos"] + (media_pontos * dias_brutos)
-
-        ranking = base_ranking.copy()
-        ranking.insert(0, "Posição", range(1, len(ranking) + 1))
-        for m in [300, 350, 375, 400]:
-            ranking[f"Meta | {m}"] = ranking["Pontos"] - m
-        ranking["Projeção"] = projecao
-
-        ranking_dia = base_ranking.copy()
-        ranking_dia.insert(0, "Posição", range(1, len(ranking_dia) + 1))
-        for m in [300, 350, 375, 400]:
-            ranking_dia[f"Meta Dia | {m}"] = (ranking_dia["Pontos"] - m) / dias_seguros
-        ranking_dia["Projeção"] = projecao
-
-        return ranking, ranking_dia
+        return _montar(False), _montar(True)
 
     @staticmethod
     def calcular_saude_operacao(ranking: pd.DataFrame) -> pd.DataFrame:
-        condicoes = [
-            (ranking["Pontos"] >= 400),
+        cond = [
+            ranking["Pontos"] >= 400,
             (ranking["Pontos"] >= 300) & (ranking["Pontos"] < 400),
-            (ranking["Pontos"] < 300),
+            ranking["Pontos"] < 300,
         ]
-        escolhas = ["Alta (400+)", "Na Meta (300-399)", "Abaixo (< 300)"]
-        ranking["Status"] = np.select(condicoes, escolhas, default="Sem Dados")
-        return ranking["Status"].value_counts().reset_index()
+        esc = ["Alta (400+)", "Na Meta (300-399)", "Abaixo (< 300)"]
+        r = ranking.copy()
+        r["Status"] = np.select(cond, esc, default="Sem Dados")
+        return r["Status"].value_counts().reset_index()
 
     @staticmethod
     def ranking_supervisores(ranking: pd.DataFrame) -> pd.DataFrame:
-        df_sup = (
+        return (
             ranking.groupby("Supervisor")
             .agg(Qtd_Equipes=("Nome Equipe", "count"), Total_Pontos=("Pontos", "sum"))
-            .reset_index()
+            .assign(Media_por_Equipe=lambda x: x["Total_Pontos"] / x["Qtd_Equipes"])
+            .reset_index().sort_values("Media_por_Equipe", ascending=True)
         )
-        df_sup["Media_por_Equipe"] = df_sup["Total_Pontos"] / df_sup["Qtd_Equipes"]
-        return df_sup.sort_values("Media_por_Equipe", ascending=True)
 
 
 # ====================================================
-# BLOCO 5: COMPONENTES DE GRÁFICOS
+# BLOCO 5: GRÁFICOS
 # ====================================================
 class Graficos:
     @staticmethod
-    def _layout_padrao(fig: Figure, title_x: str = "", title_y: str = "") -> Figure:
+    def _layout(fig: Figure) -> Figure:
         fig.update_layout(
             showlegend=False,
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(family="Roboto"),
             margin=dict(l=0, r=0, t=30, b=0),
-            xaxis=dict(showgrid=False, title=title_x),
-            yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.1)", title=title_y),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.1)"),
         )
         return fig
 
     @staticmethod
-    def grafico_barras(df: pd.DataFrame, x: str, y: str) -> Figure:
-        fig = px.bar(
-            df, x=x, y=y, text_auto=True, color=y, color_continuous_scale="Oryel"
-        )
-        fig.update_traces(
-            texttemplate="%{text:.1f}", textposition="outside", textfont_size=12
-        )
-        return Graficos._layout_padrao(fig)
+    def barras_horizontal(df: pd.DataFrame, x: str, y: str) -> Figure:
+        fig = px.bar(df, x=x, y=y, orientation="h", text_auto=True,
+                     color=x, color_continuous_scale="Tealgrn")
+        fig.update_traces(texttemplate="%{text:.1f}", textposition="outside", textfont_size=12)
+        return Graficos._layout(fig)
 
     @staticmethod
-    def grafico_barras_horizontal(df: pd.DataFrame, x: str, y: str) -> Figure:
-        fig = px.bar(
-            df,
-            x=x,
-            y=y,
-            orientation="h",
-            text_auto=True,
-            color=x,
-            color_continuous_scale="Tealgrn",
-        )
-        fig.update_traces(
-            texttemplate="%{text:.1f}", textposition="outside", textfont_size=12
-        )
-        return Graficos._layout_padrao(fig)
-
-    @staticmethod
-    def grafico_rosca(df: pd.DataFrame, names: str, values: str) -> Figure:
-        fig = px.pie(
-            df,
-            names=names,
-            values=values,
-            hole=0.6,
-            color=names,
-            color_discrete_map={
-                "Alta (400+)": "#1E3A8A",
-                "Na Meta (300-399)": "#22C55E",
-                "Abaixo (< 300)": "#EF4444",
-            },
-        )
+    def rosca(df: pd.DataFrame, names: str, values: str) -> Figure:
+        fig = px.pie(df, names=names, values=values, hole=0.6, color=names,
+                     color_discrete_map={
+                         "Alta (400+)": "#1E3A8A",
+                         "Na Meta (300-399)": "#22C55E",
+                         "Abaixo (< 300)": "#EF4444",
+                     })
         fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=0, r=0, t=0, b=0),
             showlegend=True,
-            legend=dict(
-                orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5
-            ),
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
         )
         return fig
 
     @staticmethod
-    def grafico_linhas(df: pd.DataFrame, x: str, y: str, color: str) -> Figure:
+    def linhas(df: pd.DataFrame, x: str, y: str, color: str) -> Figure:
         fig = px.line(df, x=x, y=y, color=color, markers=True)
         fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
@@ -800,213 +564,91 @@ class Graficos:
         )
         return fig
 
-    @staticmethod
-    def mapa_pontos(df: pd.DataFrame, titulo_hover: str) -> Optional[Figure]:
-        if "lat" not in df.columns or "lon" not in df.columns:
-            return None
-        fig = px.scatter_mapbox(
-            df,
-            lat="lat",
-            lon="lon",
-            size="Pontos",
-            color="Pontos",
-            color_continuous_scale="Oryel",
-            hover_name=titulo_hover,
-            hover_data={"lat": False, "lon": False, "Pontos": ":.2f"},
-            zoom=9,
-            height=500,
-        )
-        fig.update_layout(
-            mapbox_style="open-street-map",
-            margin={"r": 0, "t": 0, "l": 0, "b": 0},
-            paper_bgcolor="rgba(0,0,0,0)",
-        )
-        return fig
-
-    @staticmethod
-    def mapa_calor(df: pd.DataFrame) -> Optional[Figure]:
-        if "lat" not in df.columns or "lon" not in df.columns:
-            return None
-        fig = px.density_mapbox(
-            df,
-            lat="lat",
-            lon="lon",
-            z="Pontos",
-            radius=25,
-            center=dict(lat=-23.55, lon=-46.63),
-            zoom=9,
-            height=500,
-            mapbox_style="open-street-map",
-            color_continuous_scale="Inferno",
-        )
-        fig.update_layout(
-            margin={"r": 0, "t": 0, "l": 0, "b": 0}, paper_bgcolor="rgba(0,0,0,0)"
-        )
-        return fig
-
 
 # ====================================================
-# BLOCO 6: INICIALIZAÇÃO E DADOS BRUTOS
+# BLOCO 6: HERO + DADOS
 # ====================================================
-ComponenteVisual.aplicar_capa()
-st.markdown(
-    f"""
-    <div class="hero-corp">
-        <div style="position:relative;z-index:2;">
-            <h1 class="hero-title">📈 Central de Performance | Produção por Técnico</h1>
-            <p class="hero-subtitle">
-                Acompanhamento individual de execução, produtividade e performance em campo
-            </p>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
+render_hero(
+    titulo="📈 Central de Performance | Produção por Técnico",
+    subtitulo="Acompanhamento individual de execução, produtividade e performance em campo",
+    badge="Atualização em tempo real",
 )
 
 if "dados_prod" not in st.session_state:
-    st.warning("⚠️ Carregue os dados na página principal primeiro.")
+    render_insight("Carregue os dados na página principal primeiro.", tipo="alerta")
     st.stop()
 
 prod = st.session_state["dados_prod"]["Prod"].copy()
 gpon = st.session_state["dados_prod"]["Gpon"].copy()
 prod["Pontos"] = pd.to_numeric(prod["Pontos"], errors="coerce").fillna(0)
 gpon["Pontos"] = pd.to_numeric(gpon["Pontos"], errors="coerce").fillna(0)
-
 df = pd.concat([prod, gpon], ignore_index=True)
 
-TOTAL_GERAL_PONTOS = df["Pontos"].sum()
-TOTAL_GERAL_OS = len(df)
+TOTAL_GERAL_PONTOS  = df["Pontos"].sum()
+TOTAL_GERAL_OS      = len(df)
 TOTAL_GERAL_EQUIPES = df["Nome Equipe"].nunique() if "Nome Equipe" in df.columns else 0
-MEDIA_GERAL_PONTOS = (
-    TOTAL_GERAL_PONTOS / TOTAL_GERAL_EQUIPES if TOTAL_GERAL_EQUIPES > 0 else 0
-)
+MEDIA_GERAL_PONTOS  = TOTAL_GERAL_PONTOS / TOTAL_GERAL_EQUIPES if TOTAL_GERAL_EQUIPES > 0 else 0.0
 
 
 # ====================================================
-# BLOCO 7: FILTROS (SIDEBAR)
+# BLOCO 7: FILTROS
 # ====================================================
 st.sidebar.header("🎯 Filtros Avançados")
-if "Projeto" in df.columns:
-    proj_sel = st.sidebar.selectbox(
-        "Projeto:", ["Todos"] + sorted(df["Projeto"].dropna().astype(str).unique())
-    )
-    if proj_sel != "Todos":
-        df = df[df["Projeto"] == proj_sel]
 
-if "Supervisor" in df.columns:
-    sup_sel = st.sidebar.selectbox(
-        "Supervisor:",
-        ["Todos"] + sorted(df["Supervisor"].dropna().astype(str).unique()),
-    )
-    if sup_sel != "Todos":
-        df = df[df["Supervisor"] == sup_sel]
-
-if "Nome Equipe" in df.columns:
-    equipe_sel = st.sidebar.selectbox(
-        "Equipe:", ["Todos"] + sorted(df["Nome Equipe"].dropna().astype(str).unique())
-    )
-    if equipe_sel != "Todos":
-        df = df[df["Nome Equipe"] == equipe_sel]
+for col_nome, label in [
+    ("Projeto", "Projeto:"),
+    ("Supervisor", "Supervisor:"),
+    ("Nome Equipe", "Equipe:"),
+]:
+    if col_nome in df.columns:
+        opcoes = ["Todos"] + sorted(df[col_nome].dropna().astype(str).unique())
+        sel = st.sidebar.selectbox(label, opcoes, key=f"sel_{col_nome}")
+        if sel != "Todos":
+            df = df[df[col_nome] == sel]
 
 if st.sidebar.button("🔄 Limpar Filtros"):
     st.rerun()
 
 
 # ====================================================
-# BLOCO 8: CÁLCULOS E CARDS
+# BLOCO 8: CÁLCULOS + KPIs
 # ====================================================
 dias_brutos, dias_seguros, ultima_atualizacao, dias_passados = (
     Utilitarios.calcular_dias_uteis(df)
 )
 
 total_equipes_filtro = df["Nome Equipe"].nunique() if "Nome Equipe" in df.columns else 0
-total_os_filtro = len(df)
-total_pontos_filtro = df["Pontos"].sum() if "Pontos" in df.columns else 0
-media_pontos_filtro = (
-    total_pontos_filtro / total_equipes_filtro if total_equipes_filtro > 0 else 0
+total_os_filtro      = len(df)
+total_pontos_filtro  = df["Pontos"].sum() if "Pontos" in df.columns else 0.0
+media_pontos_filtro  = (
+    total_pontos_filtro / total_equipes_filtro if total_equipes_filtro > 0 else 0.0
 )
 
-var_pontos = Utilitarios.calcular_share(total_pontos_filtro, TOTAL_GERAL_PONTOS)
-var_os = Utilitarios.calcular_share(total_os_filtro, TOTAL_GERAL_OS)
+var_pontos  = Utilitarios.calcular_share(total_pontos_filtro, TOTAL_GERAL_PONTOS)
+var_os      = Utilitarios.calcular_share(total_os_filtro, TOTAL_GERAL_OS)
 var_equipes = Utilitarios.calcular_share(total_equipes_filtro, TOTAL_GERAL_EQUIPES)
-var_media = Utilitarios.calcular_variacao(media_pontos_filtro, MEDIA_GERAL_PONTOS)
+var_media   = Utilitarios.calcular_variacao(media_pontos_filtro, MEDIA_GERAL_PONTOS)
 
-st.markdown(
-    ComponenteVisual.exibir_ticker(
-        [
-            {
-                "label": "Pontos",
-                "valor": Utilitarios.formatar_numero(total_pontos_filtro),
-                "variacao": var_pontos[0],
-                "delta": var_pontos[1],
-            },
-            {
-                "label": "O.S.",
-                "valor": Utilitarios.formatar_numero(total_os_filtro),
-                "variacao": var_os[0],
-                "delta": var_os[1],
-            },
-            {
-                "label": "Equipes",
-                "valor": str(total_equipes_filtro),
-                "variacao": var_equipes[0],
-                "delta": var_equipes[1],
-            },
-            {
-                "label": "Média/Equipe",
-                "valor": Utilitarios.formatar_numero(media_pontos_filtro),
-                "variacao": var_media[0],
-                "delta": var_media[1],
-            },
-        ]
-    ),
-    unsafe_allow_html=True,
-)
+ComponenteVisual.exibir_ticker([
+    {"label": "Pontos",       "valor": Utilitarios.formatar_numero(total_pontos_filtro),  "variacao": var_pontos[0],  "delta": var_pontos[1]},
+    {"label": "O.S.",         "valor": Utilitarios.formatar_numero(total_os_filtro),      "variacao": var_os[0],      "delta": var_os[1]},
+    {"label": "Equipes",      "valor": str(total_equipes_filtro),                         "variacao": var_equipes[0], "delta": var_equipes[1]},
+    {"label": "Média/Equipe", "valor": Utilitarios.formatar_numero(media_pontos_filtro),  "variacao": var_media[0],   "delta": var_media[1]},
+])
 
-ComponenteVisual.gerar_insight_ia(media_pontos_filtro, dias_brutos, var_pontos)
+ComponenteVisual.gerar_insight_ia(media_pontos_filtro, dias_brutos)
 
 c1, c2, c3, c4 = st.columns(4)
-with c1:
-    st.markdown(
-        ComponenteVisual.criar_card(
-            "Total Pontos (Geral)",
-            Utilitarios.formatar_numero(TOTAL_GERAL_PONTOS),
-            "cinza",
-        ),
-        unsafe_allow_html=True,
-    )
-with c2:
-    st.markdown(
-        ComponenteVisual.criar_card(
-            "Total Pontos (Filtro)",
-            Utilitarios.formatar_numero(total_pontos_filtro),
-            "azul",
-            var_pontos[1],
-        ),
-        unsafe_allow_html=True,
-    )
-with c3:
-    st.markdown(
-        ComponenteVisual.criar_card(
-            "Equipes (Filtro)", str(total_equipes_filtro), "verde", var_equipes[1]
-        ),
-        unsafe_allow_html=True,
-    )
-with c4:
-    st.markdown(
-        ComponenteVisual.criar_card(
-            "Total O.S. (Filtro)",
-            Utilitarios.formatar_numero(total_os_filtro),
-            "laranja",
-            var_os[1],
-        ),
-        unsafe_allow_html=True,
-    )
+render_kpi(c1, "Total Pontos · Geral",  Utilitarios.formatar_numero(TOTAL_GERAL_PONTOS),   tema="cinza")
+render_kpi(c2, "Total Pontos · Filtro", Utilitarios.formatar_numero(total_pontos_filtro),  sub=var_pontos[1],  tema="azul")
+render_kpi(c3, "Equipes · Filtro",      str(total_equipes_filtro),                         sub=var_equipes[1], tema="verde")
+render_kpi(c4, "Total O.S. · Filtro",   Utilitarios.formatar_numero(total_os_filtro),      sub=var_os[1],      tema="laranja")
 
 st.divider()
 
+
 # ====================================================
-# BLOCO 9: ESTRUTURA DE ABAS MESTRES
+# BLOCO 9: ABAS
 # ====================================================
 ranking = pd.DataFrame()
 ranking_dia = pd.DataFrame()
@@ -1019,38 +661,23 @@ aba_ranking, aba_executivo, aba_evolucao = st.tabs(
     ["🏆 Ranking & Metas", "👔 Visão Executiva", "📈 Evolução Temporal"]
 )
 
-# ----------------- ABA 1: RANKING E METAS -----------------
+# ── ABA 1 ──────────────────────────────────────────
 with aba_ranking:
-    st.markdown(
-        """
-        <div class="section-header">
-            <h3>🥇 Pódio Corporativo — Top 3 Equipes</h3>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    render_section_header("🥇", "Pódio Corporativo — Top 3 Equipes")
     ComponenteVisual.gerar_podio(ranking)
 
     st.write("")
 
-    col_titulo, col_toggle = st.columns([3, 1])
-    with col_titulo:
-        st.markdown(
-            """
-            <div class="section-header">
-                <h3>📊 Ranking Geral · Metas & Projeção</h3>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with col_toggle:
+    col_t, col_tg = st.columns([3, 1])
+    with col_t:
+        render_section_header("📊", "Ranking Geral · Metas & Projeção")
+    with col_tg:
         st.write("")
         por_dia = st.toggle("📅 **Modo Meta Diária**", key="tg_meta_dia")
 
     df_exibir = ranking_dia if por_dia else ranking
-    modo_txt = "Meta Diária" if por_dia else "Meta Mensal"
+    modo_txt  = "Meta Diária" if por_dia else "Meta Mensal"
 
-    # ✅ Usa o novo componente corporativo
     ComponenteVisual.render_dataframe_corporativo(
         df_exibir,
         titulo=f"Performance por Equipe — {modo_txt}",
@@ -1059,11 +686,10 @@ with aba_ranking:
         modo_diario=por_dia,
     )
 
-    # Botões de exportação
-    col_dl1, col_dl2, col_dl3 = st.columns([1.5, 1.5, 5])
+    col_dl1, col_dl2, _ = st.columns([1.5, 1.5, 5])
+    nome_arq = "ranking_diario.xlsx" if por_dia else "ranking_geral.xlsx"
 
     with col_dl1:
-        nome_arq = "ranking_diario.xlsx" if por_dia else "ranking_geral.xlsx"
         st.download_button(
             "📥 **Exportar Excel**",
             data=Utilitarios.exportar_excel(df_exibir),
@@ -1071,118 +697,85 @@ with aba_ranking:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
         )
-
     with col_dl2:
-        csv_bytes = df_exibir.to_csv(index=False, decimal=",").encode("utf-8-sig")
         st.download_button(
             "📄 **Exportar CSV**",
-            data=csv_bytes,
+            data=df_exibir.to_csv(index=False, decimal=",").encode("utf-8-sig"),
             file_name=nome_arq.replace(".xlsx", ".csv"),
             mime="text/csv",
             use_container_width=True,
         )
 
-    # Legenda de cores
     st.markdown(
-        """
+        f"""
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;
              padding:12px 16px;background:#F8FAFC;border-radius:8px;
-             border:1px solid #E2E8F0;font-size:0.78rem;">
-            <span style="font-weight:700;color:#64748B;
-                 text-transform:uppercase;letter-spacing:0.05em;">
-                🎨 Legenda:
-            </span>
+             border:1px solid #E2E8F0;font-size:0.78rem;
+             font-family:{FONTE_TEXTO};">
+            <span style="font-weight:700;color:{COR_TEXTO_3};
+                 text-transform:uppercase;letter-spacing:0.05em;">🎨 Legenda:</span>
             <span style="background:#1E3A8A;color:white;padding:3px 10px;
-                 border-radius:6px;font-weight:700;">
-                🏆 400+ pts — Alta Performance
-            </span>
+                 border-radius:6px;font-weight:700;">🏆 400+ pts — Alta Performance</span>
             <span style="background:#DCFCE7;color:#166534;padding:3px 10px;
-                 border-radius:6px;font-weight:700;">
-                ✅ 300-399 — Na Meta
-            </span>
+                 border-radius:6px;font-weight:700;">✅ 300-399 — Na Meta</span>
             <span style="background:#FEF9C3;color:#854D0E;padding:3px 10px;
-                 border-radius:6px;font-weight:700;">
-                ⚠️ 275-299 — Próximo da Meta
-            </span>
+                 border-radius:6px;font-weight:700;">⚠️ 275-299 — Próximo da Meta</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-# ----------------- ABA 2: VISÃO EXECUTIVA -----------------
+# ── ABA 2 ──────────────────────────────────────────
 with aba_executivo:
-    st.markdown(
-        """
-        <div class="section-header">
-            <h3>👔 Performance de Gestão</h3>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    render_section_header("👔", "Performance de Gestão")
 
-    c_exec1, c_exec2 = st.columns([1, 2])
-
-    with c_exec1:
+    c_e1, c_e2 = st.columns([1, 2])
+    with c_e1:
         st.markdown("**Saúde da Operação (Faixa de Metas)**")
         df_saude = ProcessamentoDados.calcular_saude_operacao(ranking)
         st.plotly_chart(
-            Graficos.grafico_rosca(df_saude, "Status", "count"),
-            use_container_width=True,
-            key="graf_saude",
+            Graficos.rosca(df_saude, "Status", "count"),
+            use_container_width=True, key="graf_saude",
         )
-
-    with c_exec2:
+    with c_e2:
         st.markdown("**Ranking de Supervisores (Média pts por Equipe)**")
         df_sup = ProcessamentoDados.ranking_supervisores(ranking)
         st.plotly_chart(
-            Graficos.grafico_barras_horizontal(
-                df_sup, "Media_por_Equipe", "Supervisor"
-            ),
-            use_container_width=True,
-            key="graf_sup",
+            Graficos.barras_horizontal(df_sup, "Media_por_Equipe", "Supervisor"),
+            use_container_width=True, key="graf_sup",
         )
 
-# ----------------- ABA 3: EVOLUÇÃO TEMPORAL -----------------
+# ── ABA 3 ──────────────────────────────────────────
 with aba_evolucao:
     col_data = Utilitarios.encontrar_coluna_data(df)
+    render_section_header("📈", "Curva de Tendência Diária")
 
-    st.markdown(
-        """
-        <div class="section-header">
-            <h3>📈 Curva de Tendência Diária</h3>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    if col_data and not ranking.empty:
+        top5 = ranking.head(5)["Nome Equipe"].tolist()
+        df_ev = df[df["Nome Equipe"].isin(top5)].copy()
+        df_ev[col_data] = pd.to_datetime(df_ev[col_data]).dt.date
 
-    if col_data:
-        top_equipes_lista = ranking.head(5)["Nome Equipe"].tolist()
-        df_evolucao = df[df["Nome Equipe"].isin(top_equipes_lista)].copy()
-
-        df_evolucao[col_data] = pd.to_datetime(df_evolucao[col_data]).dt.date
-        df_agrupado = (
-            df_evolucao.groupby([col_data, "Nome Equipe"])["Pontos"].sum().reset_index()
+        df_ag = (
+            df_ev.groupby([col_data, "Nome Equipe"])["Pontos"].sum().reset_index()
         )
+        df_ag["Pontos Acumulados"] = df_ag.groupby("Nome Equipe")["Pontos"].cumsum()
 
-        df_agrupado["Pontos Acumulados"] = df_agrupado.groupby("Nome Equipe")[
-            "Pontos"
-        ].cumsum()
-
-        fig_linha = Graficos.grafico_linhas(
-            df_agrupado, col_data, "Pontos Acumulados", "Nome Equipe"
+        st.plotly_chart(
+            Graficos.linhas(df_ag, col_data, "Pontos Acumulados", "Nome Equipe"),
+            use_container_width=True, key="graf_linha",
         )
-        st.plotly_chart(fig_linha, use_container_width=True, key="graf_linha")
-        st.caption(
-            "Mostrando a evolução de pontos acumulados das Top 5 equipes atuais."
-        )
+        st.caption("Evolução de pontos acumulados das Top 5 equipes atuais.")
     else:
-        st.info(
-            "ℹ️ Para ver a evolução, sua planilha precisa de uma coluna de Data (ex: 'Data Agendamento' ou 'Data Conclusão')."
+        render_insight(
+            "Para ver a evolução, a planilha precisa de uma coluna de Data "
+            "(ex: 'Data Agendamento' ou 'Data Conclusão').",
+            tipo="info",
         )
 
-# Rodapé com atualização
+# ── Rodapé ──────────────────────────────────────────
 if pd.notna(ultima_atualizacao):
     st.sidebar.divider()
     st.sidebar.caption(
-        f"🕒 **Última Atualização:**\n{pd.to_datetime(ultima_atualizacao).strftime('%d/%m/%Y')}"
+        f"🕒 **Última Atualização:**\n"
+        f"{pd.to_datetime(ultima_atualizacao).strftime('%d/%m/%Y')}"
     )

@@ -302,21 +302,48 @@ Encontrou um bug? Abra uma [issue](https://github.com/denisvick-dev/totale-kpi/i
 
 ---
 
-## 👨‍💻 Autor
+## 👨‍💻 Sobre o Autor
 
 <div align="center">
 
-### **Denis Vick**
+<table>
+<tr>
+<td align="center" width="150">
+<img src="https://github.com/denisvick-dev.png" width="120" style="border-radius:50%"/>
+</td>
+<td align="left">
 
-*Analista de COP · Totale Tecnologia*
+### **Denis Vick**
+**Analista de COP** · *Totale Tecnologia*
+
+Apaixonado por transformar dados em decisões estratégicas e por criar soluções que facilitam o dia a dia das operações.
+
+</td>
+</tr>
+</table>
 
 <br>
 
-[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/denisvick-dev)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/dvick13/)
-[![Instagram](https://img.shields.io/badge/Instagram-E4405F?style=for-the-badge&logo=instagram&logoColor=white)](https://instagram.com/denisvick)
-[![WhatsApp](https://img.shields.io/badge/WhatsApp-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://wa.me/5511993045101)
-[![Email](https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:denis.vick@totaletecnologia.com.br)
+### 📬 Vamos Conectar!
+
+<a href="https://www.linkedin.com/in/dvick13/">
+  <img src="https://img.shields.io/badge/LinkedIn-Denis_Vick-0077B5?style=for-the-badge&logo=linkedin&logoColor=white" />
+</a>
+<a href="https://github.com/denisvick-dev">
+  <img src="https://img.shields.io/badge/GitHub-denisvick--dev-181717?style=for-the-badge&logo=github&logoColor=white" />
+</a>
+<a href="https://instagram.com/denisvick">
+  <img src="https://img.shields.io/badge/Instagram-@denisvick-E4405F?style=for-the-badge&logo=instagram&logoColor=white" />
+</a>
+<br>
+<a href="https://wa.me/5511993045101">
+  <img src="https://img.shields.io/badge/WhatsApp-(11)_99304--5101-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" />
+</a>
+<a href="mailto:denis.vick@totaletecnologia.com.br">
+  <img src="https://img.shields.io/badge/Email-denis.vick@totaletecnologia.com.br-D14836?style=for-the-badge&logo=gmail&logoColor=white" />
+</a>
+
+</div>
 
 <br>
 
