@@ -312,6 +312,145 @@ def _html_resultado_base_mig(regioes: List[str], total: int) -> str:
         f'<span class="resultado-base-count">{total_fmt} registros</span>'
         f"</div>"
     )
+    
+# ====================================================
+# 🎨 CARD DE STATUS MIGRAÇÃO (visual unificado)
+# ====================================================
+def _render_card_status_mig(m_seg: Dict[str, Any], sla_meta: float) -> None:
+    """
+    Card unificado de status do segmento Migração.
+    Substitui render_segmento_header + render_alerta_sla
+    por um único componente coeso e corporativo.
+    Mantém a identidade AZUL-PETRÓLEO do segmento.
+    """
+    quebra_atual = float(m_seg["quebra_atual"])
+    dentro_sla = quebra_atual <= sla_meta
+    diferenca = sla_meta - quebra_atual
+
+    if dentro_sla:
+        status_label = "DENTRO DO SLA"
+        status_icone = "✓"
+        cor_principal = "#059669"      # verde
+        cor_bg_status = "#D1FAE5"
+        cor_texto_status = "#065F46"
+        mensagem = (
+            f"Migração com folga de <strong>{diferenca:.2%}</strong> em relação à meta. "
+            "Manter cadência de execução e monitorar disponibilidade de equipamentos GPON."
+        )
+        icone_mensagem = "✅"
+    else:
+        excesso = quebra_atual - sla_meta
+        status_label = "FORA DO SLA"
+        status_icone = "!"
+        cor_principal = "#DC2626"      # vermelho
+        cor_bg_status = "#FEE2E2"
+        cor_texto_status = "#991B1B"
+        mensagem = (
+            f"Migração acima da meta em <strong>{excesso:.2%}</strong>. "
+            "Verificar estoque GPON e certificação dos técnicos — ação corretiva imediata."
+        )
+        icone_mensagem = "🚨"
+
+    quebra_fmt = f"{quebra_atual:.2%}".replace(".", ",")
+    meta_fmt = f"{sla_meta:.2%}".replace(".", ",")
+
+    # 🎨 Identidade Migração: gradiente AZUL-PETRÓLEO
+    header_esq = (
+        '<div style="display:flex;align-items:center;gap:14px;">'
+        '<div style="width:44px;height:44px;background:linear-gradient(135deg,#0C4A6E 0%,#0369A1 55%,#0284C7 100%);'
+        'border-radius:10px;display:flex;align-items:center;justify-content:center;'
+        'box-shadow:0 4px 12px rgba(12,74,110,0.28);">'
+        '<span style="font-size:22px;">🔄</span>'
+        '</div>'
+        '<div>'
+        '<div style="font-family:\'Manrope\',sans-serif;font-size:18px;font-weight:800;'
+        'color:#1F2937;letter-spacing:-0.3px;line-height:1.1;">Migração</div>'
+        '<div style="font-family:\'Inter\',sans-serif;font-size:12px;color:#6B7280;'
+        'font-weight:500;margin-top:2px;">Mudança de Pacote + GPON</div>'
+        '</div>'
+        '</div>'
+    )
+
+    badge_status = (
+        f'<div style="display:inline-flex;align-items:center;gap:6px;'
+        f'padding:6px 14px;background:{cor_bg_status};border-radius:999px;'
+        f'border:1px solid {cor_principal};">'
+        f'<span style="display:inline-flex;align-items:center;justify-content:center;'
+        f'width:18px;height:18px;background:{cor_principal};color:white;border-radius:50%;'
+        f'font-size:11px;font-weight:800;">{status_icone}</span>'
+        f'<span style="font-family:\'Inter\',sans-serif;font-size:11px;font-weight:700;'
+        f'color:{cor_texto_status};text-transform:uppercase;letter-spacing:0.6px;">'
+        f'{status_label}</span>'
+        f'</div>'
+    )
+
+    pill_quebra = (
+        f'<div style="display:inline-flex;flex-direction:column;padding:6px 14px;'
+        f'background:#F0F9FF;border-radius:8px;border:1px solid #BAE6FD;">'
+        f'<span style="font-size:10px;color:#6B7280;font-weight:600;text-transform:uppercase;'
+        f'letter-spacing:0.6px;">Quebra Atual</span>'
+        f'<span style="font-family:\'Manrope\',sans-serif;font-size:16px;color:{cor_principal};'
+        f'font-weight:800;font-variant-numeric:tabular-nums;line-height:1.2;">{quebra_fmt}</span>'
+        f'</div>'
+    )
+
+    pill_meta = (
+        '<div style="display:inline-flex;flex-direction:column;padding:6px 14px;'
+        'background:#F0F9FF;border-radius:8px;border:1px solid #BAE6FD;">'
+        '<span style="font-size:10px;color:#6B7280;font-weight:600;text-transform:uppercase;'
+        f'letter-spacing:0.6px;">Meta SLA</span>'
+        f'<span style="font-family:\'Manrope\',sans-serif;font-size:16px;color:#0C4A6E;'
+        f'font-weight:800;font-variant-numeric:tabular-nums;line-height:1.2;">{meta_fmt}</span>'
+        '</div>'
+    )
+
+    header_dir = (
+        f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+        f'{badge_status}{pill_quebra}{pill_meta}'
+        f'</div>'
+    )
+
+    pct_barra = min(100.0, (quebra_atual / (sla_meta * 2)) * 100) if sla_meta > 0 else 0
+    barra = (
+        '<div style="margin:16px 0 12px 0;">'
+        '<div style="display:flex;justify-content:space-between;margin-bottom:6px;'
+        'font-size:11px;color:#6B7280;font-weight:600;">'
+        f'<span>0%</span><span>Meta {meta_fmt}</span><span>{sla_meta*2:.0%}</span>'
+        '</div>'
+        '<div style="position:relative;height:8px;background:#E5E7EB;border-radius:4px;overflow:hidden;">'
+        '<div style="position:absolute;left:50%;top:0;width:2px;height:100%;background:#374151;z-index:2;"></div>'
+        f'<div style="width:{pct_barra}%;height:100%;background:linear-gradient(90deg,{cor_principal} 0%,{cor_principal}CC 100%);border-radius:4px;transition:width 0.4s;"></div>'
+        '</div>'
+        '</div>'
+    )
+
+    mensagem_html = (
+        f'<div style="display:flex;align-items:flex-start;gap:10px;'
+        f'padding:12px 14px;background:{cor_bg_status};border-left:3px solid {cor_principal};'
+        f'border-radius:6px;">'
+        f'<span style="font-size:16px;line-height:1;flex-shrink:0;">{icone_mensagem}</span>'
+        f'<div style="font-family:\'Inter\',sans-serif;font-size:13px;color:{cor_texto_status};'
+        f'line-height:1.55;font-weight:500;">{mensagem}</div>'
+        '</div>'
+    )
+
+    header_completo = (
+        f'<div style="display:flex;align-items:center;justify-content:space-between;'
+        f'flex-wrap:wrap;gap:16px;">{header_esq}{header_dir}</div>'
+    )
+
+    # 🎨 Borda superior AZUL-PETRÓLEO (identidade Migração)
+    card_html = (
+        '<div style="background:white;border:1px solid #E5E7EB;border-radius:14px;'
+        'padding:20px 24px;box-shadow:0 2px 8px rgba(0,0,0,0.04);margin:16px 0 24px 0;'
+        'border-top:3px solid #0369A1;">'
+        f'{header_completo}'
+        f'{barra}'
+        f'{mensagem_html}'
+        '</div>'
+    )
+
+    st.markdown(card_html, unsafe_allow_html=True)
 
 
 def _render_topo_fixo_mig(regioes: List[str], total: int) -> None:
@@ -1632,8 +1771,7 @@ def main() -> None:
         return
 
     m_seg = Motor.projetar(df_seg, p_base)
-    render_segmento_header(TIPO, m_seg["quebra_atual"], sla_meta)
-    render_alerta_sla(m_seg["quebra_atual"], sla_meta, TIPO)
+    _render_card_status_mig(m_seg, sla_meta)
     st.markdown("")
 
     # ── Botão PDF ────────────────────────────────────────────────────
