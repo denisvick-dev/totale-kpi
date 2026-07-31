@@ -710,10 +710,11 @@ def render_dataframe(
                     df.style.format(fmt_valido),  # type: ignore[arg-type]
                     height=height,
                     use_container_width=True,
+                    hide_index=True,
                     **kwargs,
                 )
                 return
             except Exception:
                 logger.exception("Falha ao formatar. Exibindo sem formatação.")
 
-    st.dataframe(df, height=height, use_container_width=True, **kwargs)
+    st.dataframe(df, height=height, use_container_width=True, hide_index=True, **kwargs)

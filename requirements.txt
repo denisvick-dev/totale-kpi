@@ -22,3 +22,4 @@ pyarrow
 pillow
 matplotlib
 reportlab
+xlsxwriter

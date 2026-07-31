@@ -172,6 +172,7 @@ def main():
     # teste = st.Page("old/diagnostico_abas.py", title="Teste")
     assinatura = st.Page("pages/assinatura.py", title="Assinatura", icon="✉️")
     # toml = st.Page("old/convert_toml.py", title="TOML")
+    retorno = st.Page("pages/retorno.py", title="Retornos", icon="📜") 
 
     # Agrupamento das seções
     paginas_agrupadas = {
@@ -179,7 +180,7 @@ def main():
         "CENTRAL DE PERFORMANCE": [ranking_pontos, qtde_os, consultivo],
         "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons],
         "COMPILADO": [gestao_ativos],
-        "DISPAROS DIÁRIOS": [rota_inicial, volumetria],
+        "DISPAROS DIÁRIOS": [rota_inicial, volumetria, retorno],
         "QUEBRA": [quebra, quebra_resumo, quebra_pme, quebra_mig],
         "UTILITÁRIOS": [assinatura],
     }
