@@ -7,7 +7,7 @@ from pathlib import Path
 
 # Cores da marca
 COR_AZUL = "#012869"
-COR_LARANJA = "#F37C04"
+COR_LARANJA = "#FD4601"
 COR_CINZA = "#555555"
 COR_CINZA_CLARO = "#F5F7FA"
 COR_CINZA_MEDIO = "#E1E5EB"
