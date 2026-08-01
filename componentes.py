@@ -575,18 +575,16 @@ def render_hero(titulo: str, subtitulo: str = "", badge: str = "") -> None:
     subtitulo_html = f'<p class="hero-subtitle">{subtitulo}</p>' if subtitulo else ""
     badge_html = f'<span class="hero-badge">{badge}</span>' if badge else ""
 
-    st.markdown(
-        f"""
-        <div class="hero-corp">
-            <div class="hero-content">
-                <h1 class="hero-title">{titulo}</h1>
-                {subtitulo_html}
-                {badge_html}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    html = (
+        f'<div class="hero-corp">'
+        f'<div class="hero-content">'
+        f'<h1 class="hero-title">{titulo}</h1>'
+        f'{subtitulo_html}'
+        f'{badge_html}'
+        f'</div>'
+        f'</div>'
     )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_section(titulo: str, divider: str = "gray") -> None:
