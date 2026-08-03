@@ -60,7 +60,7 @@ from componentes import (
 # Apenas componentes EXCLUSIVOS deste dashboard (segmento-header,
 # alerta-sla, dataframe com styler condicional).
 # ────────────────────────────────────────────────────────────────
-from quebra import (
+from old.quebra import (
     Config,
     Motor,
     Utils,
