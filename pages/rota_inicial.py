@@ -127,22 +127,58 @@ RENOMEAR_COLUNAS: Dict[str, str] = {
 # ====================================================
 # 2.1  EXTRAÇÃO DE VELOCIDADE (PRIORIZA PENDENTE)
 # ====================================================
-_RE_VELOCIDADE = re.compile(r"(\d+(?:[.,]\d+)?)\s*([MG])(?:B)?\b", re.IGNORECASE)
+_RE_PRODUTO_INTERNET = re.compile(r"\b(BL|BANDA\s*LARGA)\b", re.IGNORECASE)
 
+_RE_Mbps_Gbps = re.compile(
+    r"(\d+(?:[.,]\d+)?)\s*(GIGA|GB|G|MEGA|MB|M)\b", 
+    re.IGNORECASE
+)
+
+_RE_BL = re.compile(
+    r"\bBL\s*(\d+(?:[.,]\d+)?)\s*(M|MEGA|G|GIGA)?\b", 
+    re.IGNORECASE
+)
 
 def _extrair_velocidade_e_mbps(produto: Any) -> tuple[str, float]:
     if not isinstance(produto, str) or not produto.strip():
         return "", np.nan
-    m = _RE_VELOCIDADE.search(produto.upper())
-    if not m:
-        return "", np.nan
-    valor = float(m.group(1).replace(",", "."))
-    unidade = m.group(2).upper()
-    mbps = valor * 1000 if unidade == "G" else valor
-    valor_txt = str(int(valor)) if valor.is_integer() else str(valor).replace(".", ",")
-    label = f"{valor_txt} {'Gbps' if unidade == 'G' else 'Mbps'}"
-    return label, mbps
 
+    produto_up = produto.upper()
+
+    # ✅ 1️⃣ Só considerar produtos de internet (BL ou BANDA LARGA)
+    if not _RE_PRODUTO_INTERNET.search(produto_up):
+        return "", np.nan
+
+    mbps = np.nan
+
+    # ✅ 2️⃣ Prioridade: Padrão BL (ex: BL 600M, BL 1 GIGA)
+    m_bl = _RE_BL.search(produto_up)
+    if m_bl:
+        valor = float(m_bl.group(1).replace(",", "."))
+        unidade = m_bl.group(2)
+        if unidade and unidade.startswith("G"):
+            mbps = valor * 1000
+        else:
+            mbps = valor
+
+    # ✅ 3️⃣ Padrão geral (se não achou no BL, mas tem BANDA LARGA)
+    else:
+        m = _RE_Mbps_Gbps.search(produto_up)
+        if m:
+            valor = float(m.group(1).replace(",", "."))
+            unidade = m.group(2)
+            if unidade.startswith("G"):
+                mbps = valor * 1000
+            else:
+                mbps = valor
+
+    # 🔥 VALIDAÇÃO: Só aceitar velocidades >= 70 Mbps
+    if pd.notna(mbps) and mbps >= 70:
+        label = f"{int(mbps)} Mbps" if mbps < 1000 else f"{mbps/1000:.0f} Gbps"
+        return label, mbps
+
+    # Se for menor que 70 ou não encontrou, ignora
+    return "", np.nan
 
 def atribuir_velocidade_por_contrato(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -502,6 +538,8 @@ def ler_arquivo(file_bytes: bytes, filename: str) -> pd.DataFrame:
 def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFrame:
     if not isinstance(df_bruto, pd.DataFrame) or df_bruto.empty:
         return pd.DataFrame()
+    
+    _RE_REMOVER_FID = re.compile(r"\bFID\s*(12M|24M)\b", re.IGNORECASE)
 
     df = df_bruto.copy()
     df.columns = df.columns.astype(str).str.strip().str.upper()
@@ -578,7 +616,13 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
 
     hab  = df["HABILIDADE"].astype(str).str.upper()
     tipo = df["TIPO_OS"].astype(str).str.upper()
+    
     prod = df["PRODUTO"].astype(str).str.upper()
+    # 🔥 Remover apenas "FID 12M" e "FID 24M"
+    prod = prod.str.replace(_RE_REMOVER_FID, "", regex=True)
+    # Limpeza extra de espaços duplicados
+    prod = prod.str.replace(r"\s{2,}", " ", regex=True).str.strip()
+    df["PRODUTO"] = prod
 
     df["Check_GPON"]       = hab.str.contains(r"PON\(1/100\)", regex=True, na=False)
     df["Check_ND"]         = tipo.str.contains("ADESAO", na=False)
