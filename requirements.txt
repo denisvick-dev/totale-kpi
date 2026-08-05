@@ -23,4 +23,5 @@ pillow
 matplotlib
 reportlab
 xlsxwriter
+fastapi
 starlette<1.4.0
