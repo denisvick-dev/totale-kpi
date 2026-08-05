@@ -24,4 +24,4 @@ matplotlib
 reportlab
 xlsxwriter
 fastapi
-starlette
+starlette<1.4.0
