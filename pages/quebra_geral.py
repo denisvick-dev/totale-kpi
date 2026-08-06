@@ -62,7 +62,13 @@ class Config:
     SLA_PME = 0.20
     SLA_MIGRACAO = 0.25
 
-    # 🔗 URL FIXA da planilha de ativos (aba: lista_ativos)
+    # ✅ NOVO: Tipos de O.S. que compõem o segmento Migração
+    TIPOS_OS_MIGRACAO: tuple = (
+        "MUDANCA DE PACOTE",
+        "INSTALACAO DE CABO GPON",
+    )
+
+    # URL Google Sheets
     URL_LISTA_ATIVOS = (
         "https://docs.google.com/spreadsheets/d/"
         "1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
@@ -702,29 +708,71 @@ class DataLoader:
         # 6. Segmento
         col_tipo = Utils.buscar_coluna(df, ["TIPO O.S 1", "TIPO SERVICO", "SEGMENTO"])
         col_hab = Utils.buscar_coluna(df, ["HABILIDADE DE TRABALHO", "HABILIDADE"])
+
         tipo_u = (
-            df[col_tipo].fillna("").astype(str).str.upper()
+            df[col_tipo].fillna("").astype(str).str.upper().str.strip()
             if col_tipo
             else pd.Series("", index=df.index)
         )
         hab_u = (
-            df[col_hab].fillna("").astype(str).str.upper()
+            df[col_hab].fillna("").astype(str).str.upper().str.strip()
             if col_hab
             else pd.Series("", index=df.index)
         )
 
-        flag_gpon = hab_u.str.contains(
-            r"PON|FIBRA", regex=True, na=False
-        ) | tipo_u.str.contains(r"GPON|FIBRA", regex=True, na=False)
-        flag_nd = tipo_u.str.contains("ADESAO|NOVO|DOMICILIO", na=False)
-        flag_pme = hab_u.str.contains("PME|EMPRESAR", na=False) | tipo_u.str.contains(
-            "PME|EMPRESAR", na=False
-        )
-        flag_mig = tipo_u.str.contains("MUDANCA DE PACOTE|MIGRA", na=False) & flag_gpon
+        # ── Normaliza removendo acentos para comparação segura ──────────
+        import unicodedata
 
+        def _normalizar(serie: pd.Series) -> pd.Series:
+            return (
+                serie.str.normalize("NFKD")
+                .str.encode("ascii", errors="ignore")
+                .str.decode("ascii")
+                .str.upper()
+                .str.strip()
+            )
+
+        tipo_norm = _normalizar(tipo_u)
+        hab_norm = _normalizar(hab_u)
+
+        # ── Conjunto normalizado dos tipos de Migração ───────────────────
+        _tipos_mig_norm = {
+            unicodedata.normalize("NFKD", t)
+            .encode("ascii", errors="ignore")
+            .decode("ascii")
+            .upper()
+            .strip()
+            for t in Config.TIPOS_OS_MIGRACAO
+        }
+
+        # ── Flags de classificação ───────────────────────────────────────
+
+        # ✅ Migração: EXATAMENTE "MUDANCA DE PACOTE" ou "INSTALACAO DE CABO GPON"
+        flag_mig = tipo_norm.isin(_tipos_mig_norm)
+
+        # GPON genérico (exclui os já capturados como Migração)
+        flag_gpon = (
+            hab_norm.str.contains(r"PON|FIBRA", regex=True, na=False)
+            | tipo_norm.str.contains(r"GPON|FIBRA", regex=True, na=False)
+        ) & ~flag_mig
+
+        # PME
+        flag_pme = (
+            hab_norm.str.contains(r"PME|EMPRESAR", regex=True, na=False)
+            | tipo_norm.str.contains(r"PME|EMPRESAR", regex=True, na=False)
+        ) & ~flag_mig
+
+        # Novos Domicílios
+        flag_nd = (
+            (tipo_norm.str.contains(r"ADESAO|NOVO|DOMICILIO", regex=True, na=False))
+            & ~flag_mig
+            & ~flag_pme
+        )
+
+        # ── Aplica prioridade: Migração > PME > GPON > Novos > Outros ───
         df["TIPO_SERVICO"] = np.select(
-            [flag_pme, flag_mig, flag_gpon, flag_nd],
-            ["PME", "Migração", "GPON", "Novos Domicílios"],
+            [flag_mig, flag_pme, flag_gpon, flag_nd],
+            ["Migração", "PME", "GPON", "Novos Domicílios"],
             default="Outros",
         )
 
@@ -2400,6 +2448,45 @@ def render_sidebar(df_full: pd.DataFrame) -> Dict[str, Any]:
         if st.button("🔄 Reiniciar Painel", use_container_width=True):
             st.session_state["df_memoria"] = None
             st.rerun()
+
+            # ── Debug: verificação dos tipos de O.S. ────────────────────
+        with st.expander("🔎 Distribuição TIPO_SERVICO", expanded=False):
+            if "TIPO_SERVICO" in df_full.columns:
+                dist = df_full["TIPO_SERVICO"].value_counts().reset_index()
+                dist.columns = ["Segmento", "Registros"]
+                st.dataframe(dist, hide_index=True, use_container_width=True)
+
+            # Mostra os valores brutos da coluna de tipo
+            col_tipo_raw = Utils.buscar_coluna(
+                df_full,
+                ["TIPO O.S 1", "TIPO SERVICO", "SEGMENTO"],
+            )
+            if col_tipo_raw:
+                st.markdown(f"**Coluna:** `{col_tipo_raw}`")
+                for t in sorted(
+                    df_full[col_tipo_raw]
+                    .dropna()
+                    .astype(str)
+                    .str.upper()
+                    .str.strip()
+                    .unique()
+                ):
+                    import unicodedata
+
+                    t_norm = (
+                        unicodedata.normalize("NFKD", t)
+                        .encode("ascii", errors="ignore")
+                        .decode("ascii")
+                    )
+                    _mig_norm = {
+                        unicodedata.normalize("NFKD", x)
+                        .encode("ascii", errors="ignore")
+                        .decode("ascii")
+                        .upper()
+                        for x in Config.TIPOS_OS_MIGRACAO
+                    }
+                    emoji = "🔄" if t_norm.upper() in _mig_norm else "⚪"
+                    st.markdown(f"{emoji} `{t}`")
 
     return {
         "visao": visao,
