@@ -37,9 +37,6 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-# ─────────────────────────────────────────────────────────────────────
-# 🎨 DESIGN SYSTEM
-# ─────────────────────────────────────────────────────────────────────
 from componentes import (
     aplicar_estilo as _aplicar_estilo_global,
     render_kpi,
@@ -73,15 +70,10 @@ if "df_memoria" not in st.session_state:
 
 
 # =====================================================================
-# ✅ CRITÉRIO DE MIGRAÇÃO
+# ✅ FUNÇÕES DE NORMALIZAÇÃO
 # =====================================================================
-_OS_GPON        = "191 - INSTALACAO DE CABO GPON"
-_OS_MUD_PAC     = "24 - MUDANCA DE PACOTE"
-_OS_MUD_PAC_DIG = "57 - MUDANCA DE PACOTE DIGITAL"
-
-
 def _normalizar_str(texto: str) -> str:
-    """Remove acentos, maiúsculo, strip."""
+    """Remove acentos, converte para maiúsculo e strip."""
     return (
         unicodedata.normalize("NFKD", texto)
         .encode("ascii", errors="ignore")
@@ -89,17 +81,6 @@ def _normalizar_str(texto: str) -> str:
         .upper()
         .strip()
     )
-
-
-_OS_GPON_NORM        = _normalizar_str(_OS_GPON)
-_OS_MUD_PAC_NORM     = _normalizar_str(_OS_MUD_PAC)
-_OS_MUD_PAC_DIG_NORM = _normalizar_str(_OS_MUD_PAC_DIG)
-
-_TIPOS_OS_MIGRACAO_NORM: FrozenSet[str] = frozenset([
-    _OS_GPON_NORM,
-    _OS_MUD_PAC_NORM,
-    _OS_MUD_PAC_DIG_NORM,
-])
 
 
 def _norm_col_nome(nome: str) -> str:
@@ -115,6 +96,40 @@ def _norm_col_nome(nome: str) -> str:
     )
 
 
+# =====================================================================
+# ✅ CRITÉRIO DE CLASSIFICAÇÃO
+# =====================================================================
+# Migração (AND dos 2 critérios):
+#   1. CATEGORIA DA CAPACIDADE = "Classe 15"
+#   2. TIPO O.S contém "191 - INSTALACAO DE CABO GPON"
+#
+# Novos Domicílios:
+#   TIPO O.S contém "ADESAO"
+#
+# PME:
+#   é Novos Domicílios E Categoria da Capacidade contém "PME"
+# ─────────────────────────────────────────────────────────────────────
+
+# Migração — critério 1
+_VALOR_CATEGORIA_MIGRACAO: str = "CLASSE 15"   # já normalizado
+
+# Migração — critério 2
+_OS_191_NORM: str = _normalizar_str("191 - INSTALACAO DE CABO GPON")
+
+# Outros segmentos
+_TERMOS_ND:  Tuple[str, ...] = ("ADESAO",)
+_TERMOS_PME: Tuple[str, ...] = ("PME",)
+
+# Candidatos para coluna Categoria / Capacidade
+_CANDS_CAPACIDADE: List[str] = [
+    "CATEGORIA DA CAPACIDADE",
+    "CATEGORIAS DA CAPACIDADE",
+    "CATEGORIAS CAPACIDADE",
+    "CATEGORIA CAPACIDADE",
+    "CAPACIDADE",
+]
+
+
 def _detectar_cols_tipo(df: pd.DataFrame) -> List[str]:
     """Retorna todas as colunas TIPO O.S* do DataFrame."""
     cols: List[str] = []
@@ -125,39 +140,47 @@ def _detectar_cols_tipo(df: pd.DataFrame) -> List[str]:
     return cols
 
 
+def _detectar_col_capacidade(df: pd.DataFrame) -> Optional[str]:
+    """Detecta a coluna 'Categoria da Capacidade' pelo nome."""
+    cols_norm = {_norm_col_nome(str(c)): c for c in df.columns}
+    for cand in _CANDS_CAPACIDADE:
+        cand_norm = _norm_col_nome(cand)
+        if cand_norm in cols_norm:
+            return cols_norm[cand_norm]
+    for col_norm, col_real in cols_norm.items():
+        if "CAPACIDADE" in col_norm:
+            return col_real
+    return None
+
+
 def _criar_coluna_tipos_agrupados(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Cria duas colunas auxiliares:
-    • _TIPOS_OS_AGRUPADOS : string com todos os tipos únicos da linha,
-                            separados por ' + ', ordenados alfabeticamente.
-    • _TIPOS_OS_SET       : frozenset com os valores normalizados.
-
-    Exemplo:
-        TIPO O.S 1 = "24 - MUDANCA DE PACOTE"
-        TIPO O.S 2 = "191 - INSTALACAO DE CABO GPON"
-        → _TIPOS_OS_AGRUPADOS = "191 - INSTALACAO DE CABO GPON + 24 - MUDANCA DE PACOTE"
-        → _TIPOS_OS_SET       = frozenset({"191 - INSTALACAO DE CABO GPON",
-                                            "24 - MUDANCA DE PACOTE"})
+    Cria:
+    • _TIPOS_OS_AGRUPADOS : string com todos os TIPO O.S únicos da linha
+    • _TIPOS_OS_SET       : frozenset normalizado com os TIPO O.S da linha
     """
-    df = df.copy()
+    df        = df.copy()
     cols_tipo = _detectar_cols_tipo(df)
+    _VAZIOS   = {"NAN", "NONE", "NULL", "", "N/A", "NAO INFORMADO"}
 
     if not cols_tipo:
         df["_TIPOS_OS_AGRUPADOS"] = ""
-        df["_TIPOS_OS_SET"]       = pd.Series([frozenset() for _ in range(len(df))])
+        df["_TIPOS_OS_SET"] = pd.Series(
+            [frozenset() for _ in range(len(df))],
+            index=df.index,
+            dtype=object,
+        )
         print("[quebra_unificada] ⚠️ Nenhuma coluna TIPO O.S encontrada.")
         return df
 
     print(f"[quebra_unificada] Colunas TIPO O.S detectadas: {cols_tipo}")
 
-    _VAZIOS = {"NAN", "NONE", "NULL", "", "N/A", "NAO INFORMADO"}
-
     def _agrupar_linha(row: pd.Series) -> Tuple[str, FrozenSet[str]]:
         valores_raw:  set[str] = set()
         valores_norm: set[str] = set()
         for col in cols_tipo:
-            val     = str(row.get(col, "")).strip()
-            val_up  = val.upper()
+            val    = str(row.get(col, "")).strip()
+            val_up = val.upper()
             if not val or val_up in _VAZIOS:
                 continue
             val_norm = _normalizar_str(val)
@@ -185,78 +208,285 @@ def _classificar_tipo_servico(
 ) -> Tuple[pd.DataFrame, pd.Series]:
     """
     1. Cria _TIPOS_OS_AGRUPADOS e _TIPOS_OS_SET.
-    2. Aplica regras de Migração sobre o SET.
+    2. Aplica as regras de classificação.
     3. Retorna (df_enriquecido, serie_TIPO_SERVICO).
 
-    Regras de Migração (qualquer uma basta):
-    ┌────────────────────────────────────────────────────────────────┐
-    │ Regra 1: SET contém "24 - MUDANCA DE PACOTE"                   │
-    │          E SET contém "191 - INSTALACAO DE CABO GPON"          │
-    ├────────────────────────────────────────────────────────────────┤
-    │ Regra 2: SET contém "57 - MUDANCA DE PACOTE DIGITAL"           │
-    │          E SET contém "191 - INSTALACAO DE CABO GPON"          │
-    ├────────────────────────────────────────────────────────────────┤
-    │ Regra 3: SET contém "191 - INSTALACAO DE CABO GPON" (standalone)│
-    └────────────────────────────────────────────────────────────────┘
-    Prioridade: Migração > PME > valor original de TIPO_SERVICO
+    ┌──────────────────────────────────────────────────────────────────┐
+    │ Migração (os 2 critérios juntos — AND):                          │
+    │   1. CATEGORIA DA CAPACIDADE = "Classe 15"                       │
+    │   2. TIPO O.S contém "191 - INSTALACAO DE CABO GPON"             │
+    ├──────────────────────────────────────────────────────────────────┤
+    │ Novos Domicílios : TIPO O.S contém "ADESAO"                      │
+    ├──────────────────────────────────────────────────────────────────┤
+    │ PME              : é Novos Domicílios                            │
+    │                    E Categoria da Capacidade contém "PME"        │
+    └──────────────────────────────────────────────────────────────────┘
     """
-    # ── 1. Cria colunas agrupadas ─────────────────────────────────────
+    # ── 1. Cria colunas agrupadas de TIPO O.S ─────────────────────────
     df = _criar_coluna_tipos_agrupados(df)
 
-    # ── 2. Fallback se não há colunas TIPO O.S ────────────────────────
-    sem_dados = "_TIPOS_OS_SET" not in df.columns or df["_TIPOS_OS_SET"].apply(len).sum() == 0
-    if sem_dados:
-        resultado = (
-            df["TIPO_SERVICO"].copy()
-            if "TIPO_SERVICO" in df.columns
-            else pd.Series("Outros", index=df.index)
-        )
-        return df, resultado
+    # ── 2. Detecta coluna Categoria da Capacidade ─────────────────────
+    col_cap = _detectar_col_capacidade(df)
+    print(f"[quebra_unificada] Coluna Capacidade detectada: {col_cap!r}")
 
-    # ── 3. Classifica cada linha pelo seu SET ─────────────────────────
-    def _classificar_set(tipo_set: FrozenSet[str]) -> Optional[str]:
-        if not tipo_set:
-            return None
-
-        tem_gpon    = _OS_GPON_NORM        in tipo_set
-        tem_mud     = _OS_MUD_PAC_NORM     in tipo_set
-        tem_mud_dig = _OS_MUD_PAC_DIG_NORM in tipo_set
-
-        # Regra 3: GPON standalone (engloba Regras 1 e 2)
-        if tem_gpon:
-            return "Migração"
-
-        # Regras 1 e 2 explícitas (caso Regra 3 seja removida no futuro)
-        if (tem_mud or tem_mud_dig) and tem_gpon:
-            return "Migração"
-
-        # PME
-        for val in tipo_set:
-            if "PME" in val or "EMPRESAR" in val:
-                return "PME"
-
-        return None
-
-    classificacao = df["_TIPOS_OS_SET"].map(_classificar_set)
-
-    # ── 4. Constrói série final com prioridade ────────────────────────
-    resultado = (
-        df["TIPO_SERVICO"].copy()
-        if "TIPO_SERVICO" in df.columns
-        else pd.Series("Outros", index=df.index)
+    serie_cap: pd.Series = (
+        df[col_cap].fillna("").astype(str).map(_normalizar_str)
+        if col_cap
+        else pd.Series("", index=df.index)
     )
-    resultado = resultado.astype(str)
 
-    mask_mig = classificacao == "Migração"
-    mask_pme = (classificacao == "PME") & ~mask_mig
-    resultado[mask_pme] = "PME"
-    resultado[mask_mig] = "Migração"
+    # ── 3. Flag Migração (AND dos 2 critérios) ────────────────────────
 
-    # ── 5. Log ────────────────────────────────────────────────────────
+    # Critério 1: CATEGORIA DA CAPACIDADE = "Classe 15" (exato)
+    flag_cat_15 = serie_cap == _VALOR_CATEGORIA_MIGRACAO
+
+    # Critério 2: TIPO O.S contém "191 - INSTALACAO DE CABO GPON"
+    flag_os_191 = df["_TIPOS_OS_SET"].map(
+        lambda tipo_set: _OS_191_NORM in str(tipo_set)
+    )
+
+    # Migração = os dois juntos
+    flag_migracao = flag_cat_15 & flag_os_191
+
+    # ── 4. Flags ND e PME ─────────────────────────────────────────────
+    def _tem_nd(tipo_set: FrozenSet[str]) -> bool:
+        return any(
+            any(termo in val for termo in _TERMOS_ND)
+            for val in tipo_set
+        )
+
+    flag_nd  = df["_TIPOS_OS_SET"].map(_tem_nd)
+    flag_pme = flag_nd & serie_cap.str.contains("PME", na=False)
+
+    # ── 5. Monta resultado ────────────────────────────────────────────
+    resultado = pd.Series("Outros", index=df.index)
+    resultado[flag_nd]       = "Novos Domicílios"
+    resultado[flag_pme]      = "PME"
+    resultado[flag_migracao] = "Migração"   # Migração vence no final
+
+    # ── 6. Log ────────────────────────────────────────────────────────
+    n_cat = int(flag_cat_15.sum())
+    n_os  = int(flag_os_191.sum())
+    n_mig = int(flag_migracao.sum())
+    print(f"[quebra_unificada] Crit.1 CATEGORIA=Classe15: {n_cat} registros")
+    print(f"[quebra_unificada] Crit.2 OS contém 191:      {n_os} registros")
+    print(f"[quebra_unificada] Migração (AND):             {n_mig} registros")
+
     contagem = resultado.value_counts().to_dict()
     print(f"[quebra_unificada] Classificação TIPO_SERVICO: {contagem}")
 
     return df, resultado
+
+
+# =====================================================================
+# DEBUG SIDEBAR
+# =====================================================================
+def _render_debug_tipos(df_full: pd.DataFrame) -> None:
+    with st.expander("🔎 Critérios de Classificação", expanded=False):
+
+        # ── Distribuição final ─────────────────────────────────────────
+        if "TIPO_SERVICO" in df_full.columns:
+            st.markdown("**📊 Distribuição TIPO_SERVICO:**")
+            dist = df_full["TIPO_SERVICO"].value_counts().reset_index()
+            dist.columns = ["Segmento", "Registros"]
+            st.dataframe(dist, hide_index=True, use_container_width=True)
+
+        st.markdown("---")
+
+        # ── Colunas detectadas ─────────────────────────────────────────
+        st.markdown("**🔗 Colunas detectadas na base:**")
+        cols_tipo = _detectar_cols_tipo(df_full)
+        col_cap   = _detectar_col_capacidade(df_full)
+
+        cc1, cc2 = st.columns(2)
+        cc1.markdown(
+            "**TIPO O.S**  \n"
+            + (
+                "  \n".join(f"✅ `{c}`" for c in cols_tipo)
+                if cols_tipo
+                else "❌ Não encontrada"
+            )
+        )
+        cc2.markdown(
+            "**Categoria da Capacidade**  \n"
+            + (f"✅ `{col_cap}`" if col_cap else "❌ Não encontrada")
+        )
+
+        # ── Regras ─────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("**📋 Regras de Classificação:**")
+        st.markdown(
+            "🔄 **Migração** (os 2 critérios juntos — AND):\n\n"
+            "| Critério | Coluna | Condição |\n"
+            "|----------|--------|----------|\n"
+            f"| 1️⃣ | `{col_cap or 'CATEGORIA DA CAPACIDADE'}` | = `Classe 15` |\n"
+            f"| 2️⃣ | TIPO O.S | contém `191 - INSTALACAO DE CABO GPON` |\n\n"
+            "🏠 **Novos Domicílios**: TIPO O.S contém `ADESAO`\n\n"
+            "🏢 **PME**: é Novos Domicílios **E** Capacidade contém `PME`"
+        )
+
+        # ── Diagnóstico dos critérios ──────────────────────────────────
+        st.markdown("---")
+        st.markdown("**🔬 Diagnóstico dos critérios de Migração:**")
+
+        if "_TIPOS_OS_SET" not in df_full.columns:
+            st.warning("⚠️ Execute a classificação primeiro.")
+        else:
+            serie_cap_d: pd.Series = (
+                df_full[col_cap].fillna("").astype(str).map(_normalizar_str)
+                if col_cap
+                else pd.Series("", index=df_full.index)
+            )
+
+            flag_cat_d = serie_cap_d == _VALOR_CATEGORIA_MIGRACAO
+            flag_os_d  = df_full["_TIPOS_OS_SET"].map(
+                lambda s: _OS_191_NORM in str(s)
+            )
+            flag_mig_d = flag_cat_d & flag_os_d
+
+            n_cat = int(flag_cat_d.sum())
+            n_os  = int(flag_os_d.sum())
+            n_mig = int(flag_mig_d.sum())
+
+            d1, d2, d3 = st.columns(3)
+            d1.metric(
+                "1️⃣ CATEGORIA = Classe 15",
+                f"{n_cat:,}".replace(",", "."),
+                help="Linhas onde CATEGORIA DA CAPACIDADE = 'Classe 15'",
+            )
+            d2.metric(
+                "2️⃣ OS contém 191",
+                f"{n_os:,}".replace(",", "."),
+                help="Linhas onde TIPO O.S contém '191 - INSTALACAO DE CABO GPON'",
+            )
+            d3.metric(
+                "✅ Migração (AND)",
+                f"{n_mig:,}".replace(",", "."),
+                help="Linhas que atendem os 2 critérios simultaneamente",
+            )
+
+            # Alertas específicos
+            if n_mig == 0:
+                if n_cat == 0:
+                    st.error(
+                        "❌ Nenhuma linha com `Classe 15` em Categoria da Capacidade."
+                        + (" (coluna não encontrada)" if not col_cap else "")
+                    )
+                    if col_cap:
+                        st.markdown("**Valores encontrados na coluna:**")
+                        vals = (
+                            df_full[col_cap]
+                            .dropna()
+                            .astype(str)
+                            .str.strip()
+                            .value_counts()
+                            .reset_index()
+                        )
+                        vals.columns = ["Valor", "Qtd"]
+                        st.dataframe(vals, hide_index=True, use_container_width=True)
+                elif n_os == 0:
+                    st.error(
+                        "❌ Nenhuma linha com `191 - INSTALACAO DE CABO GPON` em TIPO O.S."
+                        + (" (coluna não encontrada)" if not cols_tipo else "")
+                    )
+                    if cols_tipo and "_TIPOS_OS_AGRUPADOS" in df_full.columns:
+                        st.markdown("**Combinações encontradas em TIPO O.S:**")
+                        comb = (
+                            df_full["_TIPOS_OS_AGRUPADOS"]
+                            .replace("", "(vazio)")
+                            .value_counts()
+                            .reset_index()
+                        )
+                        comb.columns = ["Combinação", "Qtd"]
+                        st.dataframe(comb, hide_index=True, use_container_width=True)
+                else:
+                    st.warning(
+                        f"⚠️ {n_cat} linhas com `Classe 15` e "
+                        f"{n_os} linhas com `191`, mas **nenhuma** tem os dois juntos."
+                    )
+
+        # ── Valores únicos por coluna ──────────────────────────────────
+        st.markdown("---")
+        st.markdown("**📋 Valores únicos nas colunas relevantes:**")
+
+        tab_cap, tab_os = st.tabs(["Categoria da Capacidade", "Tipo O.S"])
+
+        with tab_cap:
+            if col_cap:
+                for t in sorted(
+                    df_full[col_cap].dropna().astype(str).str.strip().unique()
+                ):
+                    t_norm = _normalizar_str(t)
+                    if t_norm == _VALOR_CATEGORIA_MIGRACAO:
+                        emoji, label = "🔄", "→ Migração (Classe 15)"
+                    elif "PME" in t_norm:
+                        emoji, label = "🏢", "→ PME"
+                    else:
+                        emoji, label = "⚪", ""
+                    st.markdown(f"{emoji} `{t}` {label}")
+            else:
+                st.warning("Coluna não encontrada.")
+
+        with tab_os:
+            if cols_tipo:
+                for col in cols_tipo:
+                    st.markdown(f"**`{col}`**")
+                    for t in sorted(
+                        df_full[col].dropna().astype(str).str.strip().unique()
+                    ):
+                        t_norm = _normalizar_str(t)
+                        if _OS_191_NORM in t_norm:
+                            emoji, label = "🔄", "191 — válido para Migração"
+                        elif any(x in t_norm for x in _TERMOS_ND):
+                            emoji, label = "🏠", "Novos Domicílios / PME"
+                        else:
+                            emoji, label = "⚪", ""
+                        st.markdown(f"{emoji} `{t}` {label}")
+                    st.markdown("")
+
+                if "_TIPOS_OS_AGRUPADOS" in df_full.columns:
+                    st.markdown("**Combinações agrupadas:**")
+                    comb = (
+                        df_full["_TIPOS_OS_AGRUPADOS"]
+                        .replace("", pd.NA)
+                        .dropna()
+                        .value_counts()
+                        .reset_index()
+                    )
+                    comb.columns = ["Combinação", "Registros"]
+
+                    def _label_combo(comb_str: str) -> str:
+                        s = df_full.loc[
+                            df_full["_TIPOS_OS_AGRUPADOS"] == comb_str,
+                            "_TIPOS_OS_SET",
+                        ]
+                        if s.empty:
+                            return "⚪"
+                        tipo_set = s.iloc[0]
+                        if _OS_191_NORM in tipo_set:
+                            return "🔄 contém 191"
+                        if any(any(t in v for t in _TERMOS_ND) for v in tipo_set):
+                            return "🏠 Novos Domicílios / PME"
+                        return "⚪ Outros"
+
+                    comb["Classificação OS"] = comb["Combinação"].map(_label_combo)
+                    st.dataframe(
+                        comb[["Classificação OS", "Combinação", "Registros"]],
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+            else:
+                st.warning("Coluna não encontrada.")
+
+        # ── Métricas finais ────────────────────────────────────────────
+        if "TIPO_SERVICO" in df_full.columns:
+            st.markdown("---")
+            segmentos = ["Migração", "Novos Domicílios", "PME", "Outros"]
+            emojis    = ["🔄", "🏠", "🏢", "⚪"]
+            cols_m    = st.columns(len(segmentos))
+            for col_m, seg, emoji in zip(cols_m, segmentos, emojis):
+                n = int((df_full["TIPO_SERVICO"] == seg).sum())
+                col_m.metric(f"{emoji} {seg}", f"{n:,}".replace(",", "."))
 
 
 # =====================================================================
@@ -316,21 +546,22 @@ class PDFExecutivoMigracao:
         defs = [
             ("MIG_Titulo",    {"fontName": "Helvetica-Bold", "fontSize": 22, "leading": 28,
                                "textColor": colors.white, "alignment": TA_CENTER, "spaceAfter": 2}),
-            ("MIG_Subtitulo", {"fontName": "Helvetica",      "fontSize": 9,  "leading": 13,
-                               "textColor": colors.HexColor("#BAE6FD"), "alignment": TA_CENTER, "spaceAfter": 0}),
+            ("MIG_Subtitulo", {"fontName": "Helvetica", "fontSize": 9, "leading": 13,
+                               "textColor": colors.HexColor("#BAE6FD"),
+                               "alignment": TA_CENTER, "spaceAfter": 0}),
             ("MIG_Secao",     {"fontName": "Helvetica-Bold", "fontSize": 11, "leading": 15,
                                "textColor": colors.HexColor(cls.COR_PRIMARIA),
                                "spaceBefore": 8, "spaceAfter": 4, "alignment": TA_LEFT}),
-            ("MIG_Texto",     {"fontName": "Helvetica",      "fontSize": 8,  "leading": 11,
+            ("MIG_Texto",     {"fontName": "Helvetica", "fontSize": 8, "leading": 11,
                                "textColor": colors.HexColor(cls.COR_TEXTO),
                                "alignment": TA_LEFT, "spaceAfter": 3}),
-            ("MIG_Destaque",  {"fontName": "Helvetica-Bold", "fontSize": 8,  "leading": 11,
+            ("MIG_Destaque",  {"fontName": "Helvetica-Bold", "fontSize": 8, "leading": 11,
                                "textColor": colors.HexColor(cls.COR_PRIMARIA),
                                "alignment": TA_LEFT, "spaceAfter": 2}),
-            ("MIG_Alerta",    {"fontName": "Helvetica-Bold", "fontSize": 8,  "leading": 11,
+            ("MIG_Alerta",    {"fontName": "Helvetica-Bold", "fontSize": 8, "leading": 11,
                                "textColor": colors.HexColor(cls.COR_CRITICO),
                                "alignment": TA_LEFT, "spaceAfter": 2}),
-            ("MIG_OK",        {"fontName": "Helvetica-Bold", "fontSize": 8,  "leading": 11,
+            ("MIG_OK",        {"fontName": "Helvetica-Bold", "fontSize": 8, "leading": 11,
                                "textColor": colors.HexColor(cls.COR_OK),
                                "alignment": TA_LEFT, "spaceAfter": 2}),
         ]
@@ -342,7 +573,7 @@ class PDFExecutivoMigracao:
     def _tab(
         cls,
         df: pd.DataFrame,
-        limite: Optional[int]      = None,
+        limite: Optional[int]           = None,
         larguras: Optional[List[float]] = None,
         cor_col_quebra: Optional[str]   = None,
         sla_meta: float = 0.25,
@@ -363,8 +594,8 @@ class PDFExecutivoMigracao:
                 return t
 
             base  = df.head(limite) if limite else df.copy()
-            st_h  = ParagraphStyle("h",  fontName="Helvetica-Bold", fontSize=6.5, leading=8,
-                                   textColor=colors.white, alignment=TA_CENTER)
+            st_h  = ParagraphStyle("h",  fontName="Helvetica-Bold", fontSize=6.5,
+                                   leading=8, textColor=colors.white, alignment=TA_CENTER)
             st_c  = ParagraphStyle("c",  fontName="Helvetica", fontSize=6.5, leading=8.5,
                                    textColor=colors.HexColor(cls.COR_TEXTO), alignment=TA_CENTER)
             st_cl = ParagraphStyle("cl", fontName="Helvetica", fontSize=6.5, leading=8.5,
@@ -383,7 +614,7 @@ class PDFExecutivoMigracao:
                 else [w * cm for w in cls._calcular_larguras(base)]
             )
             if sum(col_widths) > cls.LARGURA_UTIL * cm:
-                fator     = (cls.LARGURA_UTIL * cm) / sum(col_widths)
+                fator      = (cls.LARGURA_UTIL * cm) / sum(col_widths)
                 col_widths = [w * fator for w in col_widths]
 
             tab   = Table(dados, colWidths=col_widths, repeatRows=1)
@@ -460,7 +691,9 @@ class PDFExecutivoMigracao:
             f"Migração — Gestão de Quebra de Agenda  |  "
             f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}  |  Confidencial",
         )
-        canvas.drawRightString(page_w - cls.MARGEM_H * cm, 0.52 * cm, f"Página {doc.page}")
+        canvas.drawRightString(
+            page_w - cls.MARGEM_H * cm, 0.52 * cm, f"Página {doc.page}"
+        )
         canvas.restoreState()
 
     @classmethod
@@ -501,7 +734,11 @@ class PDFExecutivoMigracao:
                 "Não Exec. Proj.":  proj["naoexec_proj"],
                 "vs Meta":          proj["fechamento_proj"] - sla_meta,
             })
-        el.append(cls._tab(pd.DataFrame(cenarios), cor_col_quebra="Fechamento Proj.", sla_meta=sla_meta))
+        el.append(cls._tab(
+            pd.DataFrame(cenarios),
+            cor_col_quebra="Fechamento Proj.",
+            sla_meta=sla_meta,
+        ))
         el.append(Spacer(1, 0.5 * cm))
 
         el.append(Paragraph("2 ─ Técnicos Críticos", s["MIG_Secao"]))
@@ -618,11 +855,11 @@ class PDFExecutivoPME:
                 return t
 
             base  = df.head(limite) if limite else df.copy()
-            st_h  = ParagraphStyle("th",     fontName="Helvetica-Bold", fontSize=6.5, leading=8,
-                                   textColor=colors.white, alignment=TA_CENTER)
-            st_c  = ParagraphStyle("tc",     fontName="Helvetica", fontSize=6.5, leading=8.5,
+            st_h  = ParagraphStyle("th",      fontName="Helvetica-Bold", fontSize=6.5,
+                                   leading=8, textColor=colors.white, alignment=TA_CENTER)
+            st_c  = ParagraphStyle("tc",      fontName="Helvetica", fontSize=6.5, leading=8.5,
                                    textColor=colors.HexColor(cls.COR_TEXTO), alignment=TA_CENTER)
-            st_cl = ParagraphStyle("tc_left",fontName="Helvetica", fontSize=6.5, leading=8.5,
+            st_cl = ParagraphStyle("tc_left", fontName="Helvetica", fontSize=6.5, leading=8.5,
                                    textColor=colors.HexColor(cls.COR_TEXTO), alignment=TA_LEFT)
 
             dados = [[Paragraph(str(c), st_h) for c in base.columns]]
@@ -638,7 +875,7 @@ class PDFExecutivoPME:
                 else [w * cm for w in cls._calcular_larguras(base)]
             )
             if sum(col_widths) > cls.LARGURA_UTIL * cm:
-                fator     = (cls.LARGURA_UTIL * cm) / sum(col_widths)
+                fator      = (cls.LARGURA_UTIL * cm) / sum(col_widths)
                 col_widths = [w * fator for w in col_widths]
 
             tab   = Table(dados, colWidths=col_widths, repeatRows=1)
@@ -707,7 +944,9 @@ class PDFExecutivoPME:
             f"PME — Gestão de Quebra de Agenda  |  "
             f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}  |  Confidencial",
         )
-        canvas.drawRightString(page_w - cls.MARGEM_H * cm, 0.52 * cm, f"Página {doc.page}")
+        canvas.drawRightString(
+            page_w - cls.MARGEM_H * cm, 0.52 * cm, f"Página {doc.page}"
+        )
         canvas.restoreState()
 
     @classmethod
@@ -742,11 +981,11 @@ class PDFExecutivoPME:
         for nome, p in [("Otimista", p_ot), ("Base", p_base), ("Pessimista", p_pess)]:
             proj = Motor.projetar(df, p)
             cenarios.append({
-                "Cenário":        nome,
-                "Probab. Pend.":  p,
-                "Fechamento":     proj["fechamento_proj"],
-                "Não Exec. Proj.":proj["naoexec_proj"],
-                "vs Meta":        proj["fechamento_proj"] - sla_meta,
+                "Cenário":         nome,
+                "Probab. Pend.":   p,
+                "Fechamento":      proj["fechamento_proj"],
+                "Não Exec. Proj.": proj["naoexec_proj"],
+                "vs Meta":         proj["fechamento_proj"] - sla_meta,
             })
         el.append(cls._tab(
             pd.DataFrame(cenarios),
@@ -782,14 +1021,14 @@ class PDFExecutivoPME:
 # =====================================================================
 SEGMENTOS_CONFIG: Dict[str, Any] = {
     "Migração": {
-        "icone":       "🔄",
-        "subtitulo":   "Mudança de Pacote + Instalação de Cabo GPON",
+        "icone":          "🔄",
+        "subtitulo":      "Mudança de Pacote + Instalação de Cabo GPON",
         "cor_primaria":   "#0369A1",
         "cor_secundaria": "#0C4A6E",
-        "grad_hero":   "linear-gradient(135deg, #0C4A6E 0%, #0369A1 55%, #0284C7 100%)",
-        "sombra_hero": "rgba(12, 74, 110, 0.25)",
-        "sla_default": Config.SLA_MIGRACAO,
-        "pdf_class":   PDFExecutivoMigracao,
+        "grad_hero":      "linear-gradient(135deg, #0C4A6E 0%, #0369A1 55%, #0284C7 100%)",
+        "sombra_hero":    "rgba(12, 74, 110, 0.25)",
+        "sla_default":    Config.SLA_MIGRACAO,
+        "pdf_class":      PDFExecutivoMigracao,
         "acoes": [
             ("ALTA",  "Verificar estoque de equipamentos GPON nos almoxarifados das regiões com maior quebra.", "alerta"),
             ("MÉDIA", "Confirmar certificação dos técnicos em instalação GPON.", "acao"),
@@ -798,14 +1037,14 @@ SEGMENTOS_CONFIG: Dict[str, Any] = {
         ],
     },
     "PME": {
-        "icone":       "🏢",
-        "subtitulo":   "Análise estratégica dedicada às Pequenas e Médias Empresas",
+        "icone":          "🏢",
+        "subtitulo":      "Análise estratégica dedicada às Pequenas e Médias Empresas",
         "cor_primaria":   "#7C3AED",
         "cor_secundaria": "#4C1D95",
-        "grad_hero":   "linear-gradient(135deg, #4C1D95 0%, #7C3AED 55%, #A855F7 100%)",
-        "sombra_hero": "rgba(76, 29, 149, 0.25)",
-        "sla_default": Config.SLA_PME,
-        "pdf_class":   PDFExecutivoPME,
+        "grad_hero":      "linear-gradient(135deg, #4C1D95 0%, #7C3AED 55%, #A855F7 100%)",
+        "sombra_hero":    "rgba(76, 29, 149, 0.25)",
+        "sla_default":    Config.SLA_PME,
+        "pdf_class":      PDFExecutivoPME,
         "acoes": [
             ("🟡 MÉDIA", "Verificar disponibilidade de técnicos habilitados em PME.", "acao"),
             ("🟡 MÉDIA", "Acionar equipe comercial PME para comunicação proativa.", "acao"),
@@ -865,7 +1104,9 @@ div[data-testid="stElementContainer"]:has(.topo-fixo-dinamico) {{
     padding: 0.3rem 0.9rem; border-radius: 999px;
     font-size: 0.82rem; font-weight: 700; border: 2px solid;
 }}
-.resultado-base-count {{ color: #64748B; font-size: 0.72rem; margin-left: auto; font-weight: 600; }}
+.resultado-base-count {{
+    color: #64748B; font-size: 0.72rem; margin-left: auto; font-weight: 600;
+}}
 </style>""", unsafe_allow_html=True)
 
 
@@ -888,8 +1129,8 @@ def _html_resultado_base(regioes: List[str], total: int) -> str:
             f'border-color:{cor["border"]};">{escape(r)}</span>'
         )
     if not badges:
-        cor     = cores_regiao["OUTRAS"]
-        badges  = (
+        cor    = cores_regiao["OUTRAS"]
+        badges = (
             f'<span class="resultado-base-regiao" '
             f'style="background:{cor["bg"]};color:{cor["text"]};'
             f'border-color:{cor["border"]};">OUTRAS</span>'
@@ -916,19 +1157,19 @@ def _render_topo_fixo(segmento: str, regioes: List[str], total: int) -> None:
 
 
 def _render_card_status(segmento: str, m_seg: Dict[str, Any], sla_meta: float) -> None:
-    conf        = SEGMENTOS_CONFIG[segmento]
+    conf         = SEGMENTOS_CONFIG[segmento]
     quebra_atual = float(m_seg["quebra_atual"])
-    dentro_sla  = quebra_atual <= sla_meta
+    dentro_sla   = quebra_atual <= sla_meta
 
     if dentro_sla:
         status_label, status_icone = "DENTRO DO SLA", "✓"
         cor_status, cor_bg, cor_txt = "#059669", "#D1FAE5", "#065F46"
-        mensagem      = f"{segmento} com folga de <strong>{sla_meta - quebra_atual:.2%}</strong> em relação à meta."
+        mensagem       = f"{segmento} com folga de <strong>{sla_meta - quebra_atual:.2%}</strong> em relação à meta."
         icone_mensagem = "✅"
     else:
         status_label, status_icone = "FORA DO SLA", "!"
         cor_status, cor_bg, cor_txt = "#DC2626", "#FEE2E2", "#991B1B"
-        mensagem      = f"{segmento} acima da meta em <strong>{quebra_atual - sla_meta:.2%}</strong>. Ação corretiva imediata necessária."
+        mensagem       = f"{segmento} acima da meta em <strong>{quebra_atual - sla_meta:.2%}</strong>. Ação corretiva imediata necessária."
         icone_mensagem = "🚨"
 
     pct_barra = min(100.0, (quebra_atual / (sla_meta * 2)) * 100 if sla_meta > 0 else 0)
@@ -937,161 +1178,75 @@ def _render_card_status(segmento: str, m_seg: Dict[str, Any], sla_meta: float) -
 <div style="background:white;border:1px solid #E5E7EB;border-radius:14px;
             padding:20px 24px;box-shadow:0 2px 8px rgba(0,0,0,0.04);
             margin:16px 0 24px 0;border-top:3px solid {conf['cor_primaria']};">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                flex-wrap:wrap;gap:16px;">
         <div style="display:flex;align-items:center;gap:14px;">
             <div style="width:44px;height:44px;background:{conf['grad_hero']};
                         border-radius:10px;display:flex;align-items:center;
-                        justify-content:center;box-shadow:0 4px 12px {conf['sombra_hero']};">
+                        justify-content:center;
+                        box-shadow:0 4px 12px {conf['sombra_hero']};">
                 <span style="font-size:22px;">{conf['icone']}</span>
             </div>
             <div>
-                <div style="font-family:'Manrope',sans-serif;font-size:18px;font-weight:800;color:#1F2937;">{segmento}</div>
-                <div style="font-family:'Inter',sans-serif;font-size:12px;color:#6B7280;font-weight:500;">Análise de Quebra</div>
+                <div style="font-family:'Manrope',sans-serif;font-size:18px;
+                            font-weight:800;color:#1F2937;">{segmento}</div>
+                <div style="font-family:'Inter',sans-serif;font-size:12px;
+                            color:#6B7280;font-weight:500;">Análise de Quebra</div>
             </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <div style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;
-                        background:{cor_bg};border-radius:999px;border:1px solid {cor_status};">
-                <span style="display:inline-flex;align-items:center;justify-content:center;
-                             width:18px;height:18px;background:{cor_status};color:white;
-                             border-radius:50%;font-size:11px;font-weight:800;">{status_icone}</span>
-                <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;
-                             color:{cor_txt};text-transform:uppercase;">{status_label}</span>
+            <div style="display:inline-flex;align-items:center;gap:6px;
+                        padding:6px 14px;background:{cor_bg};
+                        border-radius:999px;border:1px solid {cor_status};">
+                <span style="display:inline-flex;align-items:center;
+                             justify-content:center;width:18px;height:18px;
+                             background:{cor_status};color:white;border-radius:50%;
+                             font-size:11px;font-weight:800;">{status_icone}</span>
+                <span style="font-family:'Inter',sans-serif;font-size:11px;
+                             font-weight:700;color:{cor_txt};
+                             text-transform:uppercase;">{status_label}</span>
             </div>
             <div style="display:inline-flex;flex-direction:column;padding:6px 14px;
                         background:#F0F9FF;border-radius:8px;border:1px solid #BAE6FD;">
-                <span style="font-size:10px;color:#6B7280;font-weight:600;text-transform:uppercase;">Quebra Atual</span>
-                <span style="font-family:'Manrope',sans-serif;font-size:16px;color:{cor_status};font-weight:800;">{quebra_atual:.2%}</span>
+                <span style="font-size:10px;color:#6B7280;font-weight:600;
+                             text-transform:uppercase;">Quebra Atual</span>
+                <span style="font-family:'Manrope',sans-serif;font-size:16px;
+                             color:{cor_status};font-weight:800;">{quebra_atual:.2%}</span>
             </div>
             <div style="display:inline-flex;flex-direction:column;padding:6px 14px;
                         background:#F0F9FF;border-radius:8px;border:1px solid #BAE6FD;">
-                <span style="font-size:10px;color:#6B7280;font-weight:600;text-transform:uppercase;">Meta SLA</span>
-                <span style="font-family:'Manrope',sans-serif;font-size:16px;color:{conf['cor_secundaria']};font-weight:800;">{sla_meta:.2%}</span>
+                <span style="font-size:10px;color:#6B7280;font-weight:600;
+                             text-transform:uppercase;">Meta SLA</span>
+                <span style="font-family:'Manrope',sans-serif;font-size:16px;
+                             color:{conf['cor_secundaria']};
+                             font-weight:800;">{sla_meta:.2%}</span>
             </div>
         </div>
     </div>
     <div style="margin:16px 0 12px 0;">
         <div style="display:flex;justify-content:space-between;margin-bottom:6px;
                     font-size:11px;color:#6B7280;font-weight:600;">
-            <span>0%</span><span>Meta {sla_meta:.2%}</span><span>{sla_meta*2:.0%}</span>
+            <span>0%</span><span>Meta {sla_meta:.2%}</span>
+            <span>{sla_meta*2:.0%}</span>
         </div>
-        <div style="position:relative;height:8px;background:#E5E7EB;border-radius:4px;overflow:hidden;">
-            <div style="position:absolute;left:50%;top:0;width:2px;height:100%;background:#374151;z-index:2;"></div>
+        <div style="position:relative;height:8px;background:#E5E7EB;
+                    border-radius:4px;overflow:hidden;">
+            <div style="position:absolute;left:50%;top:0;width:2px;height:100%;
+                        background:#374151;z-index:2;"></div>
             <div style="width:{pct_barra}%;height:100%;
-                        background:linear-gradient(90deg,{cor_status} 0%,{cor_status}CC 100%);
-                        border-radius:4px;"></div>
+                        background:linear-gradient(90deg,{cor_status} 0%,
+                        {cor_status}CC 100%);border-radius:4px;"></div>
         </div>
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;
-                background:{cor_bg};border-left:3px solid {cor_status};border-radius:6px;">
+                background:{cor_bg};border-left:3px solid {cor_status};
+                border-radius:6px;">
         <span style="font-size:16px;line-height:1;flex-shrink:0;">{icone_mensagem}</span>
         <div style="font-family:'Inter',sans-serif;font-size:13px;color:{cor_txt};
                     line-height:1.55;font-weight:500;">{mensagem}</div>
     </div>
 </div>"""
     st.markdown(html.replace(".", ","), unsafe_allow_html=True)
-
-
-# =====================================================================
-# DEBUG SIDEBAR
-# =====================================================================
-def _render_debug_tipos(df_full: pd.DataFrame) -> None:
-    with st.expander("🔎 Tipos de O.S. detectados", expanded=False):
-
-        # ── Distribuição final ──────────────────────────────────────
-        if "TIPO_SERVICO" in df_full.columns:
-            st.markdown("**📊 Distribuição TIPO_SERVICO:**")
-            dist = df_full["TIPO_SERVICO"].value_counts().reset_index()
-            dist.columns = ["Segmento", "Registros"]
-            st.dataframe(dist, hide_index=True, use_container_width=True)
-
-        st.markdown("---")
-
-        # ── Colunas detectadas ──────────────────────────────────────
-        cols_tipo = _detectar_cols_tipo(df_full)
-        if not cols_tipo:
-            st.warning("⚠️ Nenhuma coluna 'TIPO O.S*' encontrada.")
-            return
-
-        st.markdown(
-            f"**{len(cols_tipo)} coluna(s):** "
-            + ", ".join(f"`{c}`" for c in cols_tipo)
-        )
-
-        # ── Regras ─────────────────────────────────────────────────
-        st.markdown("---")
-        st.markdown("**📋 Regras de Migração:**")
-        st.markdown(
-            f"1. 🔄 `{_OS_MUD_PAC}` **+** `{_OS_GPON}` → Migração\n"
-            f"2. 🔄 `{_OS_MUD_PAC_DIG}` **+** `{_OS_GPON}` → Migração\n"
-            f"3. 🔄 `{_OS_GPON}` _(standalone)_ → Migração"
-        )
-
-        # ── Combinações agrupadas ───────────────────────────────────
-        if "_TIPOS_OS_AGRUPADOS" in df_full.columns:
-            st.markdown("---")
-            st.markdown("**🔗 Combinações encontradas:**")
-
-            combinacoes = (
-                df_full["_TIPOS_OS_AGRUPADOS"]
-                .replace("", pd.NA)
-                .dropna()
-                .value_counts()
-                .reset_index()
-            )
-            combinacoes.columns = ["Combinação", "Registros"]
-
-            def _label_comb(comb: str) -> str:
-                comb_norm = _normalizar_str(comb)
-                if _OS_GPON_NORM in comb_norm:
-                    return "🔄 Migração"
-                if "PME" in comb_norm or "EMPRESAR" in comb_norm:
-                    return "🏢 PME"
-                return "⚪ Outros"
-
-            combinacoes["Classificação"] = combinacoes["Combinação"].map(_label_comb)
-            st.dataframe(
-                combinacoes[["Classificação", "Combinação", "Registros"]],
-                hide_index=True,
-                use_container_width=True,
-            )
-
-        # ── Valores únicos por coluna ───────────────────────────────
-        st.markdown("---")
-        st.markdown("**📋 Valores únicos por coluna:**")
-        for col in cols_tipo:
-            st.markdown(f"**`{col}`**")
-            tipos_unicos = sorted(
-                df_full[col].dropna().astype(str).str.strip().unique()
-            )
-            if not tipos_unicos:
-                st.caption("_(sem valores)_")
-                continue
-            for t in tipos_unicos:
-                t_norm = _normalizar_str(t)
-                if t_norm == _OS_GPON_NORM:
-                    emoji, label = "🔄", "GPON — Migração"
-                elif t_norm == _OS_MUD_PAC_NORM:
-                    emoji, label = "🔄", "Mudança de Pacote"
-                elif t_norm == _OS_MUD_PAC_DIG_NORM:
-                    emoji, label = "🔄", "Mudança de Pacote Digital"
-                elif "PME" in t_norm or "EMPRESAR" in t_norm:
-                    emoji, label = "🏢", "PME"
-                else:
-                    emoji, label = "⚪", ""
-                st.markdown(f"{emoji} `{t}` {label}")
-            st.markdown("")
-
-        # ── Métricas ────────────────────────────────────────────────
-        if "TIPO_SERVICO" in df_full.columns:
-            st.markdown("---")
-            n_mig = int((df_full["TIPO_SERVICO"] == "Migração").sum())
-            n_pme = int((df_full["TIPO_SERVICO"] == "PME").sum())
-            n_out = int((~df_full["TIPO_SERVICO"].isin(["Migração", "PME"])).sum())
-            mc1, mc2, mc3 = st.columns(3)
-            mc1.metric("🔄 Migração", f"{n_mig:,}".replace(",", "."))
-            mc2.metric("🏢 PME",      f"{n_pme:,}".replace(",", "."))
-            mc3.metric("⚪ Outros",    f"{n_out:,}".replace(",", "."))
 
 
 # =====================================================================
@@ -1123,7 +1278,9 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
 
     df_p = df_seg[mask].copy()
     if df_p.empty:
-        return pd.DataFrame(columns=["Contrato", "Login", "Técnico", "Monitor", "Qtde. O.S."])
+        return pd.DataFrame(
+            columns=["Contrato", "Login", "Técnico", "Monitor", "Qtde. O.S."]
+        )
 
     df_out = pd.DataFrame(index=df_p.index)
     for nome, cands in MAPA.items():
@@ -1131,7 +1288,9 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
         df_out[nome] = df_p[col].values if col else "N/D"
 
     if "Qtde. O.S." in df_out.columns:
-        df_out["Qtde. O.S."] = pd.to_numeric(df_out["Qtde. O.S."], errors="coerce").fillna(0).astype(int)
+        df_out["Qtde. O.S."] = (
+            pd.to_numeric(df_out["Qtde. O.S."], errors="coerce").fillna(0).astype(int)
+        )
 
     return (
         df_out.drop_duplicates()
@@ -1144,15 +1303,23 @@ def _build_df_pendentes(df_seg: pd.DataFrame) -> pd.DataFrame:
 # =====================================================================
 # SUB-ABAS
 # =====================================================================
-def _sub_visao_geral(segmento, df_seg, m_seg, p_ot, p_base, p_pess, sla_meta) -> None:
+def _sub_visao_geral(
+    segmento: str,
+    df_seg: pd.DataFrame,
+    m_seg: Dict[str, Any],
+    p_ot: float,
+    p_base: float,
+    p_pess: float,
+    sla_meta: float,
+) -> None:
     render_section(f"📊 Resumo Operacional — {segmento}")
     tema_q: TemaKPI = "vermelho" if m_seg["quebra_atual"] > sla_meta else "verde"
     c1, c2, c3, c4, c5 = st.columns(5)
-    render_kpi(c1, "Alocado",     f"{int(m_seg['alocado']):,}",  tema="azul")
-    render_kpi(c2, "Executadas",  f"{int(m_seg['exec']):,}",     tema="verde")
-    render_kpi(c3, "Não Exec.",   f"{int(m_seg['naoexec']):,}",  tema="laranja")
-    render_kpi(c4, "Pendentes",   f"{int(m_seg['pend']):,}",     tema="cinza")
-    render_kpi(c5, "Quebra Atual",f"{m_seg['quebra_atual']:.2%}",
+    render_kpi(c1, "Alocado",    f"{int(m_seg['alocado']):,}",  tema="azul")
+    render_kpi(c2, "Executadas", f"{int(m_seg['exec']):,}",     tema="verde")
+    render_kpi(c3, "Não Exec.",  f"{int(m_seg['naoexec']):,}",  tema="laranja")
+    render_kpi(c4, "Pendentes",  f"{int(m_seg['pend']):,}",     tema="cinza")
+    render_kpi(c5, "Quebra Atual", f"{m_seg['quebra_atual']:.2%}",
                sub=f"Meta: {sla_meta:.0%}", tema=tema_q)
 
     st.markdown("")
@@ -1172,20 +1339,26 @@ def _sub_visao_geral(segmento, df_seg, m_seg, p_ot, p_base, p_pess, sla_meta) ->
         fig = go.Figure(go.Indicator(
             mode="gauge+number+delta",
             value=m_seg["quebra_atual"] * 100,
-            delta={"reference": sla_meta * 100,
-                   "increasing": {"color": "#EF4444"},
-                   "decreasing": {"color": "#10B981"}, "suffix": "%"},
+            delta={
+                "reference": sla_meta * 100,
+                "increasing": {"color": "#EF4444"},
+                "decreasing": {"color": "#10B981"},
+                "suffix": "%",
+            },
             number={"suffix": "%", "font": {"size": 40}},
             gauge={
                 "axis":  {"range": [0, 50], "ticksuffix": "%"},
                 "bar":   {"color": cor_bar},
                 "steps": [
-                    {"range": [0, sla_meta * 100],          "color": "#DCFCE7"},
+                    {"range": [0, sla_meta * 100],              "color": "#DCFCE7"},
                     {"range": [sla_meta * 100, sla_meta * 120], "color": "#FEF9C3"},
-                    {"range": [sla_meta * 120, 50],          "color": "#FEE2E2"},
+                    {"range": [sla_meta * 120, 50],             "color": "#FEE2E2"},
                 ],
-                "threshold": {"line": {"color": "#DC2626", "width": 3},
-                              "thickness": 0.85, "value": sla_meta * 100},
+                "threshold": {
+                    "line": {"color": "#DC2626", "width": 3},
+                    "thickness": 0.85,
+                    "value": sla_meta * 100,
+                },
             },
             title={"text": f"Quebra vs. Meta {sla_meta:.0%}", "font": {"size": 14}},
         ))
@@ -1200,15 +1373,18 @@ def _sub_visao_geral(segmento, df_seg, m_seg, p_ot, p_base, p_pess, sla_meta) ->
         "vermelho" if folga["estourado"]
         else ("verde" if folga["folga_ne_pendente"] > 0 else "laranja")
     )
-    render_kpi(f1, "Folga (OS)",      f"{int(np.floor(folga['folga_ne_pendente'])):,}",
+    render_kpi(f1, "Folga (OS)",
+               f"{int(np.floor(folga['folga_ne_pendente'])):,}",
                sub="Não Exec. ainda permitidas", tema=cor_f)
-    render_kpi(f2, "Execução Mínima", f"{int(np.ceil(folga['precisa_executar_pendente'])):,}",
+    render_kpi(f2, "Execução Mínima",
+               f"{int(np.ceil(folga['precisa_executar_pendente'])):,}",
                sub="Pendentes a executar para atingir meta", tema="azul")
-    render_kpi(f3, "Limite NE Total", f"{int(folga['limite_ne_total']):,}",
+    render_kpi(f3, "Limite NE Total",
+               f"{int(folga['limite_ne_total']):,}",
                sub=f"= {sla_meta:.0%} × {int(folga['alocado']):,}", tema="cinza")
 
 
-def _sub_causa_raiz(segmento, df_seg) -> None:
+def _sub_causa_raiz(segmento: str, df_seg: pd.DataFrame) -> None:
     render_section(f"🔍 Causa Raiz — {segmento}")
     df_c = Motor.causa_raiz_segmento(df_seg, segmento, "_COL_BAIXA", top_n=8)
     if df_c.empty:
@@ -1223,12 +1399,16 @@ def _sub_causa_raiz(segmento, df_seg) -> None:
         cor_bar   = SEGMENTOS_CONFIG[segmento]["cor_primaria"]
         cor_linha = SEGMENTOS_CONFIG[segmento]["cor_secundaria"]
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=df_c["Motivo de Baixa"], y=df_c["Volume"],
-                             name="Volume", marker_color=cor_bar,
-                             text=df_c["Volume"], textposition="outside"))
-        fig.add_trace(go.Scatter(x=df_c["Motivo de Baixa"], y=df_c["Acumulado"],
-                                 name="Acumulado %", yaxis="y2", mode="lines+markers",
-                                 line=dict(color=cor_linha, width=2), marker=dict(size=7)))
+        fig.add_trace(go.Bar(
+            x=df_c["Motivo de Baixa"], y=df_c["Volume"],
+            name="Volume", marker_color=cor_bar,
+            text=df_c["Volume"], textposition="outside",
+        ))
+        fig.add_trace(go.Scatter(
+            x=df_c["Motivo de Baixa"], y=df_c["Acumulado"],
+            name="Acumulado %", yaxis="y2", mode="lines+markers",
+            line=dict(color=cor_linha, width=2), marker=dict(size=7),
+        ))
         fig.update_layout(
             title=f"Pareto de Motivos — {segmento}",
             yaxis=dict(title="Volume"),
@@ -1245,12 +1425,20 @@ def _sub_causa_raiz(segmento, df_seg) -> None:
         t1, t2 = df_c.iloc[0], df_c.iloc[1]
         render_insight(
             f"Os 2 principais motivos (**{t1['Motivo de Baixa']}** e "
-            f"**{t2['Motivo de Baixa']}**) respondem por **{t2['Acumulado']:.1%}** das quebras.",
+            f"**{t2['Motivo de Baixa']}**) respondem por "
+            f"**{t2['Acumulado']:.1%}** das quebras.",
             tipo="acao",
         )
 
 
-def _sub_tecnicos(segmento, df_seg, p_base, min_aloc, top_n, sla_meta) -> None:
+def _sub_tecnicos(
+    segmento: str,
+    df_seg: pd.DataFrame,
+    p_base: float,
+    min_aloc: float,
+    top_n: int,
+    sla_meta: float,
+) -> None:
     render_section(f"👤 Técnicos com Maior Quebra — {segmento}")
     df_tec = Motor.tecnicos_criticos(df_seg, segmento, p_base, min_aloc, top_n)
     if df_tec.empty:
@@ -1278,11 +1466,17 @@ def _sub_tecnicos(segmento, df_seg, p_base, min_aloc, top_n, sla_meta) -> None:
     fig.add_vline(x=sla_meta, line_dash="dash", line_color="#DC2626",
                   annotation_text=f"Meta {sla_meta:.0%}")
     fig.update_layout(title="Quebra Projetada por Técnico", xaxis_tickformat=".1%",
-                      height=max(300, len(df_plot) * 36), margin=dict(t=40, b=20, l=10, r=60))
+                      height=max(300, len(df_plot) * 36),
+                      margin=dict(t=40, b=20, l=10, r=60))
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
-def _sub_plano_acao(segmento, df_seg, p_base, sla_meta) -> None:
+def _sub_plano_acao(
+    segmento: str,
+    df_seg: pd.DataFrame,
+    p_base: float,
+    sla_meta: float,
+) -> None:
     render_section(f"🎯 Plano de Ação — {segmento}")
     folga     = Motor.folga_sla(df_seg, sla_meta)
     cen       = Motor.projetar(df_seg, p_base)
@@ -1310,14 +1504,16 @@ def _sub_plano_acao(segmento, df_seg, p_base, sla_meta) -> None:
                            "critico"))
         if pend_exec > 0:
             acoes.append(("🟠 ALTA",
-                           f"Garantir execução de {int(np.ceil(pend_exec)):,} OS pendentes para atingir meta.",
+                           f"Garantir execução de {int(np.ceil(pend_exec)):,} OS pendentes "
+                           "para atingir meta.",
                            "alerta"))
         acoes.extend(SEGMENTOS_CONFIG[segmento]["acoes"])
         for pri, ac, tp in acoes:
             render_insight(f"**{pri}** — {ac}", tipo=cast(TipoInsight, tp))
 
-    df_plano = pd.DataFrame([{"Segmento": segmento, "Prioridade": p, "Ação": a}
-                              for p, a, _ in acoes])
+    df_plano = pd.DataFrame(
+        [{"Segmento": segmento, "Prioridade": p, "Ação": a} for p, a, _ in acoes]
+    )
     if not df_plano.empty:
         st.download_button("📥 Exportar Plano",
                            Utils.gerar_excel(df_plano, f"Plano_{segmento[:20]}"),
@@ -1325,7 +1521,7 @@ def _sub_plano_acao(segmento, df_seg, p_base, sla_meta) -> None:
                            key=f"dl_plano_{segmento}")
 
 
-def _sub_pendentes(segmento, df_seg) -> None:
+def _sub_pendentes(segmento: str, df_seg: pd.DataFrame) -> None:
     render_section(f"📋 Contratos Pendentes — {segmento}")
     df_pend    = _build_df_pendentes(df_seg)
     total_pend = len(df_pend)
@@ -1349,15 +1545,23 @@ def _sub_pendentes(segmento, df_seg) -> None:
     with st.expander("🔎 Filtros rápidos", expanded=False):
         fc1, fc2 = st.columns(2)
         with fc1:
-            f_tec = st.selectbox("Técnico",
-                                 ["Todos"] + sorted(str(x) for x in df_pend["Técnico"].dropna().unique()
-                                                    if str(x) not in {"N/D", "nan"}),
-                                 key=f"pend_f_tec_{segmento}")
+            f_tec = st.selectbox(
+                "Técnico",
+                ["Todos"] + sorted(
+                    str(x) for x in df_pend["Técnico"].dropna().unique()
+                    if str(x) not in {"N/D", "nan"}
+                ),
+                key=f"pend_f_tec_{segmento}",
+            )
         with fc2:
-            f_mon = st.selectbox("Monitor",
-                                 ["Todos"] + sorted(str(x) for x in df_pend["Monitor"].dropna().unique()
-                                                    if str(x) not in {"N/D", "nan"}),
-                                 key=f"pend_f_mon_{segmento}")
+            f_mon = st.selectbox(
+                "Monitor",
+                ["Todos"] + sorted(
+                    str(x) for x in df_pend["Monitor"].dropna().unique()
+                    if str(x) not in {"N/D", "nan"}
+                ),
+                key=f"pend_f_mon_{segmento}",
+            )
 
     df_view = df_pend.copy()
     if f_tec != "Todos":
@@ -1366,7 +1570,8 @@ def _sub_pendentes(segmento, df_seg) -> None:
         df_view = df_view[df_view["Monitor"] == f_mon]
 
     st.markdown(f"**Exibindo {len(df_view):,} de {total_pend:,} contratos pendentes**")
-    render_dataframe(df_view.reset_index(drop=True), titulo="Pendentes", icone="📋", height=480)
+    render_dataframe(df_view.reset_index(drop=True),
+                     titulo="Pendentes", icone="📋", height=480)
 
     st.markdown("")
     col_exp1, col_exp2, _ = st.columns([1, 1, 2])
@@ -1402,7 +1607,7 @@ def main() -> None:
             Utils.classificar_status(df_full[col_s]) if col_s else "Pendente"
         )
 
-    # ── ✅ Cria _TIPOS_OS_AGRUPADOS + reclassifica TIPO_SERVICO ───────
+    # ── ✅ Cria _TIPOS_OS_AGRUPADOS + classifica TIPO_SERVICO ─────────
     df_full, df_full["TIPO_SERVICO"] = _classificar_tipo_servico(df_full)
 
     # ── Sidebar ────────────────────────────────────────────────────────
@@ -1418,30 +1623,47 @@ def main() -> None:
             str(x) for x in df_full["MONITOR"].dropna().unique()
             if str(x) not in {"nan", "SEM MONITOR", "NÃO MAPEADO"}
         )
-        sel_mon  = st.selectbox("👔 Monitor", monitores, key=f"mon_{segmento_selecionado}")
-        df_filt  = df_full if sel_mon == "Todos" else df_full[df_full["MONITOR"] == sel_mon]
+        sel_mon  = st.selectbox("👔 Monitor", monitores,
+                                key=f"mon_{segmento_selecionado}")
+        df_filt  = (
+            df_full if sel_mon == "Todos"
+            else df_full[df_full["MONITOR"] == sel_mon]
+        )
 
         tecnicos = ["Todos"] + sorted(
             str(x) for x in df_filt["TÉCNICO"].dropna().unique()
             if str(x) not in {"nan", "NÃO MAPEADO"}
         )
-        sel_tec = st.selectbox("👤 Técnico", tecnicos, key=f"tec_{segmento_selecionado}")
-        df      = df_filt if sel_tec == "Todos" else df_filt[df_filt["TÉCNICO"] == sel_tec]
+        sel_tec = st.selectbox("👤 Técnico", tecnicos,
+                               key=f"tec_{segmento_selecionado}")
+        df      = (
+            df_filt if sel_tec == "Todos"
+            else df_filt[df_filt["TÉCNICO"] == sel_tec]
+        )
 
         st.divider()
         st.subheader("🔮 Probabilidades")
-        p_ot   = st.slider("Otimista (%)",   0, 100, 15, 5, key=f"pot_{segmento_selecionado}")  / 100.0
-        p_base = st.slider("Base (%)",       0, 100, 20 if segmento_selecionado == "PME" else 25,
-                           5, key=f"pbase_{segmento_selecionado}") / 100.0
-        p_pess = st.slider("Pessimista (%)", 0, 100, 50, 5, key=f"ppess_{segmento_selecionado}") / 100.0
+        p_ot   = st.slider("Otimista (%)", 0, 100, 15, 5,
+                           key=f"pot_{segmento_selecionado}") / 100.0
+        p_base = st.slider("Base (%)", 0, 100,
+                           20 if segmento_selecionado == "PME" else 25, 5,
+                           key=f"pbase_{segmento_selecionado}") / 100.0
+        p_pess = st.slider("Pessimista (%)", 0, 100, 50, 5,
+                           key=f"ppess_{segmento_selecionado}") / 100.0
 
         st.divider()
         padrao_sla = float(SEGMENTOS_CONFIG[segmento_selecionado]["sla_default"] * 100)
-        sla_meta   = st.number_input("Meta SLA (%)", 0.0, 100.0, padrao_sla, 0.5,
-                                     key=f"sla_v_{segmento_selecionado}") / 100.0
+        sla_meta   = st.number_input(
+            "Meta SLA (%)", 0.0, 100.0, padrao_sla, 0.5,
+            key=f"sla_v_{segmento_selecionado}",
+        ) / 100.0
         min_aloc = 1.0
         top_n    = 999_999
 
+        st.divider()
+        if st.button("🔄 Reiniciar Painel", use_container_width=True):
+            st.session_state["df_memoria"] = None
+            st.rerun()
         st.divider()
         _render_debug_tipos(df_full)
 
@@ -1453,7 +1675,8 @@ def main() -> None:
     _injetar_css_dinamico(segmento_selecionado)
 
     regioes = (
-        [str(r).strip().upper() for r in df[Config.COL_REGIAO].dropna().unique() if str(r).strip()]
+        [str(r).strip().upper() for r in df[Config.COL_REGIAO].dropna().unique()
+         if str(r).strip()]
         if Config.COL_REGIAO in df.columns
         else ["OUTRAS"]
     )
@@ -1465,7 +1688,7 @@ def main() -> None:
         render_insight(
             f"Nenhum registro classificado como **{segmento_selecionado}** "
             "nos filtros atuais.  \n"
-            "Verifique o expander **🔎 Tipos de O.S. detectados** na sidebar.",
+            "Verifique o expander **🔎 Critérios de Classificação** na sidebar.",
             tipo="info",
         )
         return
@@ -1486,14 +1709,20 @@ def main() -> None:
         st.download_button(
             label=f"📄 Baixar PDF — {segmento_selecionado}",
             data=pdf_bytes,
-            file_name=f"relatorio_{segmento_selecionado.lower()}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+            file_name=(
+                f"relatorio_{segmento_selecionado.lower()}_"
+                f"{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+            ),
             mime="application/pdf",
             key=f"pdf_dl_{segmento_selecionado}",
             use_container_width=True,
             type="primary",
         )
     with col_desc:
-        render_insight("O PDF inclui métricas, projeções, top técnicos e plano de ação.", tipo="info")
+        render_insight(
+            "O PDF inclui métricas, projeções, top técnicos e plano de ação.",
+            tipo="info",
+        )
 
     st.divider()
 
@@ -1503,11 +1732,15 @@ def main() -> None:
         "👤 Técnicos",    "🎯 Plano de Ação", "📋 Pendentes",
     ])
     with sub1:
-        _sub_visao_geral(segmento_selecionado, df_seg, m_seg, p_ot, p_base, p_pess, sla_meta)
+        _sub_visao_geral(
+            segmento_selecionado, df_seg, m_seg, p_ot, p_base, p_pess, sla_meta
+        )
     with sub2:
         _sub_causa_raiz(segmento_selecionado, df_seg)
     with sub3:
-        _sub_tecnicos(segmento_selecionado, df_seg, p_base, min_aloc, top_n, sla_meta)
+        _sub_tecnicos(
+            segmento_selecionado, df_seg, p_base, min_aloc, top_n, sla_meta
+        )
     with sub4:
         _sub_plano_acao(segmento_selecionado, df_seg, p_base, sla_meta)
     with sub5:
