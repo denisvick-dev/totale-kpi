@@ -2,42 +2,42 @@ import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 import io
 from pathlib import Path
+import traceback
 
 # ============ CONFIGURAÇÕES ============
 
 # Cores da marca
 COR_AZUL = "#012869"
-COR_LARANJA = "#FD4601"
+COR_LARANJA = "#FF4B00"
 COR_CINZA = "#555555"
 COR_CINZA_CLARO = "#F5F7FA"
 COR_CINZA_MEDIO = "#E1E5EB"
 COR_BRANCA = "#FFFFFF"
 COR_TEXTO = "#2C3E50"
 
-# Dimensões do template
-TEMPLATE_WIDTH = 1327
-TEMPLATE_HEIGHT = 284
+# Dimensão ÚNICA (template = saída)
+IMG_WIDTH = 600
+IMG_HEIGHT = 123
 
-# Diretório raiz do projeto (detecta automaticamente)
+# Diretório raiz do projeto
 ARQUIVO_ATUAL = Path(__file__).resolve()
 if ARQUIVO_ATUAL.parent.name == "pages":
     BASE_DIR = ARQUIVO_ATUAL.parent.parent
 else:
     BASE_DIR = ARQUIVO_ATUAL.parent
 
-# Diretórios do projeto
+# Diretórios
 FONTS_DIR = BASE_DIR / "fonts"
 ASSETS_DIR = BASE_DIR / "assets"
 ICONS_DIR = ASSETS_DIR / "icons"
 IMAGES_DIR = ASSETS_DIR / "images"
 
-# Caminhos dos arquivos
+# Arquivos
 FONTE_REGULAR = FONTS_DIR / "Oscine-Regular.ttf"
 FONTE_BOLD = FONTS_DIR / "Oscine-Bold.ttf"
 ICONE_INSTAGRAM = ICONS_DIR / "instagram.png"
 ICONE_LINKEDIN = ICONS_DIR / "linkedin.png"
-TEMPLATE_BASE = IMAGES_DIR / "template-base.png"
-
+TEMPLATE_BASE = IMAGES_DIR / "ass_email_totale.png"
 
 # ============ STREAMLIT CONFIG ============
 
@@ -48,38 +48,33 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS Corporativo Personalizado
+# ============ CSS CORPORATIVO ============
+
 st.markdown(f"""
     <style>
-    /* Importar fonte profissional */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* Reset e base */
+
     html, body, [class*="css"] {{
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }}
-    
-    /* Esconder apenas o menu (mantém header para navegação) */
+
     #MainMenu {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
-    
-    /* Container principal */
+    footer    {{visibility: hidden;}}
+
     .main .block-container {{
         padding-top: 2rem;
         padding-bottom: 2rem;
         max-width: 1400px;
     }}
-    
-    /* Header corporativo */
+
     .corporate-header {{
         background: linear-gradient(135deg, {COR_AZUL} 0%, #023a9c 100%);
         padding: 2rem 3rem;
         border-radius: 12px;
         margin-bottom: 2rem;
-        box-shadow: 0 4px 20px rgba(1, 40, 105, 0.15);
+        box-shadow: 0 4px 20px rgba(1,40,105,0.15);
         color: white;
     }}
-    
     .corporate-header h1 {{
         color: white !important;
         font-size: 2rem !important;
@@ -87,14 +82,11 @@ st.markdown(f"""
         margin: 0 !important;
         letter-spacing: -0.5px;
     }}
-    
     .corporate-header p {{
-        color: rgba(255, 255, 255, 0.85) !important;
+        color: rgba(255,255,255,0.85) !important;
         font-size: 1rem !important;
         margin: 0.5rem 0 0 0 !important;
-        font-weight: 400;
     }}
-    
     .header-badge {{
         display: inline-block;
         background: {COR_LARANJA};
@@ -107,8 +99,7 @@ st.markdown(f"""
         text-transform: uppercase;
         margin-bottom: 8px;
     }}
-    
-    /* Seções (na área principal) */
+
     .section-title {{
         color: {COR_AZUL};
         font-size: 1.25rem;
@@ -118,20 +109,17 @@ st.markdown(f"""
         align-items: center;
         gap: 8px;
     }}
-    
     .section-subtitle {{
         color: {COR_CINZA};
         font-size: 0.875rem;
         margin-bottom: 1.5rem;
     }}
-    
-    /* Inputs (apenas na área principal, NÃO na sidebar) */
+
     section.main .stTextInput > label {{
         color: {COR_TEXTO} !important;
         font-weight: 500 !important;
         font-size: 0.875rem !important;
     }}
-    
     section.main .stTextInput > div > div > input {{
         border-radius: 8px !important;
         border: 1.5px solid {COR_CINZA_MEDIO} !important;
@@ -139,21 +127,18 @@ st.markdown(f"""
         font-size: 0.95rem !important;
         transition: all 0.2s ease !important;
     }}
-    
     section.main .stTextInput > div > div > input:focus {{
         border-color: {COR_LARANJA} !important;
-        box-shadow: 0 0 0 3px rgba(243, 124, 4, 0.1) !important;
+        box-shadow: 0 0 0 3px rgba(255,75,0,0.1) !important;
     }}
-    
-    /* Selectbox área principal */
     section.main .stSelectbox > label {{
         color: {COR_TEXTO} !important;
         font-weight: 500 !important;
         font-size: 0.875rem !important;
     }}
-    
-    /* Botões */
-    .stButton > button, .stDownloadButton > button {{
+
+    .stButton > button,
+    .stDownloadButton > button {{
         background: linear-gradient(135deg, {COR_LARANJA} 0%, #e56d00 100%) !important;
         color: white !important;
         border: none !important;
@@ -163,22 +148,14 @@ st.markdown(f"""
         font-size: 0.95rem !important;
         letter-spacing: 0.3px !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 2px 8px rgba(243, 124, 4, 0.25) !important;
+        box-shadow: 0 2px 8px rgba(255,75,0,0.25) !important;
     }}
-    
-    .stButton > button:hover, .stDownloadButton > button:hover {{
+    .stButton > button:hover,
+    .stDownloadButton > button:hover {{
         transform: translateY(-1px) !important;
-        box-shadow: 0 4px 16px rgba(243, 124, 4, 0.35) !important;
+        box-shadow: 0 4px 16px rgba(255,75,0,0.35) !important;
     }}
-    
-    /* Alertas */
-    .stAlert {{
-        border-radius: 8px !important;
-        border: none !important;
-        padding: 1rem 1.25rem !important;
-    }}
-    
-    /* Status Indicator */
+
     .status-item {{
         display: flex;
         align-items: center;
@@ -190,23 +167,15 @@ st.markdown(f"""
         font-size: 0.875rem;
         color: {COR_TEXTO};
     }}
-    
-    .status-ok {{
-        border-left-color: #10B981;
-    }}
-    
-    .status-error {{
-        border-left-color: #EF4444;
-    }}
-    
-    /* Métricas de arquivo */
+    .status-ok    {{ border-left-color: #10B981; }}
+    .status-error {{ border-left-color: #EF4444; }}
+
     .file-metrics {{
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 1rem;
         margin: 1rem 0;
     }}
-    
     .metric-box {{
         background: white;
         padding: 1rem;
@@ -214,7 +183,6 @@ st.markdown(f"""
         border: 1px solid {COR_CINZA_MEDIO};
         text-align: center;
     }}
-    
     .metric-label {{
         font-size: 0.75rem;
         color: {COR_CINZA};
@@ -223,22 +191,43 @@ st.markdown(f"""
         font-weight: 600;
         margin-bottom: 0.25rem;
     }}
-    
     .metric-value {{
         font-size: 1.25rem;
         color: {COR_AZUL};
         font-weight: 700;
     }}
-    
-    /* Divider personalizado */
+
+    .stAlert {{
+        border-radius: 8px !important;
+        border: none !important;
+        padding: 1rem 1.25rem !important;
+    }}
+
     .custom-divider {{
         height: 1px;
         background: linear-gradient(90deg, transparent, {COR_CINZA_MEDIO}, transparent);
         margin: 2rem 0;
         border: none;
     }}
-    
-    /* Footer */
+
+    .preview-container {{
+        background: {COR_CINZA_CLARO};
+        border: 2px dashed {COR_CINZA_MEDIO};
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+    }}
+
+    .info-card {{
+        background: white;
+        border: 1px solid {COR_CINZA_MEDIO};
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+        border-left: 4px solid {COR_AZUL};
+    }}
+    .info-card-orange {{ border-left-color: {COR_LARANJA}; }}
+
     .corporate-footer {{
         margin-top: 3rem;
         padding: 1.5rem;
@@ -247,170 +236,234 @@ st.markdown(f"""
         text-align: center;
         border-top: 3px solid {COR_LARANJA};
     }}
-    
     .corporate-footer p {{
         margin: 0;
         color: {COR_CINZA};
         font-size: 0.875rem;
     }}
-    
-    .corporate-footer strong {{
-        color: {COR_AZUL};
-    }}
-    
-    /* ============ SIDEBAR - PRESERVAR NAVEGAÇÃO ============ */
-    /* Garantir que os links de navegação sejam VISÍVEIS na sidebar */
-    [data-testid="stSidebarNav"] {{
-        background: transparent !important;
-    }}
-    
-    [data-testid="stSidebarNav"] a {{
-        color: white !important;
-    }}
-    
+    .corporate-footer strong {{ color: {COR_AZUL}; }}
+
+    [data-testid="stSidebarNav"] a,
     [data-testid="stSidebarNav"] a span {{
         color: white !important;
         font-weight: 500 !important;
     }}
-    
     [data-testid="stSidebarNav"] a:hover {{
-        background: rgba(255, 255, 255, 0.15) !important;
+        background: rgba(255,255,255,0.15) !important;
     }}
-    
-    /* Títulos do meu conteúdo dentro da sidebar */
     [data-testid="stSidebar"] .element-container h2,
-    [data-testid="stSidebar"] .element-container h3 {{
-        color: white !important;
-    }}
-    
-    /* Texto normal na sidebar em branco */
+    [data-testid="stSidebar"] .element-container h3,
     [data-testid="stSidebar"] .element-container p,
     [data-testid="stSidebar"] .element-container label {{
         color: white !important;
     }}
-    
-    /* Expander na sidebar */
     [data-testid="stSidebar"] .streamlit-expanderHeader {{
-        background: rgba(255, 255, 255, 0.1) !important;
+        background: rgba(255,255,255,0.1) !important;
         color: white !important;
         border-radius: 6px !important;
     }}
-    
-    /* Sliders na sidebar - texto branco */
     [data-testid="stSidebar"] .stSlider label {{
         color: white !important;
     }}
     </style>
 """, unsafe_allow_html=True)
-# ============ HEADER CORPORATIVO ============
+
+# ============ HEADER ============
 
 st.markdown(f"""
     <div class="corporate-header">
         <div class="header-badge">Ferramenta Interna</div>
-        <h1>Gerador de Assinatura de E-mail</h1>
-        <p>Crie sua assinatura profissional padronizada Totale Tecnologia</p>
+        <h1>✉️ Gerador de Assinatura de E-mail</h1>
+        <p>Crie sua assinatura profissional padronizada · Totale Tecnologia</p>
     </div>
 """, unsafe_allow_html=True)
 
-# ============ FUNÇÕES AUXILIARES ============
+# ============ FUNÇÕES ============
 
-def hex_to_rgb(hex_color):
-    """Converte cor hexadecimal para RGB"""
-    hex_color = hex_color.lstrip('#')
+def hex_to_rgb(hex_color: str) -> tuple:
+    """Converte cor hexadecimal para tupla RGB."""
+    hex_color = hex_color.lstrip("#")
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
-def carregar_fonte(tamanho, negrito=False):
-    """Carrega a fonte Oscine com fallback para fontes do sistema"""
-    caminho_fonte = FONTE_BOLD if negrito else FONTE_REGULAR
-    
-    if caminho_fonte.exists():
+def carregar_fonte(tamanho: int, negrito: bool = False):
+    """
+    Carrega fonte com diagnóstico.
+    Retorna (fonte, nome_info).
+    """
+    caminho = FONTE_BOLD if negrito else FONTE_REGULAR
+    tipo = "Bold" if negrito else "Regular"
+
+    if caminho.exists():
         try:
-            return ImageFont.truetype(str(caminho_fonte), tamanho)
+            fonte = ImageFont.truetype(str(caminho), tamanho)
+            return fonte, f"Oscine {tipo} ({caminho.name})"
         except (OSError, IOError) as e:
-            st.warning(f"⚠️ Erro ao carregar fonte {caminho_fonte.name}: {e}")
-    
-    fontes_sistema = [
-        "arialbd.ttf" if negrito else "arial.ttf",
-        "C:\\Windows\\Fonts\\arialbd.ttf" if negrito else "C:\\Windows\\Fonts\\arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if negrito else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
+            st.warning(f"⚠️ Erro ao carregar {caminho.name}: {e}")
+
+    fallbacks = [
+        ("Arial Bold" if negrito else "Arial",
+         "arialbd.ttf" if negrito else "arial.ttf"),
+        ("Arial (Win)",
+         "C:/Windows/Fonts/arialbd.ttf" if negrito else "C:/Windows/Fonts/arial.ttf"),
+        ("DejaVu Sans",
+         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+         if negrito else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        ("Liberation Sans",
+         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
+         if negrito else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
+        ("FreeSans",
+         "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
+         if negrito else "/usr/share/fonts/truetype/freefont/FreeSans.ttf"),
+        ("Helvetica",
+         "/System/Library/Fonts/Helvetica.ttc"),
     ]
-    
-    for fonte in fontes_sistema:
+
+    for nome_fonte, caminho_fonte in fallbacks:
         try:
-            return ImageFont.truetype(fonte, tamanho)
+            fonte = ImageFont.truetype(caminho_fonte, tamanho)
+            return fonte, f"{nome_fonte} (fallback)"
         except (OSError, IOError):
             continue
-    
-    return ImageFont.load_default()
+
+    return ImageFont.load_default(), "DEFAULT (bitmap — texto pequeno!)"
 
 
-def verificar_recursos():
-    """Verifica se todos os recursos necessários estão presentes"""
-    status = {
-        "Fonte Regular": FONTE_REGULAR.exists(),
-        "Fonte Bold": FONTE_BOLD.exists(),
+def verificar_recursos() -> dict:
+    """Status de cada recurso necessário."""
+    return {
+        "Fonte Regular":   FONTE_REGULAR.exists(),
+        "Fonte Bold":      FONTE_BOLD.exists(),
         "Ícone Instagram": ICONE_INSTAGRAM.exists(),
-        "Ícone LinkedIn": ICONE_LINKEDIN.exists(),
-        "Template Base": TEMPLATE_BASE.exists(),
+        "Ícone LinkedIn":  ICONE_LINKEDIN.exists(),
+        "Template Base":   TEMPLATE_BASE.exists(),
     }
-    return status
 
 
-def gerar_assinatura(nome, cargo, telefone1, telefone2, config):
-    """Sobrescreve texto na imagem template"""
-    
-    img = Image.open(TEMPLATE_BASE).convert("RGB")
-    draw = ImageDraw.Draw(img)
-    
+def formatar_telefone(tel: str) -> str:
+    """Formata telefone automaticamente."""
+    digitos = "".join(filter(str.isdigit, tel))
+    if len(digitos) == 11:
+        return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
+    if len(digitos) == 10:
+        return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
+    return tel
+
+
+def gerar_assinatura(
+    nome: str,
+    cargo: str,
+    telefone1: str,
+    telefone2: str,
+    config: dict,
+    debug: bool = False
+) -> tuple:
+    """
+    Abre o template e desenha os textos.
+    Retorna (imagem_rgb, log_debug).
+    SEM redimensionamento — o template já é o tamanho final.
+    """
+    log = []
+
+    # Abrir template
+    img = Image.open(TEMPLATE_BASE).convert("RGBA")
+    w, h = img.size
+    log.append(f"✅ Template aberto: {w}×{h} px")
+
+    # Verificar tamanho esperado
+    if w != IMG_WIDTH or h != IMG_HEIGHT:
+        log.append(f"⚠️ Tamanho diferente do esperado ({IMG_WIDTH}×{IMG_HEIGHT})")
+
+    # Camada de texto transparente
+    txt_layer = Image.new("RGBA", img.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(txt_layer)
+
     laranja_rgb = hex_to_rgb(COR_LARANJA)
     azul_rgb = hex_to_rgb(COR_AZUL)
-    
-    fonte_nome = carregar_fonte(config["tamanho_nome"], negrito=True)
-    fonte_cargo = carregar_fonte(config["tamanho_cargo"], negrito=False)
-    fonte_telefone = carregar_fonte(config["tamanho_telefone"], negrito=True)
-    
-    if nome:
-        draw.text(
-            (config["x_nome"], config["y_nome"]),
-            nome,
-            fill=laranja_rgb,
-            font=fonte_nome
-        )
-    
-    if cargo:
-        draw.text(
-            (config["x_cargo"], config["y_cargo"]),
-            cargo,
-            fill=azul_rgb,
-            font=fonte_cargo
-        )
-    
-    telefones = telefone1 if telefone1 else ""
-    if telefone2:
-        telefones += f"  •  {telefone2}" if telefones else telefone2
-    
+
+    # Carregar fontes
+    fonte_nome, info_fn = carregar_fonte(config["tamanho_nome"], negrito=True)
+    fonte_cargo, info_fc = carregar_fonte(config["tamanho_cargo"], negrito=False)
+    fonte_telefone, info_ft = carregar_fonte(config["tamanho_telefone"], negrito=True)
+
+    log.append(f"🔤 Nome: {info_fn} (tam={config['tamanho_nome']})")
+    log.append(f"🔤 Cargo: {info_fc} (tam={config['tamanho_cargo']})")
+    log.append(f"🔤 Tel: {info_ft} (tam={config['tamanho_telefone']})")
+
+    # ── NOME ──
+    if nome and nome.strip():
+        pos = (config["x_nome"], config["y_nome"])
+        txt = nome.strip()
+        bbox = draw.textbbox(pos, txt, font=fonte_nome)
+        log.append(f"📝 NOME: '{txt}' pos={pos} bbox={bbox}")
+        draw.text(pos, txt, fill=laranja_rgb + (255,), font=fonte_nome)
+        if debug:
+            draw.rectangle(bbox, outline=(255, 0, 0, 180), width=2)
+    else:
+        log.append("⚠️ NOME: vazio")
+
+    # ── CARGO ──
+    if cargo and cargo.strip():
+        pos = (config["x_cargo"], config["y_cargo"])
+        txt = cargo.strip()
+        bbox = draw.textbbox(pos, txt, font=fonte_cargo)
+        log.append(f"📝 CARGO: '{txt}' pos={pos} bbox={bbox}")
+        draw.text(pos, txt, fill=azul_rgb + (255,), font=fonte_cargo)
+        if debug:
+            draw.rectangle(bbox, outline=(0, 0, 255, 180), width=2)
+    else:
+        log.append("⚠️ CARGO: vazio")
+
+    # ── TELEFONES ──
+    tel1 = telefone1.strip() if telefone1 else ""
+    tel2 = telefone2.strip() if telefone2 else ""
+    if tel1 and tel2:
+        telefones = f"{tel1}  •  {tel2}"
+    elif tel1:
+        telefones = tel1
+    elif tel2:
+        telefones = tel2
+    else:
+        telefones = ""
+
     if telefones:
-        draw.text(
-            (config["x_telefone"], config["y_telefone"]),
-            telefones,
-            fill=azul_rgb,
-            font=fonte_telefone
-        )
-    
-    return img
+        pos = (config["x_telefone"], config["y_telefone"])
+        bbox = draw.textbbox(pos, telefones, font=fonte_telefone)
+        log.append(f"📝 TEL: '{telefones}' pos={pos} bbox={bbox}")
+        draw.text(pos, telefones, fill=azul_rgb + (255,), font=fonte_telefone)
+        if debug:
+            draw.rectangle(bbox, outline=(0, 128, 0, 180), width=2)
+    else:
+        log.append("⚠️ TEL: vazio")
+
+    # Compor e converter para RGB
+    resultado = Image.alpha_composite(img, txt_layer).convert("RGB")
+    log.append(f"✅ Imagem final: {resultado.size[0]}×{resultado.size[1]} px")
+
+    return resultado, log
 
 
-# ============ SIDEBAR CORPORATIVA ============
+def imagem_para_buffer(img: Image.Image, formato: str, qualidade: int = 90) -> io.BytesIO:
+    """Salva imagem em buffer de memória."""
+    buf = io.BytesIO()
+    if formato == "PNG":
+        img.save(buf, format="PNG", optimize=True)
+    else:
+        img.convert("RGB").save(buf, format="JPEG", quality=qualidade, optimize=True)
+    buf.seek(0)
+    return buf
+
+
+# ============ SIDEBAR ============
 
 with st.sidebar:
-    st.markdown("## Painel de Controle")
-    
-    # Status dos recursos com visual melhorado
+    st.markdown("## ⚙️ Painel de Controle")
+
+    # Status
     st.markdown("### 📦 Status do Sistema")
     status = verificar_recursos()
-    
+    todos_ok = all(status.values())
+
     for recurso, ok in status.items():
         classe = "status-ok" if ok else "status-error"
         icone = "✓" if ok else "✗"
@@ -418,108 +471,205 @@ with st.sidebar:
             f'<div class="status-item {classe}"><strong>{icone}</strong>&nbsp;&nbsp;{recurso}</div>',
             unsafe_allow_html=True
         )
-    
+
+    if todos_ok:
+        st.success("Todos os recursos carregados!", icon="✅")
+    else:
+        st.warning("Alguns recursos estão faltando.", icon="⚠️")
+
     st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
-    
+
     # Info do template
     st.markdown(f"""
-        <div style="background: white; padding: 1rem; border-radius: 8px; border-left: 3px solid {COR_AZUL};">
-            <div style="font-size: 0.75rem; color: {COR_CINZA}; text-transform: uppercase; font-weight: 600;">Template</div>
-            <div style="font-size: 1rem; color: {COR_AZUL}; font-weight: 700; margin-top: 4px;">{TEMPLATE_WIDTH} × {TEMPLATE_HEIGHT} px</div>
+        <div style="background:white;padding:1rem;border-radius:8px;border-left:3px solid {COR_AZUL};">
+            <div style="font-size:0.7rem;color:{COR_CINZA};text-transform:uppercase;font-weight:600;">
+                Tamanho da Assinatura
+            </div>
+            <div style="font-size:1.1rem;color:{COR_AZUL};font-weight:700;margin-top:4px;">
+                {IMG_WIDTH} × {IMG_HEIGHT} px
+            </div>
+            <div style="font-size:0.7rem;color:{COR_CINZA};margin-top:4px;">
+                Template = Saída final (sem redimensionamento)
+            </div>
         </div>
     """, unsafe_allow_html=True)
-    
+
     st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
-    
-    # Ajustes de posição
+
+    # Posicionamento
     st.markdown("### 🎯 Ajustes de Posicionamento")
-    st.caption("Configure a posição dos elementos")
-    
+    st.caption(f"Coordenadas em pixels ({IMG_WIDTH}×{IMG_HEIGHT})")
+
     with st.expander("👤 Nome", expanded=False):
-        x_nome = st.slider("Posição Horizontal (X)", 0, TEMPLATE_WIDTH, 125, key="xn")
-        y_nome = st.slider("Posição Vertical (Y)", 0, TEMPLATE_HEIGHT, 164, key="yn")
-        tamanho_nome = st.slider("Tamanho da Fonte", 10, 80, 42, key="tn")
-    
+        x_nome = st.slider("X (horizontal)", 0, IMG_WIDTH, 55, key="xn")
+        y_nome = st.slider("Y (vertical)", 0, IMG_HEIGHT, 70, key="yn")
+        tamanho_nome = st.slider("Tamanho da fonte", 6, 40, 18, key="tn")
+
     with st.expander("💼 Cargo", expanded=False):
-        x_cargo = st.slider("Posição Horizontal (X)", 0, TEMPLATE_WIDTH, 125, key="xc")
-        y_cargo = st.slider("Posição Vertical (Y)", 0, TEMPLATE_HEIGHT, 211, key="yc")
-        tamanho_cargo = st.slider("Tamanho da Fonte", 8, 60, 32, key="tc")
-    
+        x_cargo = st.slider("X (horizontal)", 0, IMG_WIDTH, 55, key="xc")
+        y_cargo = st.slider("Y (vertical)", 0, IMG_HEIGHT, 91, key="yc")
+        tamanho_cargo = st.slider("Tamanho da fonte", 6, 30, 13, key="tc")
+
     with st.expander("📱 Telefones", expanded=False):
-        x_telefone = st.slider("Posição Horizontal (X)", 0, TEMPLATE_WIDTH, 598, key="xt")
-        y_telefone = st.slider("Posição Vertical (Y)", 0, TEMPLATE_HEIGHT, 209, key="yt")
-        tamanho_telefone = st.slider("Tamanho da Fonte", 8, 60, 35, key="tt")
-    
+        x_telefone = st.slider("X (horizontal)", 0, IMG_WIDTH, 270, key="xt")
+        y_telefone = st.slider("Y (vertical)", 0, IMG_HEIGHT, 90, key="yt")
+        tamanho_telefone = st.slider("Tamanho da fonte", 6, 30, 15, key="tt")
+
     st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
-    
-    # Debug
-    with st.expander("🔧 Configurações Avançadas"):
-        st.caption("**Caminhos do Sistema**")
-        st.code(f"Base: {BASE_DIR.name}", language="text")
-        st.code(f"Fontes: fonts/", language="text")
-        st.code(f"Assets: assets/", language="text")
+
+    # Modo debug
+    st.markdown("### 🔍 Diagnóstico")
+    modo_debug = st.checkbox(
+        "Ativar modo debug",
+        value=False,
+        help="Mostra retângulos ao redor do texto e log detalhado"
+    )
+
+    with st.expander("🔧 Caminhos do Sistema"):
+        st.code(f"Base    : {BASE_DIR}", language="text")
+        st.code(f"Fontes  : {FONTS_DIR}", language="text")
+        st.code(f"Assets  : {ASSETS_DIR}", language="text")
+        st.code(f"Template: {TEMPLATE_BASE}", language="text")
+
+        if FONTS_DIR.exists():
+            fontes = list(FONTS_DIR.glob("*.*"))
+            if fontes:
+                st.caption("**Fontes encontradas:**")
+                for f in fontes:
+                    st.write(f"  • `{f.name}` ({f.stat().st_size/1024:.1f} KB)")
+            else:
+                st.warning("Pasta fonts/ vazia!")
+        else:
+            st.error("Pasta fonts/ não existe!")
 
 
 # ============ VERIFICAÇÕES ============
 
 if not TEMPLATE_BASE.exists():
-    st.error("❌ **Template não encontrado**")
-    st.warning(f"Adicione o arquivo template em: `{TEMPLATE_BASE}`")
-    
+    st.error("❌ **Template não encontrado!**")
+    st.warning(f"Caminho esperado: `{TEMPLATE_BASE}`")
+
     if IMAGES_DIR.exists():
         arquivos = list(IMAGES_DIR.iterdir())
         if arquivos:
-            st.info("📁 Arquivos encontrados na pasta:")
+            st.info("📁 Arquivos em `images/`:")
             for arq in arquivos:
-                st.write(f"- `{arq.name}`")
+                st.write(f"  • `{arq.name}`")
+        else:
+            st.info("Pasta `images/` está vazia.")
+    else:
+        st.info("Pasta `assets/images/` não encontrada.")
+    st.stop()
+
+# Verificar dimensões reais do template
+try:
+    _test = Image.open(TEMPLATE_BASE)
+    _tw, _th = _test.size
+    if _tw != IMG_WIDTH or _th != IMG_HEIGHT:
+        st.error(
+            f"❌ **Template com tamanho errado!** "
+            f"Encontrado: **{_tw}×{_th} px** — Esperado: **{IMG_WIDTH}×{IMG_HEIGHT} px**"
+        )
+        st.info(
+            f"Redimensione o template para exatamente **{IMG_WIDTH}×{IMG_HEIGHT} px** "
+            f"ou ajuste as constantes `IMG_WIDTH` e `IMG_HEIGHT` no código."
+        )
+        st.warning("As posições padrão dos textos foram calibradas para 600×123 px.")
+except Exception as e:
+    st.error(f"❌ Erro ao abrir template: {e}")
     st.stop()
 
 if not FONTE_REGULAR.exists() or not FONTE_BOLD.exists():
-    st.warning("⚠️ Fontes Oscine não encontradas. Usando fonte alternativa do sistema.")
+    st.warning("⚠️ Fontes **Oscine** não encontradas. Será usada fonte alternativa.")
 
 
-# ============ CONTEÚDO PRINCIPAL ============
+# ============ LAYOUT PRINCIPAL ============
 
 col1, col2 = st.columns([1, 2], gap="large")
 
-# ===== COLUNA ESQUERDA: FORMULÁRIO =====
+# ════════════════════════════════════════
+# COLUNA ESQUERDA — Formulário
+# ════════════════════════════════════════
 with col1:
     st.markdown('<div class="section-title">📝 Dados Pessoais</div>', unsafe_allow_html=True)
-    st.markdown('<p class="section-subtitle">Preencha as informações que aparecerão na assinatura</p>', unsafe_allow_html=True)
-    
-    with st.container():
-        nome = st.text_input(
-            "Nome Completo",
-            value="Denis Vick",
-            placeholder="Digite seu nome completo"
-        )
-        
-        cargo = st.text_input(
-            "Cargo / Função",
-            value="Analista de COP | Leste & ABCDM",
-            placeholder="Ex: Analista, Gerente, Coordenador"
-        )
-        
-        st.markdown("**Contatos Telefônicos**")
-        
-        telefone1 = st.text_input(
+    st.markdown(
+        '<p class="section-subtitle">Preencha as informações da assinatura</p>',
+        unsafe_allow_html=True
+    )
+
+    nome = st.text_input(
+        "Nome Completo *",
+        value="Denis Vick",
+        placeholder="Digite seu nome completo",
+        help="Exibido em laranja"
+    )
+
+    cargo = st.text_input(
+        "Cargo / Função *",
+        value="Analista de COP | Leste & ABCDM",
+        placeholder="Ex: Analista, Gerente, Coordenador",
+        help="Exibido em azul, abaixo do nome"
+    )
+
+    st.markdown("**📞 Contatos Telefônicos**")
+
+    col_tel1, col_tel2 = st.columns(2)
+
+    with col_tel1:
+        telefone1_raw = st.text_input(
             "Telefone Principal",
-            value="(11) 99304-5101",
-            placeholder="(00) 00000-0000"
+            value="11993045101",
+            placeholder="00900000000",
+            help="Apenas números — formatação automática",
+            max_chars=11
         )
-        
-        telefone2 = st.text_input(
+
+    with col_tel2:
+        telefone2_raw = st.text_input(
             "Telefone Secundário",
             value="",
             placeholder="Opcional",
-            help="Deixe em branco se não quiser incluir"
+            help="Deixe em branco se não quiser",
+            max_chars=11
         )
 
-# ===== COLUNA DIREITA: PRÉ-VISUALIZAÇÃO =====
+    telefone1 = formatar_telefone(telefone1_raw)
+    telefone2 = formatar_telefone(telefone2_raw)
+
+    if telefone1_raw:
+        st.caption(f"📱 Formatado: **{telefone1}**")
+    if telefone2_raw:
+        st.caption(f"📱 Formatado: **{telefone2}**")
+
+    campos_ok = bool(nome.strip() and cargo.strip())
+    if not campos_ok:
+        st.warning("⚠️ Preencha Nome e Cargo para gerar a assinatura.")
+
+    st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
+
+    st.markdown(f"""
+        <div class="info-card info-card-orange">
+            <strong style="color:{COR_LARANJA};">💡 Dicas</strong>
+            <ul style="margin:0.5rem 0 0 0;padding-left:1.2rem;font-size:0.85rem;color:{COR_TEXTO};">
+                <li>Digite apenas números no telefone</li>
+                <li>Use os sliders na sidebar para ajustar posições</li>
+                <li>Ative o <b>modo debug</b> se o texto não aparecer</li>
+                <li>O template já está em {IMG_WIDTH}×{IMG_HEIGHT} px</li>
+            </ul>
+        </div>
+    """, unsafe_allow_html=True)
+
+
+# ════════════════════════════════════════
+# COLUNA DIREITA — Preview + Download
+# ════════════════════════════════════════
 with col2:
     st.markdown('<div class="section-title">👁️ Pré-visualização</div>', unsafe_allow_html=True)
-    st.markdown('<p class="section-subtitle">Veja como sua assinatura ficará no e-mail</p>', unsafe_allow_html=True)
-    
+    st.markdown(
+        '<p class="section-subtitle">Visualização em tempo real da assinatura</p>',
+        unsafe_allow_html=True
+    )
+
     try:
         config = {
             "x_nome": x_nome,
@@ -532,85 +682,67 @@ with col2:
             "y_telefone": y_telefone,
             "tamanho_telefone": tamanho_telefone,
         }
-        
-        img_final = gerar_assinatura(nome, cargo, telefone1, telefone2, config)
-        
-        # Container de preview
+
+        img_final, debug_log = gerar_assinatura(
+            nome, cargo, telefone1, telefone2, config,
+            debug=modo_debug
+        )
+
+        # Preview
+        st.markdown('<div class="preview-container">', unsafe_allow_html=True)
         st.image(img_final, use_container_width=True)
-        st.caption(f"📐 Resolução original: {img_final.width} × {img_final.height} pixels")
-        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.caption(f"📐 Tamanho: **{img_final.width} × {img_final.height} px** (pronto para uso)")
+
+        # Log de debug
+        if modo_debug:
+            st.markdown("### 🔍 Log de Diagnóstico")
+            for linha in debug_log:
+                if linha.startswith("✅"):
+                    st.success(linha, icon="✅")
+                elif linha.startswith("⚠️"):
+                    st.warning(linha, icon="⚠️")
+                elif linha.startswith("❌"):
+                    st.error(linha, icon="❌")
+                else:
+                    st.text(linha)
+
         st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
-        
-        # ============ SEÇÃO DE DOWNLOAD ============
+
+        # ══════════════════════════════════
+        # DOWNLOAD
+        # ══════════════════════════════════
         st.markdown('<div class="section-title">📥 Exportar Assinatura</div>', unsafe_allow_html=True)
-        st.markdown('<p class="section-subtitle">Configure o tamanho e formato para download</p>', unsafe_allow_html=True)
-        
-        col_tam1, col_tam2 = st.columns(2)
-        
-        with col_tam1:
-            tamanho_opcao = st.selectbox(
-                "📏 Tamanho da Imagem",
-                options=[
-                    "E-mail Padrão (600px)",
-                    "E-mail Compacto (500px)",
-                    "E-mail Ampliado (700px)",
-                    "Resolução Original (1327px)"
-                ],
-                index=0,
-                help="600px é o tamanho recomendado para a maioria dos clientes de e-mail"
-            )
-        
-        with col_tam2:
-            formato_opcao = st.selectbox(
-                "🎨 Formato do Arquivo",
-                options=[
-                    "PNG (alta qualidade)",
-                    "JPG (arquivo menor)"
-                ],
-                index=0,
-                help="PNG mantém melhor qualidade. JPG gera arquivo menor."
-            )
-        
-        larguras = {
-            "E-mail Padrão (600px)": 600,
-            "E-mail Compacto (500px)": 500,
-            "E-mail Ampliado (700px)": 700,
-            "Resolução Original (1327px)": TEMPLATE_WIDTH
-        }
-        
-        largura_final = larguras[tamanho_opcao]
-        
-        if largura_final != img_final.width:
-            proporcao = largura_final / img_final.width
-            altura_final = int(img_final.height * proporcao)
-            img_download = img_final.resize(
-                (largura_final, altura_final),
-                Image.Resampling.LANCZOS
-            )
-        else:
-            img_download = img_final
-        
-        buffer = io.BytesIO()
-        
-        if formato_opcao.startswith("PNG"):
-            img_download.save(buffer, format="PNG", optimize=True)
-            mime_type = "image/png"
-            extensao = "png"
-        else:
-            img_jpg = img_download.convert("RGB")
-            img_jpg.save(buffer, format="JPEG", quality=90, optimize=True)
-            mime_type = "image/jpeg"
-            extensao = "jpg"
-        
-        buffer.seek(0)
+        st.markdown(
+            '<p class="section-subtitle">Escolha o formato e faça o download</p>',
+            unsafe_allow_html=True
+        )
+
+        formato_opcao = st.selectbox(
+            "🎨 Formato do Arquivo",
+            options=[
+                "PNG (alta qualidade)",
+                "JPG (arquivo menor)",
+            ],
+            index=0,
+            help="PNG preserva nitidez. JPG gera arquivo menor."
+        )
+
+        formato = "PNG" if formato_opcao.startswith("PNG") else "JPG"
+        extensao = formato.lower()
+        mime_type = "image/png" if formato == "PNG" else "image/jpeg"
+
+        # Buffer direto (sem redimensionamento)
+        buffer = imagem_para_buffer(img_final, formato)
         tamanho_kb = len(buffer.getvalue()) / 1024
-        
-        # Métricas em cards
+
+        # Métricas
         st.markdown(f"""
             <div class="file-metrics">
                 <div class="metric-box">
                     <div class="metric-label">Dimensões</div>
-                    <div class="metric-value">{img_download.width}×{img_download.height}</div>
+                    <div class="metric-value">{img_final.width}×{img_final.height}</div>
                 </div>
                 <div class="metric-box">
                     <div class="metric-label">Tamanho</div>
@@ -622,80 +754,100 @@ with col2:
                 </div>
             </div>
         """, unsafe_allow_html=True)
-        
-        # Botão de download
+
+        # Download
+        nome_slug = nome.strip().replace(" ", "_").lower() if nome.strip() else "padrao"
+        nome_arquivo = f"assinatura_totale_{nome_slug}.{extensao}"
+
         st.download_button(
-            label=f"⬇️  Baixar Assinatura em {extensao.upper()}",
+            label=f"⬇️  Baixar Assinatura · {img_final.width}×{img_final.height} px · {extensao.upper()}",
             data=buffer,
-            file_name=f"assinatura_totale_{nome.replace(' ', '_').lower() if nome else 'padrao'}.{extensao}",
+            file_name=nome_arquivo,
             mime=mime_type,
             use_container_width=True,
-            type="primary"
+            type="primary",
+            disabled=not campos_ok
         )
-        
-        # Status do arquivo
-        if tamanho_kb > 100:
-            st.warning(f"⚠️ **Arquivo grande** ({tamanho_kb:.1f} KB). Recomendamos abaixo de 100 KB para melhor performance em e-mails.")
+
+        # Alerta de tamanho
+        if tamanho_kb > 150:
+            st.warning(f"⚠️ Arquivo grande ({tamanho_kb:.1f} KB). Recomendado: < 150 KB.")
+        elif tamanho_kb > 100:
+            st.info(f"ℹ️ {tamanho_kb:.1f} KB — considere JPG para reduzir.")
         else:
-            st.success(f"✅ **Tamanho otimizado** para uso em assinatura de e-mail")
-        
-        # Instruções em tabs
+            st.success(f"✅ Tamanho otimizado ({tamanho_kb:.1f} KB) — perfeito para e-mail!")
+
         st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
+
+        # ══════════════════════════════════
+        # GUIA DE INSTALAÇÃO
+        # ══════════════════════════════════
         st.markdown('<div class="section-title">📚 Guia de Instalação</div>', unsafe_allow_html=True)
-        
-        tab1, tab2, tab3 = st.tabs(["📧 Gmail", "📧 Outlook Desktop", "📧 Outlook Web"])
-        
+
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📧 Gmail", "🖥️ Outlook Desktop", "🌐 Outlook Web", "📱 Mobile"
+        ])
+
         with tab1:
             st.markdown("""
-            **Passo a passo para Gmail:**
-            
-            1. Abra o Gmail e clique no ícone de engrenagem ⚙️ no canto superior direito
-            2. Selecione **"Ver todas as configurações"**
-            3. Na aba **"Geral"**, role até a seção **"Assinatura"**
-            4. Clique em **"Criar nova"** e defina um nome
-            5. No editor, clique no ícone de imagem 🖼️
-            6. Faça upload da imagem PNG/JPG baixada
-            7. Configure a assinatura para "novas mensagens" e "respostas"
-            8. Role até o final da página e clique em **"Salvar alterações"**
+            #### Gmail — Passo a passo
+
+            1. Abra o **Gmail** → ⚙️ → **"Ver todas as configurações"**
+            2. Aba **"Geral"** → role até **"Assinatura"**
+            3. **"Criar nova"** → nomeie (ex: *Totale*)
+            4. No editor, ícone 🖼️ → upload da imagem
+            5. Defina para **novas mensagens** e **respostas**
+            6. **"Salvar alterações"** ✅
             """)
-        
+
         with tab2:
             st.markdown("""
-            **Passo a passo para Outlook Desktop:**
-            
-            1. Abra o Outlook e vá em **Arquivo → Opções**
-            2. Selecione **E-mail** no menu lateral
-            3. Clique no botão **"Assinaturas..."**
-            4. Clique em **"Novo"** e dê um nome à assinatura
-            5. No editor de assinatura, clique no ícone de imagem 🖼️
-            6. Selecione o arquivo baixado
-            7. Defina como padrão para **novas mensagens** e **respostas**
-            8. Clique em **OK** para salvar
+            #### Outlook Desktop — Passo a passo
+
+            1. **Arquivo** → **Opções** → **E-mail**
+            2. **"Assinaturas..."** → **"Novo"**
+            3. No editor, ícone 🖼️ → selecione o arquivo
+            4. Defina como padrão
+            5. **OK** ✅
             """)
-        
+
         with tab3:
             st.markdown("""
-            **Passo a passo para Outlook Web (Office 365):**
-            
-            1. Clique no ícone de **Configurações ⚙️** no canto superior direito
-            2. Selecione **"Ver todas as configurações do Outlook"**
-            3. Navegue até **E-mail → Compor e responder**
-            4. Na seção **"Assinatura de email"**, clique em **"Nova assinatura"**
-            5. Insira a imagem através do ícone de imagem no editor
-            6. Marque as opções para incluir automaticamente
-            7. Clique em **"Salvar"**
+            #### Outlook Web (Office 365) — Passo a passo
+
+            1. ⚙️ → **"Ver todas as configurações"**
+            2. **E-mail → Compor e responder**
+            3. **"Nova assinatura"** → insira imagem
+            4. Marque inclusão automática
+            5. **"Salvar"** ✅
             """)
-    
+
+        with tab4:
+            st.markdown("""
+            #### Mobile
+
+            **Gmail:** ☰ → Configurações → conta → "Assinatura para dispositivo móvel"
+
+            **Outlook:** ☰ → ⚙️ → conta → "Assinatura"
+
+            > 💡 Para melhor compatibilidade, hospede a imagem e insira via URL.
+            """)
+
     except FileNotFoundError as e:
         st.error(f"❌ Arquivo não encontrado: {e}")
     except Exception as e:
-        st.error(f"❌ Erro ao processar: {e}")
+        st.error(f"❌ Erro inesperado: {e}")
+        with st.expander("🔍 Detalhes do erro"):
+            st.code(traceback.format_exc(), language="python")
 
-# ============ FOOTER CORPORATIVO ============
+
+# ============ FOOTER ============
 
 st.markdown(f"""
     <div class="corporate-footer">
-        <p><strong>Totale Tecnologia</strong> © 2026 · Conexão em Movimento</p>
-        <p style="font-size: 0.75rem; margin-top: 0.5rem;">Ferramenta de uso interno · Versão 1.0</p>
+        <p><strong>Totale Tecnologia</strong> · Conexão em Movimento</p>
+        <p style="font-size:0.75rem;margin-top:0.5rem;">
+            Ferramenta de uso interno · Versão 2.1 · © 2026
+        </p>
     </div>
 """, unsafe_allow_html=True)
