@@ -14,7 +14,7 @@ from openpyxl.utils import get_column_letter
 from streamlit_gsheets import GSheetsConnection
 
 # ── Componentes corporativos ──────────────────────────────────────────────────
-from componentes import (
+from components.componentes import (
     aplicar_estilo,
     render_hero,
     render_kpi,

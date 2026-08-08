@@ -11,7 +11,7 @@ from typing import Any, Optional
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-from componentes import (
+from components.componentes import (
     aplicar_estilo,
     render_hero,
     render_kpi,

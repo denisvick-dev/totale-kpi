@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from componentes import aplicar_estilo
+from components.componentes import aplicar_estilo
 
 # ✅ SEMPRE O PRIMEIRO COMANDO STREAMLIT
 st.set_page_config(
@@ -164,6 +164,7 @@ def main():
     retorno = st.Page("pages/retorno.py", title="Retornos", icon="📜")
     p_atendimento = st.Page("pages/p_atendimento.py", title="1º Atendimento", icon="🚙")
     quebra_geral = st.Page("pages/quebra_geral.py", title="Geral", icon="📉")
+    criterios = st.Page("components/criterios.py", title="Critérios", icon="📋")
     
     # ═══════════════════════════════════════════════════════
     # PÁGINAS ANTIGAS
@@ -183,7 +184,7 @@ def main():
         "COMPILADO": [gestao_ativos],
         "DISPAROS DIÁRIOS": [rota_inicial, volumetria, retorno, p_atendimento],
         "QUEBRA": [quebra_geral, quebra_unif],
-        "UTILITÁRIOS": [assinatura],
+        "UTILITÁRIOS": [assinatura, criterios],
     }
 
     pg = st.navigation(paginas_agrupadas)

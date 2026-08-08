@@ -47,7 +47,7 @@ from reportlab.platypus import (
 # componentes.py — garante visual corporativo global (fontes
 # Manrope/Inter, gradientes, sombras) e type-safety consistente.
 # ────────────────────────────────────────────────────────────────
-from componentes import (
+from components.componentes import (
     aplicar_estilo as _aplicar_estilo_global,
     render_kpi,
     render_kpi_sm,

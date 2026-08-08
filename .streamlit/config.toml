@@ -9,7 +9,7 @@ textColor = "#1F2937"
 font = "sans serif"
 
 [server]
-enableStaticServing = true
+enableStaticServing = false
 headless = true
 
 [browser]

@@ -7,7 +7,7 @@ from typing import Optional, List
 # IMPORTAÇÃO DO DESIGN SYSTEM CORPORATIVO
 # ────────────────────────────────────────────────────────
 try:
-    from componentes import (
+    from components.componentes import (
         aplicar_estilo,
         render_hero,
         render_kpi,

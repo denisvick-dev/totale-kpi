@@ -31,7 +31,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pandas as pd
 import streamlit as st
 
-from componentes import (
+from components.componentes import (
     aplicar_estilo,
     render_hero,
     render_kpi,

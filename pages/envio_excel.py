@@ -5,7 +5,7 @@ import time
 import requests
 from io import BytesIO, StringIO
 from datetime import datetime, timezone, timedelta
-from componentes import aplicar_estilo
+from components.componentes import aplicar_estilo
 
 # ====================================================
 # BLOCO 1: CONFIGURAÇÕES GLOBAIS

@@ -38,7 +38,7 @@ for _p in [_HERE, _ROOT]:
 
 try:
     from utils import Utils  # type: ignore
-    from componentes import aplicar_estilo, render_section  # type: ignore
+    from components.componentes import aplicar_estilo, render_section  # type: ignore
 except ImportError:
     Utils = None
     aplicar_estilo = lambda: None

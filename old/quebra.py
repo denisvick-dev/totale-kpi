@@ -34,7 +34,7 @@ from reportlab.platypus import (
 # ────────────────────────────────────────────────────────────────
 # 🎨 IMPORTS DO SISTEMA DE DESIGN CORPORATIVO
 # ────────────────────────────────────────────────────────────────
-from componentes import (
+from components.componentes import (
     aplicar_estilo,
     render_hero,
     render_kpi as _render_kpi_global,

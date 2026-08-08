@@ -25,7 +25,7 @@ import pandas as pd
 import streamlit as st
 
 try:
-    from componentes import aplicar_estilo  # type: ignore
+    from components.componentes import aplicar_estilo  # type: ignore
 except ImportError:
     aplicar_estilo = lambda: None
 
