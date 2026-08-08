@@ -2108,28 +2108,25 @@ def render_sidebar(df_full: pd.DataFrame) -> Dict[str, Any]:
         visao = st.radio(
             "Módulo:",
             [
-                "Resumo Executivo (Matriz)",
-                "Análise Detalhada (Projeções)",
-                "Critérios de Classificação",
+                "📑 Resumo Executivo (Matriz)",
+                "📈 Análise Detalhada (Projeções)",
+                "📊 Critérios de Classificação",
             ],
             label_visibility="collapsed",
         )
+
         st.divider()
         st.markdown("### 🎯 Filtros Globais")
 
         monitores = ["Todos"] + sorted(
-            str(x)
-            for x in df_full["MONITOR"].dropna().unique()
+            str(x) for x in df_full["MONITOR"].dropna().unique()
             if str(x) not in {"nan", "SEM MONITOR", "NÃO MAPEADO"}
         )
         sel_mon = st.selectbox("👔 Monitor", monitores)
-        df_filt = (
-            df_full if sel_mon == "Todos" else df_full[df_full["MONITOR"] == sel_mon]
-        )
+        df_filt = df_full if sel_mon == "Todos" else df_full[df_full["MONITOR"] == sel_mon]
 
         tecnicos = ["Todos"] + sorted(
-            str(x)
-            for x in df_filt["TÉCNICO"].dropna().unique()
+            str(x) for x in df_filt["TÉCNICO"].dropna().unique()
             if str(x) not in {"nan", "NÃO MAPEADO"}
         )
         sel_tec = st.selectbox("👤 Técnico", tecnicos)
@@ -2139,51 +2136,20 @@ def render_sidebar(df_full: pd.DataFrame) -> Dict[str, Any]:
 
         st.divider()
         st.subheader("🔮 Cenários de Projeção")
-        p_ot = st.slider("Otimista (%)", 0, 100, 15, 5) / 100.0
-        p_base = st.slider("Base (%)", 0, 100, 20, 5) / 100.0
+        p_ot   = st.slider("Otimista (%)",   0, 100, 15, 5) / 100.0
+        p_base = st.slider("Base (%)",       0, 100, 20, 5) / 100.0
         p_pess = st.slider("Pessimista (%)", 0, 100, 50, 5) / 100.0
 
         st.divider()
         meta = (
             st.number_input(
                 "🎯 Meta Geral SLA (%)",
-                0.0,
-                100.0,
+                0.0, 100.0,
                 float(Config.SLA_QUEBRA_MAXIMA * 100),
                 1.0,
             )
             / 100.0
         )
-
-        # ── Resumo da Limpeza ──────────────────────────────────────────
-        st.divider()
-        st.markdown("### 🧹 Limpeza da Base")
-        n_susp = df_full.attrs.get("removidos_suspensos", 0)
-        n_con = df_full.attrs.get("removidos_contrato", 0)
-        col_atv = df_full.attrs.get("col_status_atividade", None)
-        col_con = df_full.attrs.get("col_contrato", None)
-
-        if col_atv:
-            st.success(f"🚫 Suspensos: **{n_susp}**  \n📌 `{col_atv}`")
-        else:
-            st.warning("⚠️ STATUS DA ATIVIDADE não detectada")
-
-        if col_con:
-            st.success(f"📄 Contratos inválidos: **{n_con}**  \n📌 `{col_con}`")
-        else:
-            st.warning("⚠️ CONTRATO não detectada")
-
-        st.divider()
-        st.markdown("### 🔗 Google Sheets")
-        if df_full.attrs.get("merge_aplicado"):
-            matches = df_full.attrs.get("merge_matches", 0)
-            total = df_full.attrs.get("merge_total", len(df_full))
-            pct = (matches / total * 100) if total > 0 else 0
-            st.success(
-                f"✅ **{matches:,}/{total:,}** matches ({pct:.1f}%)".replace(",", ".")
-            )
-        else:
-            st.warning("⚠️ Merge não aplicado")
 
         st.divider()
         col_r1, col_r2 = st.columns(2)
@@ -2197,10 +2163,6 @@ def render_sidebar(df_full: pd.DataFrame) -> Dict[str, Any]:
                 st.session_state["df_memoria"] = None
                 st.rerun()
 
-        st.divider()
-        # ✅ Debug centralizado
-        render_debug_criterios(df_full, expanded=False)
-
     return {
         "visao": visao,
         "df": df,
@@ -2209,8 +2171,8 @@ def render_sidebar(df_full: pd.DataFrame) -> Dict[str, Any]:
         "p_pess": p_pess,
         "meta": meta,
     }
-
-
+    
+    
 # ═══════════════════════════════════════════════════════
 # VISÃO DETALHADA
 # ═══════════════════════════════════════════════════════
@@ -2419,19 +2381,28 @@ def main() -> None:
         else ["OUTRAS"]
     )
 
-    if visao == "Resumo Executivo (Matriz)":
-        titulo_visao = "📉 Super Relatório de Quebra — Resumo Executivo"
-        subtitulo_visao = ("Matriz Monitor × Segmento · Novos Domicílios · Migração · PME")
-        badge_visao = "VISÃO CONSOLIDADA"
-    elif visao == "Análise Detalhada (Projeções)":
-        titulo_visao = "📉 Super Relatório de Quebra — Análise Detalhada"
-        subtitulo_visao = "Projeções · Rankings · Causas · Backoffice · Base Completa"
-        badge_visao = "VISÃO OPERACIONAL"
-    elif visao == "Critérios de Classificação":
-        titulo_visao = "📉 Super Relatório de Quebra — Critérios de Classificação"
-        subtitulo_visao = "Análise dos critérios de classificação dos serviços"
-        badge_visao = "VISÃO CRITÉRIO"
+    # ── Define título/subtítulo/badge de cada visão ─────────────────
+    if visao == "📑 Resumo Executivo (Matriz)":
+        titulo_visao    = "📉 Super Relatório de Quebra — Resumo Executivo"
+        subtitulo_visao = "Matriz Monitor × Segmento · Novos Domicílios · Migração · PME"
+        badge_visao     = "VISÃO CONSOLIDADA"
 
+    elif visao == "📊 Critérios de Classificação":
+        titulo_visao    = "📊 Super Relatório de Quebra — Critérios de Classificação"
+        subtitulo_visao = "Análise de regras e volumes por TOTAL DE TAREFAS"
+        badge_visao     = "AUDITORIA DE CRITÉRIOS"
+
+    elif visao == "📈 Análise Detalhada (Projeções)":
+        titulo_visao    = "📉 Super Relatório de Quebra — Análise Detalhada"
+        subtitulo_visao = "Projeções · Rankings · Causas · Backoffice · Base Completa"
+        badge_visao     = "VISÃO OPERACIONAL"
+
+    else:
+        titulo_visao    = "📉 Super Relatório de Quebra"
+        subtitulo_visao = "Visão consolidada"
+        badge_visao     = ""
+
+    # ── Renderiza o hero (SEMPRE, independente da visão) ────────────
     render_hero_topo_fixo(
         titulo=titulo_visao,
         subtitulo=subtitulo_visao,
@@ -2440,8 +2411,12 @@ def main() -> None:
         badge=badge_visao,
     )
 
-    render_lista_colunas(df_full)
+    # ── Painel de Critérios usa df_full (base completa) ─────────────
+    if visao == "📊 Critérios de Classificação":
+        render_painel_criterios(df_full)
+        return
 
+    # ── Validação de dados filtrados ────────────────────────────────
     if df.empty:
         render_insight(
             "🔍 <b>Nenhum dado para os filtros selecionados.</b><br>"
@@ -2450,13 +2425,11 @@ def main() -> None:
         )
         return
 
-    if visao == "Resumo Executivo (Matriz)":
+    # ── Renderiza visão selecionada ─────────────────────────────────
+    if visao == "📑 Resumo Executivo (Matriz)":
         render_visao_resumo(df, meta)
-    elif visao == "Análise Detalhada (Projeções)":
+    elif visao == "📈 Análise Detalhada (Projeções)":
         render_visao_detalhada(df, p_ot, p_base, p_pess, meta)
-    elif visao == "Critérios de Classificação":
-        render_painel_criterios(df_full)
-
 
 if __name__ == "__main__":
     main()

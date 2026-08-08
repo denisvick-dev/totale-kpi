@@ -426,8 +426,26 @@ def aplicar_estilo():
     st.markdown(
         """
         <style>
-    /* CRIAÇÃO DE ESTILOS PARA A HERO (barra de títulos) */
-            .hero-corp {
+        /* ============================================
+           IMPORTAÇÃO DE FONTES PREMIUM
+           ============================================ */
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        /* Aplicar Manrope globalmente */
+        html, body, [class*="css"], .stApp {
+            font-family: 'Manrope', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        }
+        
+        /* Números com largura tabular em toda a aplicação */
+        [data-testid="stDataFrame"] * {
+            font-variant-numeric: tabular-nums !important;
+            font-feature-settings: 'tnum' 1, 'lnum' 1 !important;
+        }
+        
+        /* ============================================
+           HERO — BARRA DE TÍTULO PRINCIPAL
+           ============================================ */
+        .hero-corp {
             background: linear-gradient(135deg, #012869 0%, #1E40AF 50%, #F37C04 100%);
             padding: 32px 40px;
             border-radius: 16px;
@@ -449,14 +467,16 @@ def aplicar_estilo():
             font-size: 34px;
             font-weight: 800;
             margin: 0;
-            letter-spacing: -0.5px;
-            font-family: 'Segoe UI', -apple-system, sans-serif;
+            letter-spacing: -0.8px;
+            font-family: 'Manrope', 'Inter', sans-serif;
         }
         .hero-subtitle {
             font-size: 15px;
             opacity: 0.92;
             margin: 6px 0 0 0;
             font-weight: 400;
+            font-family: 'Manrope', 'Inter', sans-serif;
+            letter-spacing: 0.2px;
         }
         .hero-badge {
             display: inline-block;
@@ -470,41 +490,200 @@ def aplicar_estilo():
             text-transform: uppercase;
         }
         
-            .kpi-card {
-                padding: 1.4rem 1.6rem; border-radius: 1rem; border-left: 5px solid;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-                transition: transform 0.15s ease, box-shadow 0.15s ease;
-            }
-            .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
-            .kpi-val  { font-size: 1.85rem; font-weight: 800; line-height: 1.1; margin: 0.3rem 0; }
-            .kpi-lab  { font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
-            .kpi-sub  { font-size: 0.78rem; margin-top: 0.2rem; }
+        /* ============================================
+           KPI CARDS
+           ============================================ */
+        .kpi-card {
+            padding: 1.4rem 1.6rem; 
+            border-radius: 1rem; 
+            border-left: 5px solid;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            font-family: 'Manrope', 'Inter', sans-serif;
+        }
+        .kpi-card:hover { 
+            transform: translateY(-3px); 
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1); 
+        }
+        .kpi-val { 
+            font-size: 1.95rem; 
+            font-weight: 800; 
+            line-height: 1.1; 
+            margin: 0.3rem 0; 
+            letter-spacing: -0.5px;
+            font-variant-numeric: tabular-nums;
+        }
+        .kpi-lab { 
+            font-size: 0.72rem; 
+            text-transform: uppercase; 
+            font-weight: 700; 
+            letter-spacing: 0.08em; 
+        }
+        .kpi-sub { 
+            font-size: 0.78rem; 
+            margin-top: 0.2rem;
+            font-weight: 500;
+        }
 
-            .resultado-base {
-                background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
-                padding: 1rem 1.5rem; border-radius: 0.75rem; margin-bottom: 1.5rem;
-                display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem;
-            }
-            .resultado-base-label  { color: #94A3B8; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
-            .resultado-base-regiao { padding: 0.3rem 0.9rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; border: 2px solid; }
-            .resultado-base-count  { color: #64748B; font-size: 0.72rem; margin-left: auto; font-weight: 600; }
+        /* ============================================
+           RESULTADO DA BASE — Barra escura com regiões
+           ============================================ */
+        .resultado-base {
+            background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%);
+            padding: 1rem 1.5rem; 
+            border-radius: 0.75rem; 
+            margin-bottom: 1.5rem;
+            display: flex; 
+            align-items: center; 
+            flex-wrap: wrap; 
+            gap: 0.6rem;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15);
+        }
+        .resultado-base-label { 
+            color: #94A3B8; 
+            font-size: 0.8rem; 
+            font-weight: 700; 
+            text-transform: uppercase; 
+            letter-spacing: 0.08em; 
+        }
+        .resultado-base-regiao { 
+            padding: 0.3rem 0.9rem; 
+            border-radius: 999px; 
+            font-size: 0.82rem; 
+            font-weight: 700; 
+            border: 2px solid;
+            font-family: 'Manrope', 'Inter', sans-serif;
+            letter-spacing: 0.3px;
+        }
+        .resultado-base-count { 
+            color: #64748B; 
+            font-size: 0.72rem; 
+            margin-left: auto; 
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
 
-            .styled-table-wrapper {
-                background: #FFFFFF; border-radius: 0.75rem;
-                padding: 1rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 1rem;
-            }
-            .styled-table-title { font-size: 1rem; font-weight: 700; color: #0F172A; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem; }
-            .styled-table-badge { font-size: 0.68rem; background: #E0F2FE; color: #0369A1; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600; }
+        /* ============================================
+           TÍTULO DAS TABELAS ESTILIZADAS
+           ============================================ */
+        .styled-table-wrapper {
+            background: #FFFFFF; 
+            border-radius: 0.75rem;
+            padding: 1rem 1.2rem; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+            margin-bottom: 1rem;
+            font-family: 'Manrope', 'Inter', sans-serif;
+        }
+        .styled-table-title { 
+            font-size: 1rem; 
+            font-weight: 700; 
+            color: #0F172A; 
+            margin-bottom: 0.6rem; 
+            display: flex; 
+            align-items: center; 
+            gap: 0.5rem;
+            letter-spacing: -0.2px;
+        }
+        .styled-table-badge { 
+            font-size: 0.68rem; 
+            background: #E0F2FE; 
+            color: #0369A1; 
+            padding: 0.15rem 0.5rem; 
+            border-radius: 999px; 
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
 
-            div[data-testid="stDataFrame"] > div { border-radius: 0.5rem; overflow: hidden; }
+        /* ============================================
+           DATAFRAMES — Refinamentos gerais
+           ============================================ */
+        div[data-testid="stDataFrame"] > div { 
+            border-radius: 0.5rem; 
+            overflow: hidden; 
+        }
+        
+        /* Forçar Manrope dentro dos dataframes */
+        div[data-testid="stDataFrame"] table,
+        div[data-testid="stDataFrame"] th,
+        div[data-testid="stDataFrame"] td {
+            font-family: 'Manrope', 'Inter', -apple-system, sans-serif !important;
+        }
 
-            .section-header { display: flex; align-items: center; gap: 0.6rem; margin: 1.5rem 0 0.8rem; padding-bottom: 0.4rem; border-bottom: 2px solid #E2E8F0; }
-            .section-header h3 { margin: 0; font-size: 1.1rem; color: #0F172A; }
+        /* ============================================
+           SECTION HEADERS (Divisórias de seção)
+           ============================================ */
+        .section-header { 
+            display: flex; 
+            align-items: center; 
+            gap: 0.6rem; 
+            margin: 1.5rem 0 0.8rem; 
+            padding-bottom: 0.4rem; 
+            border-bottom: 2px solid #E2E8F0; 
+        }
+        .section-header h3 { 
+            margin: 0; 
+            font-size: 1.1rem; 
+            color: #0F172A;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+        }
+        
+        /* ============================================
+           BOTÕES — Refinamento sutil
+           ============================================ */
+        .stButton > button {
+            font-family: 'Manrope', 'Inter', sans-serif !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.3px;
+            border-radius: 0.5rem !important;
+            transition: all 0.2s ease !important;
+        }
+        .stButton > button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        /* ============================================
+           SIDEBAR — Melhorias
+           ============================================ */
+        [data-testid="stSidebar"] {
+            font-family: 'Manrope', 'Inter', sans-serif !important;
+        }
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {
+            font-weight: 700;
+            letter-spacing: -0.2px;
+        }
+        
+        /* ============================================
+           TABS — Estilo premium
+           ============================================ */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px;
+            font-family: 'Manrope', 'Inter', sans-serif !important;
+        }
+        .stTabs [data-baseweb="tab"] {
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        /* ============================================
+           SELECTBOX & MULTISELECT — Refinamento
+           ============================================ */
+        .stSelectbox label,
+        .stMultiSelect label {
+            font-family: 'Manrope', 'Inter', sans-serif !important;
+            font-weight: 600 !important;
+            font-size: 0.85rem !important;
+            color: #334155 !important;
+        }
+        
         </style>
     """,
         unsafe_allow_html=True,
     )
-
 
 # ==========================================================
 # COMPONENTES VISUAIS
@@ -550,7 +729,6 @@ def render_section(titulo: str):
         unsafe_allow_html=True,
     )
 
-
 # ==========================================================
 # COMPONENTE — DataFrame Estilizado (Volumetria)
 # ==========================================================
@@ -563,111 +741,290 @@ def render_dataframe(
     color_col: Optional[str] = None,
     color_meta: Optional[float] = None,
     height: int | Literal["auto", "stretch", "content"] = "auto",
+    adicionar_totais: bool = True,
 ):
-    badge_text = badge or f"{len(df)} registros"
-    st.markdown(
-        f"""
-        <div class="styled-table-wrapper">
-            <div class="styled-table-title">
-                <span>{icone}</span>
-                <span>{titulo}</span>
-                <span class="styled-table-badge">{badge_text}</span>
-            </div>
-        </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
+    # --- PREPARAÇÃO DOS DADOS ---
     df_display = df.copy()
-
-    # ── 1. Resolver renomeação segura (sem duplicatas) ────────────────
     mapa_seguro = Utils.resolver_renomeacao(df_display, RENOMEAR_COLUNAS)
     df_display = df_display.rename(columns=mapa_seguro)
 
-    # ── 2. Atualizar referências de fmt e color_col pós-renomeação ────
-    if fmt:
-        fmt = {mapa_seguro.get(k, k): v for k, v in fmt.items()}
-    if color_col:
-        color_col = mapa_seguro.get(color_col, color_col)
+    # Identificar colunas
+    col_regiao = mapa_seguro.get("REGIÃO", "Região")
+    col_exec = mapa_seguro.get("Executada", "Executadas")
+    col_nao = mapa_seguro.get("Não Executada", "Não Exec.")
+    col_pen = mapa_seguro.get("Pendente", "Pendentes")
+    col_bai = mapa_seguro.get("Baixadas", "Baixadas")
+    col_total = mapa_seguro.get("Total Alocado", "Total Alocado")
+    col_taxa = mapa_seguro.get("Taxa Execução", "Taxa Exec.")
+    col_quebra = mapa_seguro.get("Taxa Quebra", "Taxa Quebra")
+    col_proj = mapa_seguro.get("Projeção", "Projeção")
 
-    # ── 3. Float → Int nas colunas de contagem ────────────────────────
+    # Converter inteiros
     for col_orig in COLUNAS_INTEIRAS:
-        col_display = mapa_seguro.get(col_orig, col_orig)
-        if col_display in df_display.columns:
-            df_display[col_display] = (
-                pd.to_numeric(df_display[col_display], errors="coerce")
-                .fillna(0)
-                .astype(int)
-            )
+        c_disp = mapa_seguro.get(col_orig, col_orig)
+        if c_disp in df_display.columns:
+            df_display[c_disp] = pd.to_numeric(df_display[c_disp], errors="coerce").fillna(0).astype(int)
 
+    # --- CALCULAR RANKING DE TAXA EXECUÇÃO ---
+    ranking_taxa = {}
+    if col_taxa in df_display.columns and len(df_display) > 0:
+        taxas_ordenadas = df_display[col_taxa].sort_values(ascending=False).reset_index(drop=True)
+        total_linhas = len(taxas_ordenadas)
+        for idx, valor in enumerate(taxas_ordenadas):
+            try:
+                v = float(valor)
+                posicao = (idx + 1) / total_linhas if total_linhas > 0 else 0
+                ranking_taxa[v] = posicao
+            except (ValueError, TypeError):
+                pass
+
+    # --- ADICIONAR LINHA DE TOTAL GERAL ---
+    if adicionar_totais and len(df_display) > 0:
+        total_row = {}
+        for col in df_display.columns:
+            if pd.api.types.is_numeric_dtype(df_display[col]):
+                total_row[col] = 0
+            else:
+                total_row[col] = ""
+        
+        col_nome = df_display.columns[1] if len(df_display.columns) > 1 else df_display.columns[0]
+        total_row[col_nome] = "TOTAL GERAL"
+
+        for c in [col_exec, col_nao, col_pen, col_bai, col_total, col_proj]:
+            if c in df_display.columns:
+                total_row[c] = int(df_display[c].sum())
+
+        if col_bai in df_display.columns and col_exec in df_display.columns:
+            baixadas_tot = df_display[col_bai].sum()
+            exec_tot = df_display[col_exec].sum()
+            if col_taxa in df_display.columns:
+                total_row[col_taxa] = exec_tot / baixadas_tot if baixadas_tot > 0 else 0.0
+            if col_quebra in df_display.columns:
+                total_row[col_quebra] = 1 - (exec_tot / baixadas_tot) if baixadas_tot > 0 else 0.0
+
+        df_display = pd.concat([df_display, pd.DataFrame([total_row])], ignore_index=True)
+
+    # --- HEADER PREMIUM COM MANROPE ---
+    data_atual = pd.Timestamp.now().strftime('%d/%m/%Y')
+    
+    st.markdown(f"""
+        <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <div style="background: #0B1739; 
+                    padding: 16px 24px; border-radius: 12px 12px 0 0; 
+                    color: #F9FAFB; margin-bottom: 0; 
+                    border-bottom: 2px solid #1E3A8A;
+                    font-family: 'Manrope', 'Inter', -apple-system, sans-serif;">
+            <span style="font-weight: 700; font-size: 0.85rem; letter-spacing: 1.2px;">
+                {icone}  {titulo.upper()} — {data_atual}
+            </span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # --- ESTILIZAÇÃO ---
     styler = df_display.style
 
-    # ── 4. Formatação numérica ────────────────────────────────────────
-    if fmt:
-        styler = styler.format(fmt)
-
-    # ── 5. Cor condicional — Taxa Execução ────────────────────────────
-    if color_col and color_col in df_display.columns and color_meta is not None:
-
-        def _cor_taxa(val):
-            try:
-                v = float(val)
-            except (ValueError, TypeError):
-                return ""
-            if v >= color_meta:
-                return "background-color:#DCFCE7;color:#166534;font-weight:600;"
-            if v >= color_meta * 0.85:
-                return "background-color:#FEF9C3;color:#854D0E;font-weight:600;"
-            return "background-color:#FEE2E2;color:#991B1B;font-weight:600;"
-
-        styler = styler.map(_cor_taxa, subset=pd.Index([color_col]))
-
-    # ── 6. Cor fixa — Executadas ≥ meta técnico ───────────────────────
-    col_exec_display = mapa_seguro.get("Executada", "Executada")
-    if col_exec_display in df_display.columns:
-
-        def _cor_exec(val):
-            try:
-                v = float(val)
-            except (ValueError, TypeError):
-                return ""
-            if v >= Config.META_EXECUTADAS_TECNICO:
-                return "background-color:#DCFCE7;color:#166534;font-weight:600;"
+    # 1. FORMATAÇÕES BRASILEIRAS
+    def _fmt_percentual(val):
+        if val == "" or val is None or pd.isna(val):
             return ""
+        try:
+            return f"{float(val) * 100:.1f}%".replace(".", ",")
+        except (ValueError, TypeError):
+            return str(val)
 
-        styler = styler.map(_cor_exec, subset=pd.Index([col_exec_display]))
+    def _fmt_inteiro(val):
+        if val == "" or val is None or pd.isna(val):
+            return ""
+        try:
+            return f"{int(val):,}".replace(",", ".")
+        except (ValueError, TypeError):
+            return str(val)
 
-    # ── 7. Header estilizado ──────────────────────────────────────────
-    styler = styler.set_table_styles(
-        [
-            {
-                "selector": "th",
-                "props": [
-                    ("background-color", "#0F172A"),
-                    ("color", "#FFFFFF"),
-                    ("font-size", "0.78rem"),
-                    ("font-weight", "700"),
-                    ("text-transform", "uppercase"),
-                    ("letter-spacing", "0.03em"),
-                    ("padding", "0.6rem 0.8rem"),
-                    ("border", "none"),
-                ],
-            },
-            {
-                "selector": "td",
-                "props": [
-                    ("font-size", "0.82rem"),
-                    ("padding", "0.5rem 0.8rem"),
-                    ("border-bottom", "1px solid #F1F5F9"),
-                ],
-            },
-            {"selector": "tr:hover td", "props": [("background-color", "#F8FAFC")]},
-        ]
-    )
+    format_dict = {}
+    if col_taxa in df_display.columns:
+        format_dict[col_taxa] = _fmt_percentual
+    if col_quebra in df_display.columns:
+        format_dict[col_quebra] = _fmt_percentual
+    for col in [col_exec, col_nao, col_pen, col_bai, col_total, col_proj]:
+        if col in df_display.columns:
+            format_dict[col] = _fmt_inteiro
+    
+    if format_dict:
+        styler = styler.format(format_dict)
+
+    # 2. TAXA EXECUÇÃO - CORES SUAVES POR RANKING (Melhor → Pior)
+    if col_taxa in df_display.columns:
+        def _cor_taxa_ranking(val):
+            if val == "" or pd.isna(val):
+                return ""
+            try:
+                v = float(val)
+                posicao = ranking_taxa.get(v, 0.5)
+                
+                # Paleta SUAVE (pastel/soft) - do melhor ao pior
+                if posicao <= 0.20:  # Top 20% - Verde menta suave
+                    bg, fg = "#D1FAE5", "#047857"
+                elif posicao <= 0.40:  # 20-40% - Verde bem claro
+                    bg, fg = "#ECFDF5", "#059669"
+                elif posicao <= 0.60:  # Meio - Amarelo pastel
+                    bg, fg = "#FEF3C7", "#B45309"
+                elif posicao <= 0.80:  # 60-80% - Laranja suave
+                    bg, fg = "#FFEDD5", "#C2410C"
+                else:  # Pior 20% - Vermelho rosé suave
+                    bg, fg = "#FEE2E2", "#B91C1C"
+                
+                return f"background-color: {bg}; color: {fg}; font-weight: 700; text-align: center;"
+            except (ValueError, TypeError):
+                return ""
+        styler = styler.map(_cor_taxa_ranking, subset=[col_taxa])
+
+    # 3. TAXA QUEBRA (Só cor do texto - sutil)
+    if col_quebra in df_display.columns:
+        def _cor_quebra(val):
+            if val == "" or pd.isna(val):
+                return ""
+            try:
+                v = float(val)
+                if v >= 0.25:
+                    return "color: #B91C1C; font-weight: 600;"
+                elif v >= 0.15:
+                    return "color: #B45309; font-weight: 600;"
+                else:
+                    return "color: #047857; font-weight: 600;"
+            except (ValueError, TypeError):
+                return ""
+        styler = styler.map(_cor_quebra, subset=[col_quebra])
+
+    # 4. EXECUTADAS - Amarelo pastel (como "OS" na imagem)
+    if col_exec in df_display.columns:
+        styler = styler.set_properties(**{
+            'background-color': '#FEF9C3', 
+            'color': '#854D0E', 
+            'font-weight': '700',
+            'font-size': '0.9rem'
+        }, subset=[col_exec])
+
+    # 5. TOTAL ALOCADO - Verde menta suave
+    if col_total in df_display.columns:
+        styler = styler.set_properties(**{
+            'background-color': '#D1FAE5',
+            'color': '#065F46', 
+            'font-weight': '700',
+            'font-size': '0.9rem'
+        }, subset=[col_total])
+
+    # 6. PROJEÇÃO - Cinza escuro premium
+    if col_proj in df_display.columns:
+        styler = styler.set_properties(**{
+            'background': 'linear-gradient(135deg, #1E293B 0%, #334155 100%)', 
+            'color': '#FFFFFF', 
+            'font-weight': '800',
+            'font-size': '0.9rem',
+            'text-shadow': '0 1px 2px rgba(0,0,0,0.15)'
+        }, subset=[col_proj])
+
+    # 7. LINHA TOTAL GERAL
+    def _estilo_total(row):
+        for val in row:
+            if isinstance(val, str) and "TOTAL GERAL" in str(val).upper():
+                return [
+                    'background-color: #E2E8F0; '
+                    'font-weight: 800; color: #0F172A; '
+                    'border-top: 2px solid #64748B; '
+                    'font-size: 0.88rem; padding: 14px 15px;'
+                ] * len(row)
+        return [''] * len(row)
+
+    styler = styler.apply(_estilo_total, axis=1)
+
+    # 8. ESTILOS GERAIS - TIPOGRAFIA MANROPE
+    styler = styler.set_table_styles([
+        # Cabeçalhos das colunas
+        {
+            "selector": "thead th",
+            "props": [
+                ("background-color", "#1E293B"),
+                ("color", "#F1F5F9"),
+                ("font-family", "'Manrope', 'Inter', -apple-system, sans-serif"),
+                ("font-weight", "600"),
+                ("text-align", "center"),
+                ("padding", "13px 12px"),
+                ("border", "none"),
+                ("font-size", "0.72rem"),
+                ("text-transform", "uppercase"),
+                ("letter-spacing", "1px"),
+                ("vertical-align", "middle")
+            ]
+        },
+        # Células
+        {
+            "selector": "tbody td",
+            "props": [
+                ("font-family", "'Manrope', 'Inter', -apple-system, sans-serif"),
+                ("padding", "12px 15px"),
+                ("border-bottom", "1px solid #F1F5F9"),
+                ("border-right", "1px solid #F1F5F9"),
+                ("font-size", "0.85rem"),
+                ("text-align", "center"),
+                ("color", "#334155"),
+                ("font-variant-numeric", "tabular-nums"),
+                ("font-feature-settings", "'tnum' 1, 'lnum' 1"),
+                ("vertical-align", "middle")
+            ]
+        },
+        # Primeira coluna (Região)
+        {
+            "selector": "tbody td:nth-child(1)",
+            "props": [
+                ("text-align", "left"),
+                ("font-weight", "600"),
+                ("color", "#475569"),
+                ("font-size", "0.8rem"),
+                ("letter-spacing", "0.3px"),
+                ("padding-left", "18px")
+            ]
+        },
+        # Segunda coluna (Monitor)
+        {
+            "selector": "tbody td:nth-child(2)",
+            "props": [
+                ("text-align", "left"),
+                ("font-weight", "600"),
+                ("color", "#0F172A"),
+                ("font-size", "0.85rem"),
+                ("letter-spacing", "0.2px"),
+                ("padding-left", "15px")
+            ]
+        },
+        # Zebra striping
+        {
+            "selector": "tbody tr:nth-child(even) td",
+            "props": [("background-color", "#FAFBFC")]
+        },
+        # Hover
+        {
+            "selector": "tbody tr:hover td",
+            "props": [
+                ("filter", "brightness(0.97)"),
+                ("transition", "filter 0.15s ease")
+            ]
+        },
+        # Container
+        {
+            "selector": "",
+            "props": [
+                ("border-radius", "0 0 12px 12px"),
+                ("overflow", "hidden"),
+                ("box-shadow", "0 4px 16px rgba(15, 23, 42, 0.1)"),
+                ("border", "1px solid #E2E8F0"),
+                ("border-top", "none"),
+                ("font-family", "'Manrope', 'Inter', -apple-system, sans-serif")
+            ]
+        }
+    ])
 
     st.dataframe(styler, use_container_width=True, hide_index=True, height=height)
-
-
+      
 # ==========================================================
 # GRÁFICOS
 # ==========================================================
@@ -846,10 +1203,9 @@ def main():
             tab_eq,
             titulo="Volumetria por Equipe",
             icone="👥",
-            fmt=fmt_padrao,
             color_col="Taxa Execução",
             color_meta=Config.META_EXECUCAO,
-            height="stretch",
+            height="auto",
         )
         st.download_button(
             "📥 Baixar Tabela Equipes",
