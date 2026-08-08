@@ -428,7 +428,7 @@ def aplicar_estilo():
         <style>
         /* ============================================
            IMPORTAÇÃO DE FONTES PREMIUM
-           ============================================ */
+        ============================================ */
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
         
         /* Aplicar Manrope globalmente */
