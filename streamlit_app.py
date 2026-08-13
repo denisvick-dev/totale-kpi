@@ -158,6 +158,7 @@ def main():
     visao_tec_prod = st.Page("pages/visao_tecnico_prod.py", title="Produção", icon="🛠️")
     visao_tec_cons = st.Page("pages/visao_tecnico_cons.py", title="Consultivo", icon="🗣️")
     rota_inicial = st.Page("pages/rota_inicial.py", title="Rota Inicial", icon="🗺️")
+    rota_geral = st.Page("pages/rota_geral.py", title="Rota Geral", icon="🗺️")
     volumetria = st.Page("pages/volumetria.py", title="Volumetria", icon="📊")
     quebra_unif = st.Page("pages/quebra_unificada.py", title="Visão PME & Migração", icon="📉")
     assinatura = st.Page("pages/assinatura.py", title="Assinatura", icon="✉️")
@@ -181,7 +182,7 @@ def main():
         "CENTRAL DE PERFORMANCE": [ranking_pontos, qtde_os, consultivo],
         "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons],
         "COMPILADO": [gestao_ativos],
-        "DISPAROS DIÁRIOS": [rota_inicial, volumetria, retorno, p_atendimento],
+        "DISPAROS DIÁRIOS": [rota_inicial, rota_geral, volumetria, retorno, p_atendimento],
         "QUEBRA": [quebra_geral, quebra_unif],
         "UTILITÁRIOS": [assinatura],
     }

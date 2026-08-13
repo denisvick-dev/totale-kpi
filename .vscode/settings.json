@@ -2,5 +2,8 @@
     "editor.fontFamily": "Fira Mono",
     "editor.fontSize": 15,
     "editor.fontVariations": false,
-    "editor.defaultFormatter": "ms-python.python"
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "[python]": {
+        "editor.defaultFormatter": "Jota0222.multi-formatter"
+    }
 }

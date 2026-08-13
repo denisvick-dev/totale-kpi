@@ -71,6 +71,8 @@ COR_TEXTO_2 = "#374151"
 COR_TEXTO_3 = "#6B7280"
 COR_BORDA = "#E2E8F0"
 COR_FUNDO = "#F8FAFC"
+COR_LARANJA_SUAVE = "#FDE68A" # Laranja suave para destaques
+COR_AZUL_SUAVE = "#DBEAFE" # Azul suave para destaques
 
 _TEMA_CORES: dict[str, str] = {
     "azul": COR_PRIMARIA,
