@@ -155,6 +155,39 @@ class ComponenteVisual:
                 border-bottom: 2px solid #E2E8F0;
             }
             .section-header h3 { margin: 0; font-size: 1.1rem; color: #0F172A; }
+            
+            /* ═══════════════════════════════════════════
+            SIDEBAR — Estilo dos filtros
+            ═══════════════════════════════════════════ */
+            [data-testid="stSidebar"] {
+                background: linear-gradient(180deg, #F8FAFC 0%, #EFF6FF 100%);
+            }
+            [data-testid="stSidebar"] h3 {
+                color: #012869;
+                font-weight: 700;
+                font-size: 14px;
+                margin-top: 0.5rem;
+            }
+            [data-testid="stSidebar"] [data-testid="stDateInput"] input {
+                border-radius: 8px !important;
+                border: 1.5px solid #CBD5E1 !important;
+                font-weight: 600 !important;
+                color: #012869 !important;
+                font-size: 13px !important;
+            }
+            [data-testid="stSidebar"] [data-testid="stDateInput"] input:focus {
+                border-color: #F37C04 !important;
+                box-shadow: 0 0 0 3px rgba(243, 124, 4, 0.15) !important;
+            }
+            [data-testid="stSidebar"] [data-testid="stRadio"] label {
+                font-size: 13px !important;
+                padding: 4px 0 !important;
+            }
+            [data-testid="stSidebar"] .stSelectbox label {
+                color: #012869 !important;
+                font-weight: 600 !important;
+                font-size: 13px !important;
+            }
         </style>
         """,
             unsafe_allow_html=True,
@@ -384,6 +417,240 @@ t_mesh, t_tv, t_vir = (
 )
 
 st.sidebar.header("🎯 Filtros Avançados")
+
+# ═══════════════════════════════════════════════════
+# 📅 FILTRO DE CALENDÁRIO INTELIGENTE
+# ═══════════════════════════════════════════════════
+st.sidebar.markdown("### 📅 Período")
+
+if "DATA" in df.columns and df["DATA"].notna().any():
+
+    # Garante que a coluna esteja em formato datetime
+    df["DATA"] = pd.to_datetime(
+        df["DATA"],
+        errors="coerce",
+        dayfirst=True,
+    )
+
+    datas_validas = df["DATA"].dropna()
+
+    data_min = datas_validas.min().date()
+    data_max = datas_validas.max().date()
+    hoje = pd.Timestamp.today().normalize().date()
+
+    # Não permite que a referência ultrapasse a última data disponível.
+    data_referencia = min(hoje, data_max)
+
+    def limitar_data(data):
+        """Mantém a data dentro dos limites disponíveis."""
+        return max(data_min, min(data, data_max))
+
+    def obter_periodo(nome_preset: str):
+        """
+        Calcula automaticamente o intervalo conforme o atalho.
+
+        Se não houver dados no mês atual, o preset 'Mês atual'
+        utiliza o mês da última data disponível.
+        """
+        if nome_preset == "Mês atual":
+            inicio = data_referencia.replace(day=1)
+            fim = data_referencia
+
+        elif nome_preset == "Última semana":
+            # Intervalo móvel de 7 dias, incluindo a data de referência
+            inicio = (
+                pd.Timestamp(data_referencia) - pd.Timedelta(days=6)
+            ).date()
+            fim = data_referencia
+
+        elif nome_preset == "Últimos 15 dias":
+            # Intervalo móvel de 15 dias, incluindo a data de referência
+            inicio = (
+                pd.Timestamp(data_referencia) - pd.Timedelta(days=14)
+            ).date()
+            fim = data_referencia
+
+        elif nome_preset == "Todo período":
+            inicio = data_min
+            fim = data_max
+
+        else:
+            # Personalizado: mantém o período selecionado pelo usuário
+            periodo_atual = st.session_state.get(
+                "filtro_periodo",
+                (data_min, data_max),
+            )
+
+            if (
+                isinstance(periodo_atual, (tuple, list))
+                and len(periodo_atual) == 2
+            ):
+                inicio = pd.Timestamp(periodo_atual[0]).date()
+                fim = pd.Timestamp(periodo_atual[1]).date()
+            else:
+                inicio = data_min
+                fim = data_max
+
+        inicio = limitar_data(inicio)
+        fim = limitar_data(fim)
+
+        if inicio > fim:
+            inicio = fim
+
+        return inicio, fim
+
+    # ------------------------------------------------
+    # Atalhos
+    # ------------------------------------------------
+    preset = st.sidebar.radio(
+        "Atalho:",
+        [
+            "Mês atual",
+            "Última semana",
+            "Últimos 15 dias",
+            "Todo período",
+            "Personalizado",
+        ],
+        index=0,
+        key="calendario_preset",
+    )
+
+    # Detecta mudança de dados, de dia ou de preset
+    assinatura_datas = (
+        data_min.isoformat(),
+        data_max.isoformat(),
+        hoje.isoformat(),
+    )
+
+    assinatura_anterior = st.session_state.get(
+        "_assinatura_datas_calendario"
+    )
+    preset_anterior = st.session_state.get(
+        "_preset_calendario_aplicado"
+    )
+
+    dados_mudaram = assinatura_anterior != assinatura_datas
+    preset_mudou = preset_anterior != preset
+
+    # Atualiza automaticamente o date_input quando:
+    # 1. O usuário muda o atalho;
+    # 2. As datas disponíveis mudam;
+    # 3. O dia atual muda.
+    if (
+        "filtro_periodo" not in st.session_state
+        or preset_mudou
+        or dados_mudaram
+    ):
+        st.session_state["filtro_periodo"] = obter_periodo(preset)
+
+    st.session_state["_assinatura_datas_calendario"] = assinatura_datas
+    st.session_state["_preset_calendario_aplicado"] = preset
+
+    def marcar_como_personalizado():
+        """
+        Quando o usuário altera manualmente o calendário,
+        muda o atalho automaticamente para Personalizado.
+        """
+        if (
+            st.session_state.get("calendario_preset")
+            != "Personalizado"
+        ):
+            st.session_state["calendario_preset"] = "Personalizado"
+
+    # ------------------------------------------------
+    # Calendário
+    # ------------------------------------------------
+    periodo = st.sidebar.date_input(
+        "Selecione o intervalo:",
+        min_value=data_min,
+        max_value=data_max,
+        format="DD/MM/YYYY",
+        key="filtro_periodo",
+        on_change=marcar_como_personalizado,
+    )
+
+    # Preserva técnicos vindos da hierarquia que não possuem DATA.
+    # Isso é importante porque seu merge é outer.
+    manter_sem_data = st.sidebar.checkbox(
+        "Manter técnicos sem movimentação",
+        value=True,
+        help=(
+            "Mantém no ranking os técnicos da hierarquia que não possuem "
+            "registros no período selecionado."
+        ),
+        key="manter_tecnicos_sem_data",
+    )
+
+    # ------------------------------------------------
+    # Aplicação do filtro
+    # ------------------------------------------------
+    if (
+        isinstance(periodo, (tuple, list))
+        and len(periodo) == 2
+    ):
+        data_ini = pd.Timestamp(periodo[0]).date()
+        data_fim = pd.Timestamp(periodo[1]).date()
+
+        if data_ini > data_fim:
+            data_ini, data_fim = data_fim, data_ini
+
+        inicio_timestamp = pd.Timestamp(data_ini)
+
+        # Limite exclusivo para incluir todo o último dia,
+        # inclusive quando DATA possui horário.
+        fim_exclusivo = (
+            pd.Timestamp(data_fim) + pd.Timedelta(days=1)
+        )
+
+        mascara_periodo = (
+            df["DATA"].ge(inicio_timestamp)
+            & df["DATA"].lt(fim_exclusivo)
+        )
+
+        if manter_sem_data:
+            mascara_periodo = (
+                mascara_periodo | df["DATA"].isna()
+            )
+
+        df = df.loc[mascara_periodo].copy()
+
+        st.sidebar.caption(
+            f"📆 {data_ini.strftime('%d/%m/%Y')} "
+            f"→ {data_fim.strftime('%d/%m/%Y')}"
+        )
+
+        st.sidebar.caption(
+            f"📊 {len(df):,.0f} registros após o filtro".replace(",", ".")
+        )
+
+        # Informa quando o mês da última carga é diferente do mês atual
+        mes_atual = (hoje.year, hoje.month)
+        mes_referencia = (
+            data_referencia.year,
+            data_referencia.month,
+        )
+
+        if preset == "Mês atual" and mes_referencia != mes_atual:
+            st.sidebar.info(
+                "Não há dados no mês corrente. "
+                "Exibindo automaticamente o último mês disponível."
+            )
+
+    else:
+        st.sidebar.warning(
+            "⚠️ Selecione a data inicial e a data final."
+        )
+
+else:
+    st.sidebar.info(
+        "ℹ️ Não existem datas válidas para aplicar o filtro."
+    )
+
+st.sidebar.divider()
+
+# ═══════════════════════════════════════════════════
+# 🏢 FILTROS DE HIERARQUIA
+# ═══════════════════════════════════════════════════
 base_sel = st.sidebar.selectbox(
     "Base:", ["Todas"] + sorted(df["Base"].dropna().unique().tolist())
 )
@@ -398,6 +665,15 @@ if base_sel != "Todas":
     df = df[df["Base"] == base_sel]
 if monitor_sel != "Todos":
     df = df[df["Monitor"] == monitor_sel]
+
+# ═══════════════════════════════════════════════════
+# 📊 RESUMO DOS FILTROS APLICADOS
+# ═══════════════════════════════════════════════════
+st.sidebar.divider()
+with st.sidebar.expander("📋 Resumo dos filtros", expanded=False):
+    st.markdown(f"**Base:** {base_sel}")
+    st.markdown(f"**Monitor:** {monitor_sel}")
+    st.markdown(f"**Registros filtrados:** {len(df):,}".replace(",", "."))
 
 # Variáveis Filtradas
 f_cons, f_prod = df["Qtde. Cons."].sum(), df["Qtde. Prod."].sum()

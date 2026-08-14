@@ -461,28 +461,63 @@ class Visualization:
     # ---------- Tabela HTML ----------
 
     @staticmethod
-    def _classe_celula(valor: float, coluna: str) -> str:
-        if coluna in ("WO", "OS"):
-            base = "cel-verde-corp"
-        elif coluna in ("MIGRAÇÃO", "PME"):
-            base = "cel-amarelo-corp"
-        elif coluna in ("Rotas", "Montados"):
-            base = "cel-azul-corp"
-        elif coluna == "Média OS":
-            base = "cel-media-os"
-        elif coluna == "Média Montados":
-            base = "cel-media-mont"
+    def _classe_celula(
+        valor: float,
+        coluna: str,
+        df_bases: Optional[pd.DataFrame] = None,
+    ) -> str:
+        """
+        Mapa de calor por RANKING (posição entre as bases):
+        - 1º lugar (maior valor) → 🟢 Verde
+        - 2º lugar (intermediário) → 🟡 Amarelo
+        - 3º lugar (menor valor) → 🔴 Vermelho
+        
+        Para colunas negativas (ND, RC, MESH, PME), a lógica é invertida:
+        menor valor = melhor (verde).
+        """
+        # Destaques especiais (mantém identidade Totale)
+        if coluna == "Média OS":
+            return "cel-media-os"
+        if coluna == "Média Montados":
+            return "cel-media-mont"
+        
+        if df_bases is None or coluna not in df_bases.columns:
+            return "cel-cinza-corp"
+        
+        valores = pd.to_numeric(df_bases[coluna], errors="coerce").dropna()
+        if len(valores) == 0:
+            return "cel-cinza-corp"
+        
+        # Colunas onde MENOR valor é MELHOR
+        COLS_NEGATIVAS = {"RC",}
+        ascending = coluna in COLS_NEGATIVAS
+        
+        # Ranking: 1 = melhor, 2 = médio, 3 = pior
+        ranking = valores.rank(method="min", ascending=ascending)
+        
+        # Descobre posição do valor atual
+        try:
+            idx_atual = valores[valores == valor].index[0]
+            posicao = int(ranking.loc[idx_atual])
+        except (IndexError, KeyError):
+            return "cel-cinza-corp"
+        
+        # Classifica pela posição do ranking
+        if posicao == 1:
+            return "cel-heat-verde"
+        elif posicao == 2:
+            return "cel-heat-amarelo"
         else:
-            base = "cel-cinza-corp"
-
-        extra = Visualization.COLUNAS_DESTAQUE.get(coluna, "")
-        return f"{base} {extra}".strip()
+            return "cel-heat-vermelho"
 
     @staticmethod
     def renderizar_tabela_html(df: pd.DataFrame) -> None:
         thead = "".join(f"<th>{c}</th>" for c in df.columns)
         linhas_html: list[str] = []
         total_idx = len(df) - 1
+        
+        # Referência apenas com as bases (exclui linha Total)
+        df_bases_ref = df.iloc[:-1].copy()
 
         for i, (_, row) in enumerate(df.iterrows()):
             eh_total = (i == total_idx)
@@ -506,7 +541,7 @@ class Visualization:
                 if eh_total:
                     celulas.append(f"<td>{texto}</td>")
                 else:
-                    classe = Visualization._classe_celula(v, col_nome)
+                    classe = Visualization._classe_celula(v, col_nome, df_bases_ref)
                     celulas.append(f'<td class="{classe}">{texto}</td>')
 
             linhas_html.append(f"<tr{classe_tr}>{''.join(celulas)}</tr>")
@@ -520,7 +555,8 @@ class Visualization:
         </div>
         """
         st.markdown(tabela, unsafe_allow_html=True)
-
+    
+    
     # ---------- Gráficos ----------
 
     @staticmethod
@@ -936,6 +972,7 @@ class UI:
 
 /* ═══════════════════════════════════════════════════════════
    TABELA CORPORATIVA — Totale
+   Layout fixo com colunas padronizadas
    ═══════════════════════════════════════════════════════════ */
 .tabela-rota-wrapper {
     background: white;
@@ -954,6 +991,20 @@ class UI:
     border-spacing: 0;
     font-family: 'Inter', sans-serif;
     font-size: 13.5px;
+    table-layout: fixed; /* 🔑 Força larguras padronizadas */
+}
+
+/* ═════════ LARGURAS PADRONIZADAS ═════════ */
+/* BASE = coluna maior; demais = mesma largura */
+.tabela-rota th:first-child,
+.tabela-rota td:first-child {
+    width: 11%;
+    min-width: 110px;
+}
+.tabela-rota th:not(:first-child),
+.tabela-rota td:not(:first-child) {
+    width: 7.4%; /* (100 - 11) / 12 colunas restantes ≈ 7.4% */
+    min-width: 78px;
 }
 
 /* ═════════ CABEÇALHO — LARANJA TOTALE ═════════ */
@@ -966,20 +1017,22 @@ class UI:
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.9px;
-    font-size: 12px;
-    padding: 20px 14px;
+    font-size: 11.5px;
+    padding: 18px 8px;
     text-align: center;
     border: none;
     text-shadow: 0 1px 2px rgba(0,0,0,0.25);
     box-shadow: inset 0 -3px 0 rgba(0,0,0,0.12);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .tabela-rota thead th:first-child { border-top-left-radius: 14px; }
 .tabela-rota thead th:last-child  { border-top-right-radius: 14px; }
 
-/* ═════════ CORPO — ENQUADRAMENTO GENEROSO ═════════ */
+/* ═════════ CORPO ═════════ */
 .tabela-rota tbody td {
-    padding: 18px 14px;
+    padding: 16px 8px;
     text-align: center;
     border-bottom: 1px solid #F1F5F9;
     font-variant-numeric: tabular-nums;
@@ -987,6 +1040,9 @@ class UI:
     font-size: 14px;
     letter-spacing: 0.2px;
     transition: filter 0.15s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .tabela-rota tbody tr:hover td {
     filter: brightness(1.05) saturate(1.08);
@@ -1008,7 +1064,7 @@ class UI:
     box-shadow:
         inset -3px 0 6px rgba(0,0,0,0.15),
         inset 0 1px 0 rgba(255,255,255,0.08);
-    padding: 20px 16px;
+    padding: 18px 10px;
 }
 
 /* ═════════ LINHA TOTAL — PRETO/CINZA/PRATA ═════════ */
@@ -1020,11 +1076,11 @@ class UI:
         #6B7280 100%) !important;
     color: white !important;
     font-weight: 800 !important;
-    font-size: 15px !important;
+    font-size: 14.5px !important;
     letter-spacing: 0.5px !important;
     text-shadow: 0 1px 2px rgba(0,0,0,0.35);
     border-bottom: none !important;
-    padding: 22px 14px !important;
+    padding: 20px 8px !important;
     box-shadow: inset 0 2px 0 rgba(255,255,255,0.05);
 }
 .tabela-rota tbody tr.linha-total td.col-base {
@@ -1041,18 +1097,120 @@ class UI:
     border-bottom-right-radius: 14px;
 }
 
-/* ═════════ CÉLULAS DE VALOR — PALETA CORPORATIVA ═════════ */
-.cel-neutra   { background:#FFFFFF; color:#1F2937; }
-.cel-verde-corp { background:linear-gradient(180deg,#D1FAE5 0%,#A7F3D0 100%); color:#065F46; font-weight:700; }
-.cel-amarelo-corp { background:linear-gradient(180deg,#FEF3C7 0%,#FDE68A 100%); color:#92400E; font-weight:700; }
-.cel-azul-corp { background:linear-gradient(180deg,#DBEAFE 0%,#BFDBFE 100%); color:#1E3A8A; font-weight:700; }
-.cel-cinza-corp { background:linear-gradient(180deg,#F3F4F6 0%,#E5E7EB 100%); color:#374151; font-weight:600; }
-.cel-media-os { background:linear-gradient(180deg,#1E5FCC 0%,#023A9E 100%); color:#FFFFFF; font-weight:800; text-shadow:0 1px 2px rgba(0,0,0,0.25); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.10); }
-.cel-media-mont { background:linear-gradient(180deg,#F37C04 0%,#C44100 100%); color:#FFFFFF; font-weight:800; text-shadow:0 1px 2px rgba(0,0,0,0.25); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.10); }
+/* ═══════════════════════════════════════════════════════════
+   MAPA DE CALOR POR RANKING — Verde/Amarelo/Vermelho
+   1º=Verde | 2º=Amarelo | 3º=Vermelho
+   ═══════════════════════════════════════════════════════════ */
 
-.tabela-rota thead th.th-destaque {
-    background: linear-gradient(135deg,#E85D04 0%,#C44100 55%,#9A3412 100%);
-    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.18), inset 3px 0 0 rgba(255,255,255,0.10);
+/* 🟢 1º LUGAR — Melhor desempenho */
+.cel-heat-verde {
+    background: linear-gradient(180deg, #D1FAE5 0%, #A7F3D0 100%);
+    color: #065F46;
+    font-weight: 700;
+    border-left: 3px solid #10B981;
+    position: relative;
+}
+.cel-heat-verde::after {
+    content: "▲";
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    font-size: 8px;
+    color: #10B981;
+    opacity: 0.75;
+}
+
+/* 🟡 2º LUGAR — Intermediário */
+.cel-heat-amarelo {
+    background: linear-gradient(180deg, #FEF3C7 0%, #FDE68A 100%);
+    color: #92400E;
+    font-weight: 700;
+    border-left: 3px solid #F59E0B;
+    position: relative;
+}
+.cel-heat-amarelo::after {
+    content: "●";
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    font-size: 8px;
+    color: #F59E0B;
+    opacity: 0.75;
+}
+
+/* 🔴 3º LUGAR — Menor valor */
+.cel-heat-vermelho {
+    background: linear-gradient(180deg, #FEE2E2 0%, #FECACA 100%);
+    color: #991B1B;
+    font-weight: 700;
+    border-left: 3px solid #EF4444;
+    position: relative;
+}
+.cel-heat-vermelho::after {
+    content: "▼";
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    font-size: 8px;
+    color: #EF4444;
+    opacity: 0.75;
+}
+
+/* CINZA — Fallback / Empate */
+.cel-cinza-corp {
+    background: linear-gradient(180deg, #F3F4F6 0%, #E5E7EB 100%);
+    color: #374151;
+    font-weight: 600;
+}
+
+/* ═════════ DESTAQUES ESPECIAIS (Médias) ═════════ */
+.cel-media-os {
+    background: linear-gradient(180deg, #1E5FCC 0%, #023A9E 100%);
+    color: #FFFFFF;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10);
+}
+.cel-media-mont {
+    background: linear-gradient(180deg, #F37C04 0%, #C44100 100%);
+    color: #FFFFFF;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
+}
+
+/* Hover destacado no heatmap */
+.tabela-rota tbody tr:hover .cel-heat-verde,
+.tabela-rota tbody tr:hover .cel-heat-amarelo,
+.tabela-rota tbody tr:hover .cel-heat-vermelho {
+    filter: brightness(1.08) saturate(1.15);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+}
+
+/* ═════════ DESTAQUES ESPECIAIS (Médias) ═════════ */
+.cel-media-os {
+    background: linear-gradient(180deg, #1E5FCC 0%, #023A9E 100%);
+    color: #FFFFFF;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10);
+}
+.cel-media-mont {
+    background: linear-gradient(180deg, #F37C04 0%, #C44100 100%);
+    color: #FFFFFF;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10);
+}
+
+/* Hover destacado no heatmap */
+.tabela-rota tbody tr:hover .cel-heat-verde,
+.tabela-rota tbody tr:hover .cel-heat-amarelo,
+.tabela-rota tbody tr:hover .cel-heat-vermelho {
+    filter: brightness(1.08) saturate(1.15);
+    transform: scale(1.01);
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1167,6 +1325,34 @@ class UI:
 
         render_section_header(icon="📋", title="Resultado consolidado", badge="Detalhamento")
         Visualization.renderizar_tabela_html(df_final)
+        
+        # Legenda do mapa de calor
+        st.markdown("""
+        <div style="
+            display: flex;
+            gap: 16px;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 8px 4px;
+            font-size: 12px;
+            font-family: 'Inter', sans-serif;
+            color: #4B5563;
+            font-weight: 600;
+        ">
+            <span style="display:flex;align-items:center;gap:6px;">
+                <span style="width:14px;height:14px;background:linear-gradient(180deg,#D1FAE5,#A7F3D0);border-left:3px solid #10B981;border-radius:3px;"></span>
+                Melhor
+            </span>
+            <span style="display:flex;align-items:center;gap:6px;">
+                <span style="width:14px;height:14px;background:linear-gradient(180deg,#FEF3C7,#FDE68A);border-left:3px solid #F59E0B;border-radius:3px;"></span>
+                Intermediário
+            </span>
+            <span style="display:flex;align-items:center;gap:6px;">
+                <span style="width:14px;height:14px;background:linear-gradient(180deg,#FEE2E2,#FECACA);border-left:3px solid #EF4444;border-radius:3px;"></span>
+                Pior
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
 
         UI._mostrar_graficos(df_bases)
         UI._mostrar_insights(df_bases, total)
