@@ -421,22 +421,16 @@ st.sidebar.header("🎯 Filtros Avançados")
 # ═══════════════════════════════════════════════════
 # 📅 FILTRO DE CALENDÁRIO INTELIGENTE
 # ═══════════════════════════════════════════════════
-st.sidebar.markdown("### 📅 Período")
+st.sidebar.markdown("📅 Período")
 
 if "DATA" in df.columns and df["DATA"].notna().any():
 
-    # Garante que a coluna esteja em formato datetime
-    df["DATA"] = pd.to_datetime(
-        df["DATA"],
-        errors="coerce",
-        dayfirst=True,
-    )
+    df["DATA"] = pd.to_datetime(df["DATA"], errors="coerce", dayfirst=True)
 
     datas_validas = df["DATA"].dropna()
-
-    data_min = datas_validas.min().date()
-    data_max = datas_validas.max().date()
-    hoje = pd.Timestamp.today().normalize().date()
+    data_min      = datas_validas.min().date()
+    data_max      = datas_validas.max().date()
+    hoje          = pd.Timestamp.today().normalize().date()
 
     # Não permite que a referência ultrapasse a última data disponível.
     data_referencia = min(hoje, data_max)
@@ -449,69 +443,69 @@ if "DATA" in df.columns and df["DATA"].notna().any():
         """
         Calcula automaticamente o intervalo conforme o atalho.
 
-        Se não houver dados no mês atual, o preset 'Mês atual'
-        utiliza o mês da última data disponível.
+        ┌─────────────────┬──────────────────────────────────────────┐
+        │ Preset          │ Comportamento                            │
+        ├─────────────────┼──────────────────────────────────────────┤
+        │ Dia vigente     │ Apenas o dia de referência               │
+        │ Mês atual       │ Do dia 1 até o dia de referência         │
+        │ Última semana   │ Janela móvel de 7 dias                   │
+        │ Últimos 15 dias │ Janela móvel de 15 dias                  │
+        │ Todo período    │ data_min → data_max                      │
+        │ Personalizado   │ Mantém seleção manual do usuário         │
+        └─────────────────┴──────────────────────────────────────────┘
         """
-        if nome_preset == "Mês atual":
+        if nome_preset == "Dia vigente":
+            # Usa o último dia com dados se hoje não tiver movimentação
+            inicio = data_referencia
+            fim    = data_referencia
+
+        elif nome_preset == "Mês atual":
             inicio = data_referencia.replace(day=1)
-            fim = data_referencia
+            fim    = data_referencia
 
         elif nome_preset == "Última semana":
-            # Intervalo móvel de 7 dias, incluindo a data de referência
-            inicio = (
-                pd.Timestamp(data_referencia) - pd.Timedelta(days=6)
-            ).date()
-            fim = data_referencia
+            inicio = (pd.Timestamp(data_referencia) - pd.Timedelta(days=6)).date()
+            fim    = data_referencia
 
         elif nome_preset == "Últimos 15 dias":
-            # Intervalo móvel de 15 dias, incluindo a data de referência
-            inicio = (
-                pd.Timestamp(data_referencia) - pd.Timedelta(days=14)
-            ).date()
-            fim = data_referencia
+            inicio = (pd.Timestamp(data_referencia) - pd.Timedelta(days=14)).date()
+            fim    = data_referencia
 
         elif nome_preset == "Todo período":
             inicio = data_min
-            fim = data_max
+            fim    = data_max
 
-        else:
-            # Personalizado: mantém o período selecionado pelo usuário
-            periodo_atual = st.session_state.get(
-                "filtro_periodo",
-                (data_min, data_max),
-            )
-
-            if (
-                isinstance(periodo_atual, (tuple, list))
-                and len(periodo_atual) == 2
-            ):
+        else:  # Personalizado
+            periodo_atual = st.session_state.get("filtro_periodo", (data_min, data_max))
+            if isinstance(periodo_atual, (tuple, list)) and len(periodo_atual) == 2:
                 inicio = pd.Timestamp(periodo_atual[0]).date()
-                fim = pd.Timestamp(periodo_atual[1]).date()
+                fim    = pd.Timestamp(periodo_atual[1]).date()
             else:
                 inicio = data_min
-                fim = data_max
+                fim    = data_max
 
         inicio = limitar_data(inicio)
-        fim = limitar_data(fim)
+        fim    = limitar_data(fim)
 
         if inicio > fim:
             inicio = fim
 
         return inicio, fim
 
-    # ------------------------------------------------
+    # ─────────────────────────────────────────────
     # Atalhos
-    # ------------------------------------------------
+    # ─────────────────────────────────────────────
     preset = st.sidebar.radio(
-        "Atalho:",
+        "Selecione:",
         [
+            "Dia vigente",        
             "Mês atual",
             "Última semana",
             "Últimos 15 dias",
             "Todo período",
             "Personalizado",
         ],
-        index=0,
+        index=1,                  # padrão continua sendo "Mês atual"
         key="calendario_preset",
     )
 
@@ -522,20 +516,12 @@ if "DATA" in df.columns and df["DATA"].notna().any():
         hoje.isoformat(),
     )
 
-    assinatura_anterior = st.session_state.get(
-        "_assinatura_datas_calendario"
-    )
-    preset_anterior = st.session_state.get(
-        "_preset_calendario_aplicado"
-    )
+    assinatura_anterior = st.session_state.get("_assinatura_datas_calendario")
+    preset_anterior     = st.session_state.get("_preset_calendario_aplicado")
 
     dados_mudaram = assinatura_anterior != assinatura_datas
-    preset_mudou = preset_anterior != preset
+    preset_mudou  = preset_anterior    != preset
 
-    # Atualiza automaticamente o date_input quando:
-    # 1. O usuário muda o atalho;
-    # 2. As datas disponíveis mudam;
-    # 3. O dia atual muda.
     if (
         "filtro_periodo" not in st.session_state
         or preset_mudou
@@ -544,22 +530,16 @@ if "DATA" in df.columns and df["DATA"].notna().any():
         st.session_state["filtro_periodo"] = obter_periodo(preset)
 
     st.session_state["_assinatura_datas_calendario"] = assinatura_datas
-    st.session_state["_preset_calendario_aplicado"] = preset
+    st.session_state["_preset_calendario_aplicado"]  = preset
 
     def marcar_como_personalizado():
-        """
-        Quando o usuário altera manualmente o calendário,
-        muda o atalho automaticamente para Personalizado.
-        """
-        if (
-            st.session_state.get("calendario_preset")
-            != "Personalizado"
-        ):
+        """Muda o atalho para Personalizado ao editar o calendário manualmente."""
+        if st.session_state.get("calendario_preset") != "Personalizado":
             st.session_state["calendario_preset"] = "Personalizado"
 
-    # ------------------------------------------------
+    # ─────────────────────────────────────────────
     # Calendário
-    # ------------------------------------------------
+    # ─────────────────────────────────────────────
     periodo = st.sidebar.date_input(
         "Selecione o intervalo:",
         min_value=data_min,
@@ -569,25 +549,21 @@ if "DATA" in df.columns and df["DATA"].notna().any():
         on_change=marcar_como_personalizado,
     )
 
-    # Preserva técnicos vindos da hierarquia que não possuem DATA.
-    # Isso é importante porque seu merge é outer.
+    # Mantém técnicos sem DATA (outer merge da hierarquia)
     manter_sem_data = st.sidebar.checkbox(
         "Manter técnicos sem movimentação",
         value=True,
         help=(
-            "Mantém no ranking os técnicos da hierarquia que não possuem "
-            "registros no período selecionado."
+            "Mantém no ranking os técnicos da hierarquia "
+            "que não possuem registros no período selecionado."
         ),
         key="manter_tecnicos_sem_data",
     )
 
-    # ------------------------------------------------
+    # ─────────────────────────────────────────────
     # Aplicação do filtro
-    # ------------------------------------------------
-    if (
-        isinstance(periodo, (tuple, list))
-        and len(periodo) == 2
-    ):
+    # ─────────────────────────────────────────────
+    if isinstance(periodo, (tuple, list)) and len(periodo) == 2:
         data_ini = pd.Timestamp(periodo[0]).date()
         data_fim = pd.Timestamp(periodo[1]).date()
 
@@ -595,40 +571,38 @@ if "DATA" in df.columns and df["DATA"].notna().any():
             data_ini, data_fim = data_fim, data_ini
 
         inicio_timestamp = pd.Timestamp(data_ini)
-
-        # Limite exclusivo para incluir todo o último dia,
-        # inclusive quando DATA possui horário.
-        fim_exclusivo = (
-            pd.Timestamp(data_fim) + pd.Timedelta(days=1)
-        )
+        fim_exclusivo    = pd.Timestamp(data_fim) + pd.Timedelta(days=1)
 
         mascara_periodo = (
-            df["DATA"].ge(inicio_timestamp)
-            & df["DATA"].lt(fim_exclusivo)
+            df["DATA"].ge(inicio_timestamp) & df["DATA"].lt(fim_exclusivo)
         )
 
         if manter_sem_data:
-            mascara_periodo = (
-                mascara_periodo | df["DATA"].isna()
-            )
+            mascara_periodo = mascara_periodo | df["DATA"].isna()
 
         df = df.loc[mascara_periodo].copy()
 
-        st.sidebar.caption(
-            f"📆 {data_ini.strftime('%d/%m/%Y')} "
-            f"→ {data_fim.strftime('%d/%m/%Y')}"
-        )
+        # ── Legenda do período selecionado ──────────────────────
+        if data_ini == data_fim:
+            # Dia vigente → exibe label especial
+            label_periodo = (
+                f"📅 Dia vigente: **{data_ini.strftime('%d/%m/%Y')}**"
+                if preset == "Dia vigente"
+                else f"📆 {data_ini.strftime('%d/%m/%Y')}"
+            )
+            st.sidebar.caption(label_periodo)
+        else:
+            st.sidebar.caption(
+                f"📆 {data_ini.strftime('%d/%m/%Y')} → {data_fim.strftime('%d/%m/%Y')}"
+            )
 
         st.sidebar.caption(
             f"📊 {len(df):,.0f} registros após o filtro".replace(",", ".")
         )
 
-        # Informa quando o mês da última carga é diferente do mês atual
-        mes_atual = (hoje.year, hoje.month)
-        mes_referencia = (
-            data_referencia.year,
-            data_referencia.month,
-        )
+        # Aviso se não há dados no mês corrente
+        mes_atual      = (hoje.year, hoje.month)
+        mes_referencia = (data_referencia.year, data_referencia.month)
 
         if preset == "Mês atual" and mes_referencia != mes_atual:
             st.sidebar.info(
@@ -636,15 +610,18 @@ if "DATA" in df.columns and df["DATA"].notna().any():
                 "Exibindo automaticamente o último mês disponível."
             )
 
+        # Aviso se não há dados hoje e o usuário escolheu "Dia vigente"
+        if preset == "Dia vigente" and data_referencia != hoje:
+            st.sidebar.info(
+                f"Não há dados para hoje ({hoje.strftime('%d/%m/%Y')}). "
+                f"Exibindo o último dia disponível: **{data_referencia.strftime('%d/%m/%Y')}**."
+            )
+
     else:
-        st.sidebar.warning(
-            "⚠️ Selecione a data inicial e a data final."
-        )
+        st.sidebar.warning("⚠️ Selecione a data inicial e a data final.")
 
 else:
-    st.sidebar.info(
-        "ℹ️ Não existem datas válidas para aplicar o filtro."
-    )
+    st.sidebar.info("ℹ️ Não existem datas válidas para aplicar o filtro.")
 
 st.sidebar.divider()
 
