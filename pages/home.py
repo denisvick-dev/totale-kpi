@@ -13,10 +13,9 @@ from datetime import datetime
 # 🔧 BLOCO 1: CONFIGURAÇÕES GERAIS
 # =====================================
 
-VERSAO_SISTEMA = "2.1.0"
+VERSAO_SISTEMA = "2.2"
 AMBIENTE = "Produção"
 FUSO_HORARIO = ZoneInfo("America/Sao_Paulo")
-INTERVALO_REFRESH = 60  # segundos (60s é mais leve que 1s)
 
 
 # =====================================
@@ -249,89 +248,7 @@ def render_cards_navegacao():
 
 
 # =====================================
-# 🖼️ BLOCO 4: CARROSSEL DE IMAGENS
-# =====================================
-
-IMGS_CARROSSEL = [
-    "assets/images/informe_vagas.jpeg",
-    "assets/images/consultivo_copa.jpg",
-    "assets/images/indicacao_totale.png",
-]
-
-
-def render_carrossel():
-    """Renderiza o carrossel de comunicados internos."""
-    st.subheader("📢 Comunicados Internos")
-
-    # Inicializa índice do slide
-    if "slide_index" not in st.session_state:
-        st.session_state.slide_index = 0
-
-    if not IMGS_CARROSSEL:
-        st.info("Nenhum comunicado disponível no momento.")
-        return
-
-    total = len(IMGS_CARROSSEL)
-
-    col1, col2, col3 = st.columns([1, 2, 1])
-
-    with col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-
-        # Imagem atual
-        slide_atual = IMGS_CARROSSEL[st.session_state.slide_index]
-        st.image(slide_atual, use_container_width=True)
-
-        # Indicador de posição
-        st.markdown(
-            f"<div style='text-align:center; font-size:14px; color:#666;'>"
-            f"Slide {st.session_state.slide_index + 1} de {total}"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-        # Botões de navegação
-        col_btn1, col_btn2 = st.columns(2)
-
-        with col_btn1:
-            if st.button("⬅ Anterior", use_container_width=True):
-                st.session_state.slide_index = (
-                    st.session_state.slide_index - 1
-                ) % total
-
-        with col_btn2:
-            if st.button("Próximo ➡", use_container_width=True):
-                st.session_state.slide_index = (
-                    st.session_state.slide_index + 1
-                ) % total
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-
-# =====================================
-# ⏰ BLOCO 5: AUTO REFRESH INTELIGENTE
-# =====================================
-
-
-def auto_refresh(intervalo_segundos=60):
-    """
-    Auto-refresh usando session_state.
-    Evita loop infinito e é mais leve que st_autorefresh.
-    """
-    key = "_last_refresh_time"
-
-    if key not in st.session_state:
-        st.session_state[key] = time.time()
-
-    tempo_decorrido = time.time() - st.session_state[key]
-
-    if tempo_decorrido > intervalo_segundos:
-        st.session_state[key] = time.time()
-        st.rerun()
-
-
-# =====================================
-# 🕒 BLOCO 6: HORÁRIO DE BRASÍLIA
+# 🕒 BLOCO 5: HORÁRIO DE BRASÍLIA
 # =====================================
 
 
@@ -364,7 +281,7 @@ def render_footer():
 
 
 # =====================================
-# 🚀 BLOCO 7: EXECUÇÃO PRINCIPAL
+# 🚀 BLOCO 6: EXECUÇÃO PRINCIPAL
 # =====================================
 
 
@@ -387,10 +304,8 @@ def main():
     render_intro()
     render_status_sistema()
     render_cards_navegacao()
-    render_carrossel()
 
     # Auto-refresh e rodapé
-    auto_refresh(intervalo_segundos=INTERVALO_REFRESH)
     render_footer()
 
 
