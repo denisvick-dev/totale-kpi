@@ -2,8 +2,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-from plotly.graph_objects import Figure
 from io import BytesIO
 from typing import Any, Optional, cast
 from streamlit_gsheets import GSheetsConnection
@@ -15,7 +13,6 @@ st.set_page_config(page_title="Total de Consultivos", page_icon="📋", layout="
 
 class Configuracoes:
     url_ativos = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
-    cores_grafico = ["#0EA5E9", "#22C55E", "#A855F7", "#F97316", "#EF4444", "#3B82F6"]
     temas_card = {
         "amarelo": {
             "fundo": "#FEF9C3",
@@ -208,7 +205,6 @@ class ComponenteVisual:
         except (TypeError, ValueError):
             pass
 
-        # Mantém a formatação original da coluna
         return ""
 
 class Calculos:
@@ -275,7 +271,6 @@ def preparar_ranking(
     ]
     colunas_soma = [c for c in colunas_soma if c in df.columns]
 
-    # Agrupa os dados e renomeia
     res = df.groupby(colunas_grupo, dropna=False)[colunas_soma].sum().reset_index()
     renomeios = {
         "Qtde. Cons.": "Total Consultivos",
@@ -286,23 +281,19 @@ def preparar_ranking(
     }
     res = res.rename(columns=renomeios).fillna(0)
 
-    # Adiciona Posição
     res = res.sort_values(
         "Total Consultivos" if "Total Consultivos" in res.columns else "Total Produtos",
         ascending=False,
     )
     res.insert(0, "Posição", range(1, len(res) + 1))
 
-    # Lógica de Ordenação: 1º Reais, 2º Projeções, 3º Demais Produtos
     nova_ordem = ["Posição"] + colunas_grupo
 
-    # Adiciona os Reais
     if "Total Consultivos" in res.columns:
         nova_ordem.append("Total Consultivos")
     if "Total Produtos" in res.columns:
         nova_ordem.append("Total Produtos")
 
-    # Adiciona as Projeções
     if "Total Consultivos" in res.columns and fator_proj > 1.0:
         res["Proj. Consultivos"] = (res["Total Consultivos"] * fator_proj).astype(int)
         nova_ordem.append("Proj. Consultivos")
@@ -311,12 +302,10 @@ def preparar_ranking(
         res["Proj. Produtos"] = (res["Total Produtos"] * fator_proj).astype(int)
         nova_ordem.append("Proj. Produtos")
 
-    # Adiciona os demais produtos (Mesh, TV, Virtua)
     for col in ["Mesh", "TV Box", "Virtua"]:
         if col in res.columns:
             nova_ordem.append(col)
 
-    # Converte métricas para int e aplica nova ordem
     metricas = [c for c in nova_ordem if c not in ["Posição"] + colunas_grupo]
     res[metricas] = res[metricas].astype(int)
     return res[nova_ordem]
@@ -349,7 +338,6 @@ if (
 
 df = st.session_state["dados_cons"]["Consultivo"].copy()
 
-# Tratamento de Colunas Numéricas Iniciais
 mapa = {
     "QTDE_CONSULTIVO": "Qtde. Cons.",
     "QTDE_PRODUTOS": "Qtde. Prod.",
@@ -363,22 +351,18 @@ for k, v in mapa.items():
 if "DATA" in df.columns:
     df["DATA"] = pd.to_datetime(df["DATA"], errors="coerce", dayfirst=True)
 
-# Merge com GSheets (Hierarquia)
 try:
     df_ativos = carregar_hierarquia()
     df["LOGIN NETSALES"] = df.get("LOGIN NETSALES", "").astype(str).str.strip()
     df = df.drop(columns=["Monitor", "Base"], errors="ignore")
-    # Outer merge: traz todos da base + todos da planilha do google (mesmo zerados)
     df = pd.merge(
         df, df_ativos, left_on="LOGIN NETSALES", right_on="Login", how="outer"
     )
 except Exception as e:
     st.error(f"Erro ao carregar hierarquia: {e}")
 
-# 1. Arruma os Logins (Se não tem Netsales, pega o Login do GSheets)
 df["LOGIN NETSALES"] = df["LOGIN NETSALES"].fillna(df["Login"]).fillna("SEM LOGIN")
 
-# 2. Arruma os Nomes (Se não tem Vendedor na base, pega Técnico do GSheets, senão pega Login)
 if "VENDEDOR" not in df.columns:
     df["VENDEDOR"] = np.nan
 
@@ -389,11 +373,9 @@ df["VENDEDOR"] = (
     .fillna("Nome Não Cadastrado")
 )
 
-# 3. Arruma a Hierarquia
 df["Monitor"] = df["Monitor"].fillna("Não Identificado")
 df["Base"] = df["Base"].fillna("Não Identificada")
 
-# 4. Preenche com ZERO as métricas dos técnicos zerados puxados do GSheets
 colunas_metricas = [
     "Qtde. Cons.",
     "Qtde. Prod.",
@@ -408,222 +390,12 @@ for col in colunas_metricas:
 # ====================================================
 # BLOCO 4: FILTROS E CÁLCULOS GLOBAIS
 # ====================================================
-# Memória dos Totais (Sem Filtro) para % de Share
 t_cons, t_prod = df["Qtde. Cons."].sum(), df["Qtde. Prod."].sum()
 t_mesh, t_tv, t_vir = (
     df["Qtde. Mesh"].sum(),
     df["Qtde. TV"].sum(),
     df["Qtde. Virtua"].sum(),
 )
-
-st.sidebar.header("🎯 Filtros Avançados")
-
-# ═══════════════════════════════════════════════════
-# 📅 FILTRO DE CALENDÁRIO INTELIGENTE
-# ═══════════════════════════════════════════════════
-st.sidebar.markdown("📅 Período")
-
-if "DATA" in df.columns and df["DATA"].notna().any():
-
-    df["DATA"] = pd.to_datetime(df["DATA"], errors="coerce", dayfirst=True)
-
-    datas_validas = df["DATA"].dropna()
-    data_min      = datas_validas.min().date()
-    data_max      = datas_validas.max().date()
-    hoje          = pd.Timestamp.today().normalize().date()
-
-    # Não permite que a referência ultrapasse a última data disponível.
-    data_referencia = min(hoje, data_max)
-
-    def limitar_data(data):
-        """Mantém a data dentro dos limites disponíveis."""
-        return max(data_min, min(data, data_max))
-
-    def obter_periodo(nome_preset: str):
-        """
-        Calcula automaticamente o intervalo conforme o atalho.
-
-        ┌─────────────────┬──────────────────────────────────────────┐
-        │ Preset          │ Comportamento                            │
-        ├─────────────────┼──────────────────────────────────────────┤
-        │ Dia vigente     │ Apenas o dia de referência               │
-        │ Mês atual       │ Do dia 1 até o dia de referência         │
-        │ Última semana   │ Janela móvel de 7 dias                   │
-        │ Últimos 15 dias │ Janela móvel de 15 dias                  │
-        │ Todo período    │ data_min → data_max                      │
-        │ Personalizado   │ Mantém seleção manual do usuário         │
-        └─────────────────┴──────────────────────────────────────────┘
-        """
-        if nome_preset == "Dia vigente":
-            # Usa o último dia com dados se hoje não tiver movimentação
-            inicio = data_referencia
-            fim    = data_referencia
-
-        elif nome_preset == "Mês atual":
-            inicio = data_referencia.replace(day=1)
-            fim    = data_referencia
-
-        elif nome_preset == "Última semana":
-            inicio = (pd.Timestamp(data_referencia) - pd.Timedelta(days=6)).date()
-            fim    = data_referencia
-
-        elif nome_preset == "Últimos 15 dias":
-            inicio = (pd.Timestamp(data_referencia) - pd.Timedelta(days=14)).date()
-            fim    = data_referencia
-
-        elif nome_preset == "Todo período":
-            inicio = data_min
-            fim    = data_max
-
-        else:  # Personalizado
-            periodo_atual = st.session_state.get("filtro_periodo", (data_min, data_max))
-            if isinstance(periodo_atual, (tuple, list)) and len(periodo_atual) == 2:
-                inicio = pd.Timestamp(periodo_atual[0]).date()
-                fim    = pd.Timestamp(periodo_atual[1]).date()
-            else:
-                inicio = data_min
-                fim    = data_max
-
-        inicio = limitar_data(inicio)
-        fim    = limitar_data(fim)
-
-        if inicio > fim:
-            inicio = fim
-
-        return inicio, fim
-
-    # ─────────────────────────────────────────────
-    # Atalhos
-    # ─────────────────────────────────────────────
-    preset = st.sidebar.radio(
-        "Selecione:",
-        [
-            "Dia vigente",        
-            "Mês atual",
-            "Última semana",
-            "Últimos 15 dias",
-            "Todo período",
-            "Personalizado",
-        ],
-        index=1,                  # padrão continua sendo "Mês atual"
-        key="calendario_preset",
-    )
-
-    # Detecta mudança de dados, de dia ou de preset
-    assinatura_datas = (
-        data_min.isoformat(),
-        data_max.isoformat(),
-        hoje.isoformat(),
-    )
-
-    assinatura_anterior = st.session_state.get("_assinatura_datas_calendario")
-    preset_anterior     = st.session_state.get("_preset_calendario_aplicado")
-
-    dados_mudaram = assinatura_anterior != assinatura_datas
-    preset_mudou  = preset_anterior    != preset
-
-    if (
-        "filtro_periodo" not in st.session_state
-        or preset_mudou
-        or dados_mudaram
-    ):
-        st.session_state["filtro_periodo"] = obter_periodo(preset)
-
-    st.session_state["_assinatura_datas_calendario"] = assinatura_datas
-    st.session_state["_preset_calendario_aplicado"]  = preset
-
-    def marcar_como_personalizado():
-        """Muda o atalho para Personalizado ao editar o calendário manualmente."""
-        if st.session_state.get("calendario_preset") != "Personalizado":
-            st.session_state["calendario_preset"] = "Personalizado"
-
-    # ─────────────────────────────────────────────
-    # Calendário
-    # ─────────────────────────────────────────────
-    periodo = st.sidebar.date_input(
-        "Selecione o intervalo:",
-        min_value=data_min,
-        max_value=data_max,
-        format="DD/MM/YYYY",
-        key="filtro_periodo",
-        on_change=marcar_como_personalizado,
-    )
-
-    # Mantém técnicos sem DATA (outer merge da hierarquia)
-    manter_sem_data = st.sidebar.checkbox(
-        "Manter técnicos sem movimentação",
-        value=True,
-        help=(
-            "Mantém no ranking os técnicos da hierarquia "
-            "que não possuem registros no período selecionado."
-        ),
-        key="manter_tecnicos_sem_data",
-    )
-
-    # ─────────────────────────────────────────────
-    # Aplicação do filtro
-    # ─────────────────────────────────────────────
-    if isinstance(periodo, (tuple, list)) and len(periodo) == 2:
-        data_ini = pd.Timestamp(periodo[0]).date()
-        data_fim = pd.Timestamp(periodo[1]).date()
-
-        if data_ini > data_fim:
-            data_ini, data_fim = data_fim, data_ini
-
-        inicio_timestamp = pd.Timestamp(data_ini)
-        fim_exclusivo    = pd.Timestamp(data_fim) + pd.Timedelta(days=1)
-
-        mascara_periodo = (
-            df["DATA"].ge(inicio_timestamp) & df["DATA"].lt(fim_exclusivo)
-        )
-
-        if manter_sem_data:
-            mascara_periodo = mascara_periodo | df["DATA"].isna()
-
-        df = df.loc[mascara_periodo].copy()
-
-        # ── Legenda do período selecionado ──────────────────────
-        if data_ini == data_fim:
-            # Dia vigente → exibe label especial
-            label_periodo = (
-                f"📅 Dia vigente: **{data_ini.strftime('%d/%m/%Y')}**"
-                if preset == "Dia vigente"
-                else f"📆 {data_ini.strftime('%d/%m/%Y')}"
-            )
-            st.sidebar.caption(label_periodo)
-        else:
-            st.sidebar.caption(
-                f"📆 {data_ini.strftime('%d/%m/%Y')} → {data_fim.strftime('%d/%m/%Y')}"
-            )
-
-        st.sidebar.caption(
-            f"📊 {len(df):,.0f} registros após o filtro".replace(",", ".")
-        )
-
-        # Aviso se não há dados no mês corrente
-        mes_atual      = (hoje.year, hoje.month)
-        mes_referencia = (data_referencia.year, data_referencia.month)
-
-        if preset == "Mês atual" and mes_referencia != mes_atual:
-            st.sidebar.info(
-                "Não há dados no mês corrente. "
-                "Exibindo automaticamente o último mês disponível."
-            )
-
-        # Aviso se não há dados hoje e o usuário escolheu "Dia vigente"
-        if preset == "Dia vigente" and data_referencia != hoje:
-            st.sidebar.info(
-                f"Não há dados para hoje ({hoje.strftime('%d/%m/%Y')}). "
-                f"Exibindo o último dia disponível: **{data_referencia.strftime('%d/%m/%Y')}**."
-            )
-
-    else:
-        st.sidebar.warning("⚠️ Selecione a data inicial e a data final.")
-
-else:
-    st.sidebar.info("ℹ️ Não existem datas válidas para aplicar o filtro.")
-
-st.sidebar.divider()
 
 # ═══════════════════════════════════════════════════
 # 🏢 FILTROS DE HIERARQUIA
@@ -643,16 +415,6 @@ if base_sel != "Todas":
 if monitor_sel != "Todos":
     df = df[df["Monitor"] == monitor_sel]
 
-# ═══════════════════════════════════════════════════
-# 📊 RESUMO DOS FILTROS APLICADOS
-# ═══════════════════════════════════════════════════
-st.sidebar.divider()
-with st.sidebar.expander("📋 Resumo dos filtros", expanded=False):
-    st.markdown(f"**Base:** {base_sel}")
-    st.markdown(f"**Monitor:** {monitor_sel}")
-    st.markdown(f"**Registros filtrados:** {len(df):,}".replace(",", "."))
-
-# Variáveis Filtradas
 f_cons, f_prod = df["Qtde. Cons."].sum(), df["Qtde. Prod."].sum()
 f_mesh, f_tv, f_vir = (
     df["Qtde. Mesh"].sum(),
@@ -758,7 +520,7 @@ if falt_dias > 0:
 st.divider()
 
 # ====================================================
-# BLOCO 6: TABELAS E GRÁFICOS
+# BLOCO 6: TABELAS
 # ====================================================
 col_tit, col_tog, _ = st.columns([3, 1, 1])
 with col_tit:
@@ -781,7 +543,6 @@ style_df = df_exibir.style.format(
     formatter=cast(Any, {c: "{:,}" for c in todas_num})
 )
 
-# Formatação das colunas realizadas
 if colunas_reais:
     style_df = style_df.set_properties(
         **{
@@ -791,7 +552,6 @@ if colunas_reais:
         subset=cast(Any, colunas_reais),
     )
 
-# Formatação das colunas projetadas
 if colunas_proj:
     style_df = style_df.set_properties(
         **{
@@ -802,7 +562,6 @@ if colunas_proj:
         subset=cast(Any, colunas_proj),
     )
 
-# Colunas nas quais a meta de 350 será verificada
 coluna_meta = colunas_reais
 
 if coluna_meta:
@@ -818,67 +577,30 @@ st.dataframe(
     hide_index=True,
 )
 
-# Abas de Gráficos Rápidos e Alertas
-aba1, aba2 = st.tabs(["📈 Desempenho e Matriz", "🚫 Equipes sem Consultivos"])
-
-with aba1:
-    g1, g2 = st.columns(2)
-    with g1:
-        if not df_exibir.empty:
-            st.plotly_chart(
-                px.bar(
-                    df_exibir.head(10),
-                    x=grupo[1] if detalhar_tec else "Monitor",
-                    y="Total Consultivos",
-                    title="Top 10 Consultivos (Real)",
-                ),
-                use_container_width=True,
-            )
-    with g2:
-        df_disp = df_exibir[df_exibir["Total Consultivos"] > 0]
-        if not df_disp.empty:
-            st.plotly_chart(
-                px.scatter(
-                    df_disp,
-                    x="Total Consultivos",
-                    y="Total Produtos",
-                    color="Monitor",
-                    title="Matriz: Consultivos x Produtos",
-                ),
-                use_container_width=True,
-            )
-
-with aba2:
-    st.subheader("🚫 Equipes que ainda não fizeram Consultivos")
-    # Filtra quem tem exatamente zero consultivos
-    df_zerados = df_exibir[df_exibir["Total Consultivos"] == 0]
-
-    if not df_zerados.empty:
-        st.dataframe(df_zerados, use_container_width=True, hide_index=True)
-    else:
-        st.success(
-            "✅ Excelente! 100% da operação possui pelo menos um consultivo registrado."
-        )
-
-# Exportação
+# Seção de Alertas: Equipes Zeradas
 st.divider()
-st.subheader("📥 Exportar Dados (Inclui Projeções)")
-c_exp1, c_exp2 = st.columns([1, 4])
-tipo_exp = c_exp1.selectbox("Formato:", ["Excel", "CSV"], label_visibility="collapsed")
-if tipo_exp == "CSV":
-    c_exp2.download_button(
-        "Baixar",
-        df_exibir.to_csv(index=False, encoding="utf-8-sig"),
-        "relatorio.csv",
-        "text/csv",
-    )
+st.subheader("🚫 Equipes que ainda não fizeram Consultivos")
+df_zerados = df_exibir[df_exibir["Total Consultivos"] == 0]
+
+if not df_zerados.empty:
+    st.dataframe(df_zerados, use_container_width=True, hide_index=True)
 else:
-    out = BytesIO()
-    with pd.ExcelWriter(out, engine="openpyxl") as w:
-        df_exibir.to_excel(w, index=False)
-    c_exp2.download_button(
-        "Baixar",
-        out.getvalue(),
-        "relatorio.xlsx",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    st.success(
+        "✅ Excelente! 100% da operação possui pelo menos um consultivo registrado."
     )
+
+# Exportação em Excel
+st.divider()
+st.subheader("📥 Exportar Relatório")
+
+out = BytesIO()
+with pd.ExcelWriter(out, engine="openpyxl") as w:
+    df_exibir.to_excel(w, index=False, sheet_name="Performance")
+
+st.download_button(
+    label="📥 Baixar Dados em Excel (.xlsx)",
+    data=out.getvalue(),
+    file_name="relatorio_performance_consultivos.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    use_container_width=True,
+)
