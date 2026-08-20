@@ -1,8 +1,5 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
-import plotly.express as px
-from plotly.graph_objects import Figure
 import numpy as np
 import datetime
 import calendar
@@ -36,126 +33,6 @@ aplicar_estilo()
 # BLOCO 2: COMPONENTES VISUAIS
 # ====================================================
 class ComponenteVisual:
-    @staticmethod
-    def exibir_ticker(dados: list) -> None:
-        """Renderiza ticker animado via components.html (isolado em iframe)."""
-        if not dados:
-            return
-
-        html_itens = ""
-        for item in dados:
-            variacao = item.get("variacao", "")
-            if variacao == "positiva":
-                cor, simbolo = "#22c55e", "▲"
-            elif variacao == "negativa":
-                cor, simbolo = "#ef4444", "▼"
-            elif variacao == "share":
-                cor, simbolo = "#38bdf8", "◴"
-            else:
-                cor, simbolo = "#94a3b8", "■"
-
-            html_itens += (
-                f'<span class="ticker-item">'
-                f'<span class="ticker-label">{item.get("label", "")}:</span>'
-                f'<span class="ticker-valor">{item.get("valor", "")}</span>'
-                f'<span class="ticker-delta" style="color:{cor};">'
-                f'{simbolo} {item.get("delta", "")}</span>'
-                f'</span>'
-                f'<span class="ticker-sep">|</span>'
-            )
-
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-<style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{
-    background: transparent;
-    font-family: 'Inter', -apple-system, sans-serif;
-    overflow: hidden;
-  }}
-  .ticker-wrapper {{
-    width: 100%;
-    overflow: hidden;
-    background: linear-gradient(90deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);
-    padding: 12px 0;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    position: relative;
-  }}
-  .ticker-wrapper::before, .ticker-wrapper::after {{
-    content: ''; position: absolute; top: 0; bottom: 0;
-    width: 60px; z-index: 2; pointer-events: none;
-  }}
-  .ticker-wrapper::before {{
-    left: 0; background: linear-gradient(90deg,#0f172a,transparent);
-  }}
-  .ticker-wrapper::after {{
-    right: 0; background: linear-gradient(90deg,transparent,#0f172a);
-  }}
-  .ticker-content {{
-    display: flex; width: max-content;
-    animation: scroll 35s linear infinite;
-  }}
-  .ticker-wrapper:hover .ticker-content {{ animation-play-state: paused; }}
-  @keyframes scroll {{
-    0%   {{ transform: translate3d(0,0,0); }}
-    100% {{ transform: translate3d(-50%,0,0); }}
-  }}
-  .ticker-item   {{ margin: 0 40px; font-size: 15px; white-space: nowrap; }}
-  .ticker-label  {{ color: #94a3b8; font-weight: 500; }}
-  .ticker-valor  {{ font-weight: 700; color: #FFFFFF; margin-left: 8px; }}
-  .ticker-delta  {{ font-weight: 700; margin-left: 6px; font-size: 13px; }}
-  .ticker-sep    {{ color: #334155; margin: 0 15px; }}
-</style>
-</head>
-<body>
-  <div class="ticker-wrapper">
-    <div class="ticker-content">{html_itens}{html_itens}</div>
-  </div>
-</body>
-</html>
-"""
-        components.html(html, height=60, scrolling=False)
-
-    @staticmethod
-    def gerar_podio(ranking_df: pd.DataFrame) -> None:
-        if len(ranking_df) < 3:
-            render_insight("Necessário ao menos 3 equipes para o pódio.", tipo="alerta")
-            return
-
-        top3 = ranking_df.head(3).reset_index(drop=True)
-        c2, c1, c3 = st.columns([1, 1.2, 1])
-
-        def _medalha_html(nome: str, pontos: float, fundo: str, borda: str, icone: str) -> str:
-            return (
-                f'<div style="background-color:{fundo};border:2px solid {borda};'
-                f'border-radius:10px;padding:15px;text-align:center;'
-                f'box-shadow:0 4px 8px rgba(0,0,0,0.1);">'
-                f'<h1 style="margin:0;font-size:30px;">{icone}</h1>'
-                f'<h4 style="margin:5px 0;color:#334155;">{nome}</h4>'
-                f'<h3 style="margin:0;color:{borda};">{pontos:,.1f} pts</h3>'
-                f'</div>'
-            )
-
-        medalhas = [
-            (c1, 0, "#FEF9C3", "#EAB308", "🥇 1º Lugar"),
-            (c2, 1, "#F1F5F9", "#94A3B8", "🥈 2º Lugar"),
-            (c3, 2, "#FFEDD5", "#F97316", "🥉 3º Lugar"),
-        ]
-        for col, idx, fundo, borda, icone in medalhas:
-            with col:
-                st.markdown(
-                    _medalha_html(
-                        top3.iloc[idx]["Nome Equipe"],
-                        top3.iloc[idx]["Pontos"],
-                        fundo, borda, icone,
-                    ),
-                    unsafe_allow_html=True,
-                )
-
     @staticmethod
     def gerar_insight_ia(media: float, dias_brutos: int) -> None:
         dias_txt = (
@@ -491,82 +368,9 @@ class ProcessamentoDados:
 
         return _montar(False), _montar(True)
 
-    @staticmethod
-    def calcular_saude_operacao(ranking: pd.DataFrame) -> pd.DataFrame:
-        cond = [
-            ranking["Pontos"] >= 400,
-            (ranking["Pontos"] >= 300) & (ranking["Pontos"] < 400),
-            ranking["Pontos"] < 300,
-        ]
-        esc = ["Alta (400+)", "Na Meta (300-399)", "Abaixo (< 300)"]
-        r = ranking.copy()
-        r["Status"] = np.select(cond, esc, default="Sem Dados")
-        return r["Status"].value_counts().reset_index()
-
-    @staticmethod
-    def ranking_supervisores(ranking: pd.DataFrame) -> pd.DataFrame:
-        return (
-            ranking.groupby("Supervisor")
-            .agg(Qtd_Equipes=("Nome Equipe", "count"), Total_Pontos=("Pontos", "sum"))
-            .assign(Media_por_Equipe=lambda x: x["Total_Pontos"] / x["Qtd_Equipes"])
-            .reset_index().sort_values("Media_por_Equipe", ascending=True)
-        )
-
 
 # ====================================================
-# BLOCO 5: GRÁFICOS
-# ====================================================
-class Graficos:
-    @staticmethod
-    def _layout(fig: Figure) -> Figure:
-        fig.update_layout(
-            showlegend=False,
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=0, r=0, t=30, b=0),
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.1)"),
-        )
-        return fig
-
-    @staticmethod
-    def barras_horizontal(df: pd.DataFrame, x: str, y: str) -> Figure:
-        fig = px.bar(df, x=x, y=y, orientation="h", text_auto=True,
-                     color=x, color_continuous_scale="Tealgrn")
-        fig.update_traces(texttemplate="%{text:.1f}", textposition="outside", textfont_size=12)
-        return Graficos._layout(fig)
-
-    @staticmethod
-    def rosca(df: pd.DataFrame, names: str, values: str) -> Figure:
-        fig = px.pie(df, names=names, values=values, hole=0.6, color=names,
-                     color_discrete_map={
-                         "Alta (400+)": "#1E3A8A",
-                         "Na Meta (300-399)": "#22C55E",
-                         "Abaixo (< 300)": "#EF4444",
-                     })
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=0, r=0, t=0, b=0),
-            showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-        )
-        return fig
-
-    @staticmethod
-    def linhas(df: pd.DataFrame, x: str, y: str, color: str) -> Figure:
-        fig = px.line(df, x=x, y=y, color=color, markers=True)
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.1)"),
-            margin=dict(l=0, r=0, t=30, b=0),
-        )
-        return fig
-
-
-# ====================================================
-# BLOCO 6: HERO + DADOS
+# BLOCO 5: HERO + DADOS
 # ====================================================
 render_hero(
     titulo="📈 Central de Performance | Produção por Técnico",
@@ -591,7 +395,7 @@ MEDIA_GERAL_PONTOS  = TOTAL_GERAL_PONTOS / TOTAL_GERAL_EQUIPES if TOTAL_GERAL_EQ
 
 
 # ====================================================
-# BLOCO 7: FILTROS
+# BLOCO 6: FILTROS
 # ====================================================
 st.sidebar.header("🎯 Filtros Avançados")
 
@@ -611,7 +415,7 @@ if st.sidebar.button("🔄 Limpar Filtros"):
 
 
 # ====================================================
-# BLOCO 8: CÁLCULOS + KPIs
+# BLOCO 7: CÁLCULOS + KPIs
 # ====================================================
 dias_brutos, dias_seguros, ultima_atualizacao, dias_passados = (
     Utilitarios.calcular_dias_uteis(df)
@@ -627,14 +431,6 @@ media_pontos_filtro  = (
 var_pontos  = Utilitarios.calcular_share(total_pontos_filtro, TOTAL_GERAL_PONTOS)
 var_os      = Utilitarios.calcular_share(total_os_filtro, TOTAL_GERAL_OS)
 var_equipes = Utilitarios.calcular_share(total_equipes_filtro, TOTAL_GERAL_EQUIPES)
-var_media   = Utilitarios.calcular_variacao(media_pontos_filtro, MEDIA_GERAL_PONTOS)
-
-ComponenteVisual.exibir_ticker([
-    {"label": "Pontos",       "valor": Utilitarios.formatar_numero(total_pontos_filtro),  "variacao": var_pontos[0],  "delta": var_pontos[1]},
-    {"label": "O.S.",         "valor": Utilitarios.formatar_numero(total_os_filtro),      "variacao": var_os[0],      "delta": var_os[1]},
-    {"label": "Equipes",      "valor": str(total_equipes_filtro),                         "variacao": var_equipes[0], "delta": var_equipes[1]},
-    {"label": "Média/Equipe", "valor": Utilitarios.formatar_numero(media_pontos_filtro),  "variacao": var_media[0],   "delta": var_media[1]},
-])
 
 ComponenteVisual.gerar_insight_ia(media_pontos_filtro, dias_brutos)
 
@@ -648,7 +444,7 @@ st.divider()
 
 
 # ====================================================
-# BLOCO 9: ABAS
+# BLOCO 8: RANKING & METAS (CONTEÚDO PRINCIPAL)
 # ====================================================
 ranking = pd.DataFrame()
 ranking_dia = pd.DataFrame()
@@ -657,120 +453,54 @@ if "Nome Equipe" in df.columns:
         df, dias_brutos, dias_seguros, dias_passados
     )
 
-aba_ranking, aba_executivo, aba_evolucao = st.tabs(
-    ["🏆 Ranking & Metas", "👔 Visão Executiva", "📈 Evolução Temporal"]
+col_t, col_tg = st.columns([3, 1])
+with col_t:
+    render_section_header("📊", "Ranking Geral · Metas & Projeção")
+with col_tg:
+    st.write("")
+    por_dia = st.toggle("📅 **Modo Meta Diária**", key="tg_meta_dia")
+
+df_exibir = ranking_dia if por_dia else ranking
+modo_txt  = "Meta Diária" if por_dia else "Meta Mensal"
+
+ComponenteVisual.render_dataframe_corporativo(
+    df_exibir,
+    titulo=f"Performance por Equipe — {modo_txt}",
+    icone="🏆",
+    badge=f"{len(df_exibir)} equipes ativas",
+    modo_diario=por_dia,
 )
 
-# ── ABA 1 ──────────────────────────────────────────
-with aba_ranking:
-    render_section_header("🥇", "Pódio Corporativo — Top 3 Equipes")
-    ComponenteVisual.gerar_podio(ranking)
+col_dl, _ = st.columns([2.5, 7.5])
+nome_arq = "ranking_diario.xlsx" if por_dia else "ranking_geral.xlsx"
 
-    st.write("")
-
-    col_t, col_tg = st.columns([3, 1])
-    with col_t:
-        render_section_header("📊", "Ranking Geral · Metas & Projeção")
-    with col_tg:
-        st.write("")
-        por_dia = st.toggle("📅 **Modo Meta Diária**", key="tg_meta_dia")
-
-    df_exibir = ranking_dia if por_dia else ranking
-    modo_txt  = "Meta Diária" if por_dia else "Meta Mensal"
-
-    ComponenteVisual.render_dataframe_corporativo(
-        df_exibir,
-        titulo=f"Performance por Equipe — {modo_txt}",
-        icone="🏆",
-        badge=f"{len(df_exibir)} equipes ativas",
-        modo_diario=por_dia,
+with col_dl:
+    st.download_button(
+        "📥 **Exportar para Excel**",
+        data=Utilitarios.exportar_excel(df_exibir),
+        file_name=nome_arq,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
     )
 
-    col_dl1, col_dl2, _ = st.columns([1.5, 1.5, 5])
-    nome_arq = "ranking_diario.xlsx" if por_dia else "ranking_geral.xlsx"
-
-    with col_dl1:
-        st.download_button(
-            "📥 **Exportar Excel**",
-            data=Utilitarios.exportar_excel(df_exibir),
-            file_name=nome_arq,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
-    with col_dl2:
-        st.download_button(
-            "📄 **Exportar CSV**",
-            data=df_exibir.to_csv(index=False, decimal=",").encode("utf-8-sig"),
-            file_name=nome_arq.replace(".xlsx", ".csv"),
-            mime="text/csv",
-            use_container_width=True,
-        )
-
-    st.markdown(
-        f"""
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;
-             padding:12px 16px;background:#F8FAFC;border-radius:8px;
-             border:1px solid #E2E8F0;font-size:0.78rem;
-             font-family:{FONTE_TEXTO};">
-            <span style="font-weight:700;color:{COR_TEXTO_3};
-                 text-transform:uppercase;letter-spacing:0.05em;">🎨 Legenda:</span>
-            <span style="background:#1E3A8A;color:white;padding:3px 10px;
-                 border-radius:6px;font-weight:700;">🏆 400+ pts — Alta Performance</span>
-            <span style="background:#DCFCE7;color:#166534;padding:3px 10px;
-                 border-radius:6px;font-weight:700;">✅ 300-399 — Na Meta</span>
-            <span style="background:#FEF9C3;color:#854D0E;padding:3px 10px;
-                 border-radius:6px;font-weight:700;">⚠️ 275-299 — Próximo da Meta</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# ── ABA 2 ──────────────────────────────────────────
-with aba_executivo:
-    render_section_header("👔", "Performance de Gestão")
-
-    c_e1, c_e2 = st.columns([1, 2])
-    with c_e1:
-        st.markdown("**Saúde da Operação (Faixa de Metas)**")
-        df_saude = ProcessamentoDados.calcular_saude_operacao(ranking)
-        st.plotly_chart(
-            Graficos.rosca(df_saude, "Status", "count"),
-            use_container_width=True, key="graf_saude",
-        )
-    with c_e2:
-        st.markdown("**Ranking de Supervisores (Média pts por Equipe)**")
-        df_sup = ProcessamentoDados.ranking_supervisores(ranking)
-        st.plotly_chart(
-            Graficos.barras_horizontal(df_sup, "Media_por_Equipe", "Supervisor"),
-            use_container_width=True, key="graf_sup",
-        )
-
-# ── ABA 3 ──────────────────────────────────────────
-with aba_evolucao:
-    col_data = Utilitarios.encontrar_coluna_data(df)
-    render_section_header("📈", "Curva de Tendência Diária")
-
-    if col_data and not ranking.empty:
-        top5 = ranking.head(5)["Nome Equipe"].tolist()
-        df_ev = df[df["Nome Equipe"].isin(top5)].copy()
-        df_ev[col_data] = pd.to_datetime(df_ev[col_data]).dt.date
-
-        df_ag = (
-            df_ev.groupby([col_data, "Nome Equipe"])["Pontos"].sum().reset_index()
-        )
-        df_ag["Pontos Acumulados"] = df_ag.groupby("Nome Equipe")["Pontos"].cumsum()
-
-        st.plotly_chart(
-            Graficos.linhas(df_ag, col_data, "Pontos Acumulados", "Nome Equipe"),
-            use_container_width=True, key="graf_linha",
-        )
-        st.caption("Evolução de pontos acumulados das Top 5 equipes atuais.")
-    else:
-        render_insight(
-            "Para ver a evolução, a planilha precisa de uma coluna de Data "
-            "(ex: 'Data Agendamento' ou 'Data Conclusão').",
-            tipo="info",
-        )
+st.markdown(
+    f"""
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;
+         padding:12px 16px;background:#F8FAFC;border-radius:8px;
+         border:1px solid #E2E8F0;font-size:0.78rem;
+         font-family:{FONTE_TEXTO};">
+        <span style="font-weight:700;color:{COR_TEXTO_3};
+             text-transform:uppercase;letter-spacing:0.05em;">🎨 Legenda:</span>
+        <span style="background:#1E3A8A;color:white;padding:3px 10px;
+             border-radius:6px;font-weight:700;">🏆 400+ pts — Alta Performance</span>
+        <span style="background:#DCFCE7;color:#166534;padding:3px 10px;
+             border-radius:6px;font-weight:700;">✅ 300-399 — Na Meta</span>
+        <span style="background:#FEF9C3;color:#854D0E;padding:3px 10px;
+             border-radius:6px;font-weight:700;">⚠️ 275-299 — Próximo da Meta</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ── Rodapé ──────────────────────────────────────────
 if pd.notna(ultima_atualizacao):

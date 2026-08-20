@@ -62,7 +62,6 @@ class Tema:
         },
     }
 
-    COR_GRAFICO_AREA   = "#F97316"
     COR_FUNDO_OS       = "#F8FAFC"
     COR_TEXTO_OS       = "#334155"
     COR_FUNDO_PROJECAO = "#334155"
@@ -371,19 +370,6 @@ class ProcessadorDados:
             .sort_values("Qtde. de O.S.", ascending=False)
         )
 
-    def tendencia_diaria(self) -> pd.DataFrame:
-        """Retorna série diária de OS para gráfico de tendência."""
-        if self.COL_DATA not in self.df.columns or self.df.empty:
-            return pd.DataFrame()
-
-        return (
-            self.df
-            .groupby(self.df[self.COL_DATA].dt.date)[self.COL_OS]
-            .count()
-            .reset_index()
-            .rename(columns={self.COL_DATA: "Data", self.COL_OS: "Quantidade"})
-        )
-
 
 # ====================================================
 # 5. ESTILIZAÇÃO DE TABELAS
@@ -446,32 +432,6 @@ class Componentes:
             )
 
     @staticmethod
-    def grafico_tendencia(df_tend: pd.DataFrame) -> None:
-        """Renderiza gráfico de área com evolução diária."""
-        st.subheader("📈 Evolução Diária de O.S.")
-
-        if df_tend.empty:
-            st.info("Sem dados de 'Data Agendamento' para tendência.")
-            return
-
-        fig = px.area(
-            df_tend,
-            x="Data",
-            y="Quantidade",
-            markers=True,
-            color_discrete_sequence=[Tema.COR_GRAFICO_AREA],
-        )
-        fig.update_layout(
-            xaxis_title="",
-            yaxis_title="",
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=0, r=0, t=10, b=0),
-            height=300,
-        )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-    @staticmethod
     def visao_supervisor(df_sup: pd.DataFrame) -> None:
         """Renderiza tabela de supervisores."""
         st.subheader("👨‍💼 Visão por Supervisor")
@@ -498,82 +458,31 @@ class Componentes:
             st.info("Sem dados de Projeto.")
             return
 
-        tab_tabela, tab_grafico = st.tabs(["📋 Tabela", "🍩 Gráfico de Share"])
-
-        with tab_tabela:
-            st.dataframe(
-                df_proj.style
-                .map(EstiloTabela.cor_os, subset=["Qtde. de O.S."])
-                .map(EstiloTabela.cor_projecao, subset=["Projeção"]),
-                use_container_width=True,
-                hide_index=True,
-                height="stretch",
-            )
-
-        with tab_grafico:
-            fig = px.pie(
-                df_proj,
-                values="Qtde. de O.S.",
-                names="Projeto",
-                hole=0.6,
-                color_discrete_sequence=px.colors.sequential.Tealgrn_r,
-            )
-            fig.update_traces(textposition="inside", textinfo="percent+label")
-            fig.update_layout(
-                showlegend=False,
-                margin=dict(t=0, b=0, l=0, r=0),
-                height=350,
-                paper_bgcolor="rgba(0,0,0,0)",
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.dataframe(
+            df_proj.style
+            .map(EstiloTabela.cor_os, subset=["Qtde. de O.S."])
+            .map(EstiloTabela.cor_projecao, subset=["Projeção"]),
+            use_container_width=True,
+            hide_index=True,
+            height="auto",
+        )
 
     @staticmethod
     def performance_tecnicos(df_tec: pd.DataFrame) -> None:
-        """Renderiza tabela geral + top 10 de técnicos."""
+        """Renderiza tabela geral de técnicos."""
         st.subheader("👷 Performance de Técnicos")
 
         if df_tec.empty:
             st.info("Sem dados de Técnicos para exibir.")
             return
 
-        col_tab, col_chart = st.columns([1.5, 1])
-
-        with col_tab:
-            st.markdown("**📋 Tabela Geral de Técnicos**")
-            st.dataframe(
-                df_tec.style.map(EstiloTabela.cor_os, subset=["Qtde. de O.S."]),
-                use_container_width=True,
-                hide_index=True,
-                height=450,
-            )
-
-        with col_chart:
-            st.markdown("**🏆 Top 10 Técnicos**")
-            top10 = df_tec.head(10).sort_values("Qtde. de O.S.", ascending=True)
-
-            fig = px.bar(
-                top10,
-                x="Qtde. de O.S.",
-                y="Nome Equipe",
-                orientation="h",
-                text="Qtde. de O.S.",
-                color="Qtde. de O.S.",
-                color_continuous_scale="Oranges",
-                range_color=[
-                    top10["Qtde. de O.S."].min(),
-                    top10["Qtde. de O.S."].max(),
-                ],
-            )
-            fig.update_layout(
-                xaxis_title="",
-                yaxis_title="",
-                coloraxis_showscale=False,
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                margin=dict(l=0, r=0, t=0, b=0),
-                height=450,
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.markdown("**📋 Tabela Geral de Técnicos**")
+        st.dataframe(
+            df_tec.style.map(EstiloTabela.cor_os, subset=["Qtde. de O.S."]),
+            use_container_width=True,
+            hide_index=True,
+            height=450,
+        )
 
     @staticmethod
     def rodape(ultima_atualizacao: Optional[pd.Timestamp]) -> None:
@@ -638,10 +547,6 @@ def main() -> None:
     Componentes.kpis(proc)
     st.divider()
 
-    # ── Tendência diária ─────────────────────────────────────────────
-    Componentes.grafico_tendencia(proc.tendencia_diaria())
-    st.divider()
-
     # ── Supervisor × Projeto ─────────────────────────────────────────
     col_esq, col_dir = st.columns(2)
 
@@ -665,54 +570,3 @@ def main() -> None:
 # ====================================================
 if __name__ == "__main__":
     main()
-
-# Old...
-# NOVO: Lógica de Classificação de Performance
-# def definir_faixa_supervisor(qtd):
-#     """
-#     Classifica a quantidade de OS em faixas predefinidas:
-#     >= 3500 : F3 (Alta Performance)
-#     3000-3499: F2 (Meta Alcançada)
-#     2500-2999: F1 (Parcial)
-#     < 2500   : Abaixo do Mínimo
-#     """
-#     try:
-#         qtd_float = float(qtd)
-#         if qtd_float >= 3500:
-#             return "F3 🌟"  # Pode usar emoji para ficar visual
-#         elif qtd_float >= 3000:
-#             return "F2 ✅"
-#         elif qtd_float >= 2500:
-#             return "F1 ⚠️"
-#         else:
-#             return "< 2500 ❌"
-#     except:
-#         return "-"
-
-
-# # NOVO: Função EXCLUSIVA para Projetos (9000 - 11000)
-# def definir_faixa_projeto(qtd):
-#     try:
-#         qtd_float = float(qtd)
-#         if qtd_float >= 11000:
-#             return "F3 🌟"
-#         elif qtd_float >= 10000:
-#             return "F2 ✅"
-#         elif qtd_float >= 9000:
-#             return "F1 ⚠️"
-#         else:
-#             return "< 9000 ❌"
-#     except:
-#         return "-"
-
-
-# # Estilo condicional específico para a coluna Faixa
-# def colorir_faixa(valor):
-#     if "F3" in str(valor):  # Fundo Dourado/Verde
-#         return "background-color: #DCFCE7; color: #166534; font-weight: bold; border-radius: 8px;"
-#     elif "F2" in str(valor):  # Fundo Azul Claro
-#         return "background-color: #DBEAFE; color: #1E40AF; font-weight: bold; border-radius: 8px;"
-#     elif "F1" in str(valor):  # Fundo Amarelo/Ambar
-#         return "background-color: #FEF3C7; color: #B45309; font-weight: bold; border-radius: 8px;"
-#     else:  # Vermelho/Cinza
-#         return "background-color: #FEE2E2; color: #991B1B; font-weight: bold; border-radius: 8px;"

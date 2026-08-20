@@ -154,37 +154,17 @@ def main():
     ranking_pontos = st.Page("pages/pontos.py", title="Ranking de Pontos", icon="📈")
     qtde_os = st.Page("pages/qtde_os.py", title="Quantidade de O.S.", icon="📊")
     consultivo = st.Page("pages/consultivo.py", title="Consultivos", icon="📋")
-    gestao_ativos = st.Page("pages/gestao_ativos.py", title="Gestão de Ativos", icon="👷")
-    visao_tec_prod = st.Page("pages/visao_tecnico_prod.py", title="Produção", icon="🛠️")
-    visao_tec_cons = st.Page("pages/visao_tecnico_cons.py", title="Consultivo", icon="🗣️")
     rota_inicial = st.Page("pages/rota_inicial.py", title="Rota Inicial", icon="🗺️")
-    rota_geral = st.Page("pages/rota_geral.py", title="Rota Geral", icon="🗺️")
     volumetria = st.Page("pages/volumetria.py", title="Volumetria", icon="📊")
     quebra_unif = st.Page("pages/quebra_unificada.py", title="Visão PME & Migração", icon="📉")
-    assinatura = st.Page("pages/assinatura.py", title="Assinatura", icon="✉️")
-    retorno = st.Page("pages/retorno.py", title="Retornos", icon="📜")
-    p_atendimento = st.Page("pages/p_atendimento.py", title="1º Atendimento", icon="🚙")
     quebra_geral = st.Page("pages/quebra_geral.py", title="Geral", icon="📉")
-    
-    # ═══════════════════════════════════════════════════════
-    # PÁGINAS ANTIGAS
-    # ═══════════════════════════════════════════════════════
-    quebra = st.Page("old/quebra.py", title="Geral", icon="📉")
-    quebra_pme = st.Page("old/quebra_pme.py", title="Visão PME", icon="📉")
-    quebra_mig = st.Page("old/quebra_migracao.py", title="Visão Migração", icon="📉")
-    quebra_resumo = st.Page("old/quebra_resumo.py", title="Resumo", icon="📉")
-    teste = st.Page("old/diagnostico_abas.py", title="Teste")
-    toml = st.Page("old/convert_toml.py", title="TOML")
 
     # Agrupamento das seções
     paginas_agrupadas = {
         "MENU PRINCIPAL": [home_page, envio_excel],
         "CENTRAL DE PERFORMANCE": [ranking_pontos, qtde_os, consultivo],
-        "VISÃO POR TÉCNICO": [visao_tec_prod, visao_tec_cons],
-        "COMPILADO": [gestao_ativos],
-        "DISPAROS DIÁRIOS": [rota_inicial, rota_geral, volumetria, retorno, p_atendimento],
+        "DISPAROS DIÁRIOS": [rota_inicial, volumetria],
         "QUEBRA": [quebra_geral, quebra_unif],
-        "UTILITÁRIOS": [assinatura],
     }
 
     pg = st.navigation(paginas_agrupadas)
