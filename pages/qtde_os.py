@@ -244,7 +244,7 @@ class ProcessadorDados:
         """Converte colunas e garante tipos."""
         if self.COL_DATA in self.df.columns:
             self.df[self.COL_DATA] = pd.to_datetime(
-                self.df[self.COL_DATA], errors="coerce"
+                self.df[self.COL_DATA].array, errors="coerce"
             )
 
     @property
