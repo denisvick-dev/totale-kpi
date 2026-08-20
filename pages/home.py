@@ -290,7 +290,7 @@ def main():
 
     # Configuração da página
     st.set_page_config(
-        page_title="Portal TOTALE 2026",
+        page_title="Portal TOTALE",
         page_icon="📊",
         layout="wide",
     )
