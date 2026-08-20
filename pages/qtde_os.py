@@ -11,7 +11,6 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 
@@ -181,7 +180,7 @@ class Tema:
 
 
 # ====================================================
-# 3. CÁLCULO DE CALENDÁRIO
+# 3. CÁLCULO DE CALENDÁRIO (Exclui apenas domingos)
 # ====================================================
 @dataclass
 class InfoCalendario:
@@ -197,7 +196,7 @@ class InfoCalendario:
     @classmethod
     def calcular(cls, data_referencia: Optional[datetime.date] = None) -> "InfoCalendario":
         """
-        Calcula dias úteis (Seg–Sáb) com base na data de referência.
+        Calcula dias úteis (Seg–Sáb, excluindo domingos) com base na data de referência.
         Se nenhuma data for informada, usa hoje.
         """
         data_ref = data_referencia or datetime.date.today()
@@ -208,7 +207,7 @@ class InfoCalendario:
         ultimo   = np.datetime64(datetime.date(ano, mes, ultimo_dia_num))
         ref      = np.datetime64(data_ref)
 
-        mask = "1111110"  # Seg a Sáb
+        mask = "1111110"  # Segunda a Sábado ativos, Domingo (0) inativo
         total = int(np.busday_count(primeiro, ultimo + np.timedelta64(1, "D"), weekmask=mask))
         passados = int(np.busday_count(primeiro, ref + np.timedelta64(1, "D"), weekmask=mask))
         faltantes = max(0, total - passados)
@@ -288,29 +287,10 @@ class ProcessadorDados:
             return ["Todos"]
         return ["Todos"] + sorted(self.df[coluna].dropna().astype(str).unique())
 
-    # ── Médias diárias ───────────────────────────────────────────────
+    # ── Tabelas de visão (Cálculo de Projeção Corrigido) ─────────────
 
-    def media_diaria(self, grupo: str) -> pd.Series:
-        """Calcula média diária de OS por grupo."""
-        if (
-            self.COL_DATA not in self.df.columns
-            or grupo not in self.df.columns
-            or self.df.empty
-        ):
-            return pd.Series(dtype=float)
-
-        return (
-            self.df
-            .groupby([grupo, self.COL_DATA])[self.COL_OS]
-            .count()
-            .groupby(grupo)
-            .mean()
-        )
-
-    # ── Tabelas de visão ─────────────────────────────────────────────
-
-    def tabela_supervisor(self, dias_faltantes: int) -> pd.DataFrame:
-        """Monta tabela de visão por supervisor com metas e projeção."""
+    def tabela_supervisor(self, dias_passados: int, dias_faltantes: int) -> pd.DataFrame:
+        """Monta tabela de visão por supervisor com metas e projeção baseada em dias úteis reais."""
         if self.COL_SUPERVISOR not in self.df.columns or self.df.empty:
             return pd.DataFrame()
 
@@ -321,19 +301,19 @@ class ProcessadorDados:
             .reset_index(name="Qtde. de O.S.")
         )
 
-        media = qtde[self.COL_SUPERVISOR].map(
-            self.media_diaria(self.COL_SUPERVISOR)
-        ).fillna(0)
+        # Média baseada em dias decorridos reais (evita distorções de groupby)
+        dias_passados_seguro = max(1, dias_passados)
+        media_diaria = qtde["Qtde. de O.S."] / dias_passados_seguro
 
         qtde["Meta | 2500"] = qtde["Qtde. de O.S."] - 2500
         qtde["Meta | 3000"] = qtde["Qtde. de O.S."] - 3000
         qtde["Meta | 3500"] = qtde["Qtde. de O.S."] - 3500
-        qtde["Projeção"]    = (qtde["Qtde. de O.S."] + media * dias_faltantes).astype(int)
+        qtde["Projeção"]    = (qtde["Qtde. de O.S."] + media_diaria * dias_faltantes).round().astype(int)
 
         return qtde.sort_values("Qtde. de O.S.", ascending=False)
 
-    def tabela_projeto(self, dias_faltantes: int) -> pd.DataFrame:
-        """Monta tabela de visão por projeto com metas e projeção."""
+    def tabela_projeto(self, dias_passados: int, dias_faltantes: int) -> pd.DataFrame:
+        """Monta tabela de visão por projeto com metas e projeção baseada em dias úteis reais."""
         if self.COL_PROJETO not in self.df.columns or self.df.empty:
             return pd.DataFrame()
 
@@ -344,14 +324,14 @@ class ProcessadorDados:
             .reset_index(name="Qtde. de O.S.")
         )
 
-        media = qtde[self.COL_PROJETO].map(
-            self.media_diaria(self.COL_PROJETO)
-        ).fillna(0)
+        # Média baseada em dias decorridos reais (evita distorções de groupby)
+        dias_passados_seguro = max(1, dias_passados)
+        media_diaria = qtde["Qtde. de O.S."] / dias_passados_seguro
 
         qtde["Meta | 9000"]  = qtde["Qtde. de O.S."] - 9000
         qtde["Meta | 10000"] = qtde["Qtde. de O.S."] - 10000
         qtde["Meta | 11000"] = qtde["Qtde. de O.S."] - 11000
-        qtde["Projeção"]     = (qtde["Qtde. de O.S."] + media * dias_faltantes).astype(int)
+        qtde["Projeção"]     = (qtde["Qtde. de O.S."] + media_diaria * dias_faltantes).round().astype(int)
 
         return qtde.sort_values("Qtde. de O.S.", ascending=False)
 
@@ -378,18 +358,16 @@ class EstiloTabela:
     """Funções de estilização condicional para DataFrames."""
 
     @staticmethod
-    def cor_os(valor: Any) -> str:
-        return (
-            f"background-color: {Tema.COR_FUNDO_OS}; "
-            f"color: {Tema.COR_TEXTO_OS}; font-weight: bold"
-        )
+    def rbg_colorir(valor: Any, fundo: str, texto: str) -> str:
+        return f"background-color: {fundo}; color: {texto}; font-weight: bold;"
 
-    @staticmethod
-    def cor_projecao(valor: Any) -> str:
-        return (
-            f"background-color: {Tema.COR_FUNDO_PROJECAO}; "
-            f"color: {Tema.COR_TEXTO_PROJECAO}; font-weight: bold"
-        )
+    @classmethod
+    def cor_os(cls, valor: Any) -> str:
+        return cls.rbg_colorir(valor, Tema.COR_FUNDO_OS, Tema.COR_TEXTO_OS)
+
+    @classmethod
+    def cor_projecao(cls, valor: Any) -> str:
+        return cls.rbg_colorir(valor, Tema.COR_FUNDO_PROJECAO, Tema.COR_TEXTO_PROJECAO)
 
 
 # ====================================================
@@ -551,10 +529,10 @@ def main() -> None:
     col_esq, col_dir = st.columns(2)
 
     with col_esq:
-        Componentes.visao_supervisor(proc.tabela_supervisor(cal.dias_faltantes))
+        Componentes.visao_supervisor(proc.tabela_supervisor(cal.dias_passados, cal.dias_faltantes))
 
     with col_dir:
-        Componentes.visao_projeto(proc.tabela_projeto(cal.dias_faltantes))
+        Componentes.visao_projeto(proc.tabela_projeto(cal.dias_passados, cal.dias_faltantes))
 
     st.divider()
 
