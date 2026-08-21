@@ -156,15 +156,13 @@ def main():
     consultivo = st.Page("pages/consultivo.py", title="Consultivos", icon="📋")
     rota_inicial = st.Page("pages/rota_inicial.py", title="Rota Inicial", icon="🗺️")
     volumetria = st.Page("pages/volumetria.py", title="Volumetria", icon="📊")
-    quebra_unif = st.Page("pages/quebra_unificada.py", title="Visão PME & Migração", icon="📉")
-    quebra_geral = st.Page("pages/quebra_geral.py", title="Geral", icon="📉")
+    quebra = st.Page("pages/quebra.py", title="Quebra", icon="📉")
 
     # Agrupamento das seções
     paginas_agrupadas = {
         "MENU PRINCIPAL": [home_page, envio_excel],
         "CENTRAL DE PERFORMANCE": [ranking_pontos, qtde_os, consultivo],
-        "DISPAROS DIÁRIOS": [rota_inicial, volumetria],
-        "QUEBRA": [quebra_geral, quebra_unif],
+        "DISPAROS DIÁRIOS": [rota_inicial, volumetria, quebra],
     }
 
     pg = st.navigation(paginas_agrupadas)
