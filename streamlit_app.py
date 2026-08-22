@@ -155,6 +155,7 @@ def main():
     qtde_os = st.Page("pages/qtde_os.py", title="Quantidade de O.S.", icon="📊")
     consultivo = st.Page("pages/consultivo.py", title="Consultivos", icon="📋")
     rota_inicial = st.Page("pages/rota_inicial.py", title="Rota Inicial", icon="🗺️")
+    rota_geral = st.Page("pages/rota_geral.py", title="Rota Geral", icon="🗺️")
     volumetria = st.Page("pages/volumetria.py", title="Volumetria", icon="📊")
     quebra = st.Page("pages/quebra.py", title="Quebra", icon="📉")
 
@@ -162,7 +163,7 @@ def main():
     paginas_agrupadas = {
         "MENU PRINCIPAL": [home_page, envio_excel],
         "CENTRAL DE PERFORMANCE": [ranking_pontos, qtde_os, consultivo],
-        "DISPAROS DIÁRIOS": [rota_inicial, volumetria, quebra],
+        "DISPAROS DIÁRIOS": [rota_inicial, rota_geral, volumetria, quebra],
     }
 
     pg = st.navigation(paginas_agrupadas)
