@@ -504,6 +504,9 @@ class DataLoader:
 class Analise:
     @staticmethod
     def matriz_resumo(df: pd.DataFrame) -> pd.DataFrame:
+        if df is None or df.empty or "TIPO_SERVICO" not in df.columns:
+            return pd.DataFrame()
+
         df_valid = df[df["TIPO_SERVICO"] != "Outros"].copy()
         if df_valid.empty:
             return pd.DataFrame()
@@ -1025,6 +1028,10 @@ def main():
         return
 
     df_full = st.session_state["df_memoria"]
+    # 🛡️ Garante que TIPO_SERVICO exista mesmo com cache antigo em sessão
+    if "TIPO_SERVICO" not in df_full.columns:
+        df_full, _ = classificar_tipo_servico(df_full)
+        st.session_state["df_memoria"] = df_full
 
     # ── SIDEBAR ──
     with st.sidebar:
