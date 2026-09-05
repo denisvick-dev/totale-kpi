@@ -1,9 +1,12 @@
 {
     "editor.fontFamily": "Fira Mono",
-    "editor.fontSize": 15,
+    "editor.fontSize": 13,
     "editor.fontVariations": false,
     "editor.defaultFormatter": "ms-python.black-formatter",
+<<<<<<< HEAD
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter"
     }
+=======
+>>>>>>> b6032ce7c518d531cd75ced8bb23c2698a99e3a9
 }
