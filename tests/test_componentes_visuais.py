@@ -121,3 +121,29 @@ def test_valores_de_kpi_mantem_a_fonte_institucional(monkeypatch):
     assert any(
         "font-family: var(--font-titulo) !important;" in bloco for bloco in blocos_kpi
     )
+
+
+def test_fonte_auto_hospedada_tambem_e_lida_de_fonts_na_raiz(monkeypatch, tmp_path):
+    (tmp_path / "oscine-bold.woff2").write_bytes(b"wOF2conteudo-falso")
+    monkeypatch.setattr(componentes, "_PASTA_FONTES", tmp_path / "sem-fontes")
+    monkeypatch.setattr(componentes, "_PASTA_FONTES_ALT", tmp_path)
+    monkeypatch.delenv("TOTALE_FONTE_HERO_URL", raising=False)
+    componentes._css_fonte_hero_selfhosted.clear()
+
+    css = _css_global(monkeypatch)
+
+    assert "font-family: 'Oscine'" in css
+    assert "data:font/woff2;base64" in css
+
+
+def test_fonte_original_do_kit_e_normalizada_pelo_nome(monkeypatch, tmp_path):
+    (tmp_path / "Oscine ExtraBold.otf").write_bytes(b"OTTOconteudo-falso")
+    monkeypatch.setattr(componentes, "_PASTA_FONTES", tmp_path)
+    monkeypatch.setattr(componentes, "_PASTA_FONTES_ALT", tmp_path / "sem-fontes")
+    monkeypatch.delenv("TOTALE_FONTE_HERO_URL", raising=False)
+    componentes._css_fonte_hero_selfhosted.clear()
+
+    css = _css_global(monkeypatch)
+
+    assert "font-weight: 800" in css
+    assert "data:font/opentype;base64" in css

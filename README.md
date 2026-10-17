@@ -109,6 +109,29 @@ Para apontar outra pasta na execução:
 python scripts/robot_base.py --pasta-entrada "C:/caminho/das/bases"
 ```
 
+### 🤖 Robô de Sincronismo local (Central de Atualização)
+
+A página **Atualização de Dados** também hospeda o painel do robô local:
+
+- monitora a pasta **Downloads** (ou o caminho configurado) a cada 5 s;
+- aceita `Atividades-*.csv`, `.xlsx`, `.xlsm`, `.xls` e arquivos com `SPO`,
+  `GRS` ou `ABCDM` no nome;
+- ignora temporários (`~$`, `.tmp`, `.crdownload`) e arquivos em gravação;
+- valida o ZIP do Excel, o encoding/separador do CSV e a estabilidade do arquivo;
+- publica a base tratada em `df_memoria` para os painéis e mantém a versão bruta
+  em `df_memoria_raw`;
+- mostra o status de cada base (SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM), a fila
+  da pasta e o diagnóstico do último ciclo.
+
+Uso via terminal (sem Streamlit):
+
+```bash
+python components/robo_local.py "C:/Users/<usuario>/Downloads"
+python components/robo_local.py "C:/bases" "dados/cache/robo.csv"
+```
+
+Para usar uma pasta diferente na interface, abra **⚙️ Pasta monitorada** no painel.
+
 ### 🗓️ Projeções em dias úteis (Seg–Sáb)
 - A semana útil é de **segunda a sábado** — **domingos não contam**
 - **Feriados** também são descontados: nacionais (fixos e móveis: Carnaval, Paixão de Cristo, Corpus Christi) e **estaduais de SP** (09/07)
@@ -307,6 +330,7 @@ totale-kpi/
 │   ├── sidebar.py                 # Tema da barra lateral
 │   ├── calendario.py              # Dias úteis (Seg–Sáb) e feriados
 │   ├── base_operacional.py        # Pipeline único do robô (volumetria + quebra)
+│   ├── robo_local.py              # Robô de sincronismo da pasta local + painel
 │   └── criterios.py               # Regras de classificação operacional
 ├── pages/                         # Painéis e Gestão de Ativos independente
 ├── scripts/
@@ -317,7 +341,8 @@ totale-kpi/
 │   └── logs/                      # Log das execuções do robô
 ├── assets/
 │   ├── icons/totale.ico           # Ícone do app
-│   └── images/novo-logo-totale.png # Logo da navegação
+│   ├── images/novo-logo-totale.png # Logo da navegação
+│   └── fonts/                     # Oscine auto-hospedada (não versionada)
 ├── tests/                         # Testes de interface e de dados
 ├── .streamlit/                    # Configuração e exemplo de credenciais
 ├── requirements.txt
@@ -368,8 +393,10 @@ python scripts/instalar_fonte_hero.py ~/Downloads/Oscine   # normaliza os nomes
 python scripts/instalar_fonte_hero.py --listar              # confere sem copiar
 ```
 
-Sem os arquivos, o app usa a Oscine se ela estiver ativa no computador
-(Adobe Creative Cloud) e cai no **Manrope** caso contrário — nada quebra.
+Os arquivos podem ficar em `assets/fonts/` ou em `fonts/` na raiz do
+repositório (ambas as pastas são lidas). Sem os arquivos, o app usa a Oscine
+se ela estiver ativa no computador (Adobe Creative Cloud) e cai no
+**Manrope** caso contrário — nada quebra.
 Para servir a todos os usuários (Streamlit Cloud), configure o kit web:
 `[tipografia] fonte_hero_url` nos secrets ou `TOTALE_FONTE_HERO_URL`.
 Detalhes em `assets/fonts/LEIA-ME.md`.
