@@ -20,6 +20,8 @@ from components.componentes import (
     render_insight,
     render_kpi,
     render_section_header,
+    render_dataframe,
+    estilizar_dataframe,
 )
 
 # ====================================================
@@ -265,7 +267,7 @@ def main():
     todas_num = [c for c in df_exibir.columns if c not in ["Posição"] + grupo]
 
     # Formatação Styler do Pandas
-    style_df = df_exibir.style.format(formatter=cast(Any, {c: "{:,}" for c in todas_num}))
+    style_df = estilizar_dataframe(df_exibir, {c: "{:,}" for c in todas_num})
 
     if colunas_reais:
         style_df = style_df.set_properties(
@@ -290,7 +292,7 @@ def main():
     df_zerados = df_exibir[df_exibir["Total Consultivos"] == 0]
 
     if not df_zerados.empty:
-        st.dataframe(df_zerados, use_container_width=True, hide_index=True)
+        render_dataframe(df_zerados)
     else:
         render_insight("✅ Excelente! 100% da operação possui pelo menos um consultivo registrado.", tipo="ok")
 

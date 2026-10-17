@@ -51,6 +51,12 @@ As cores compartilhadas ficam em `components/paleta.py`, evitando dependências
 circulares com `componentes.py`. O seletor é renderizado uma única vez em
 `streamlit_app.py`, antes de `aplicar_estilo()`. As páginas continuam chamando
 apenas `aplicar_estilo()`.
+Heros, cards de KPI, cabeçalhos, links de painéis e tabelas são reutilizados de
+`components/componentes.py` (`render_hero`, `render_kpi`,
+`render_section_header`, `render_painel_link`, `render_dataframe`). Evite CSS
+próprio para esses elementos: mantenha estilos específicos apenas quando a
+página precisar de uma visualização especial. A Gestão de Ativos preserva o
+modo escuro, mas reutiliza os mesmos componentes.
 Para scripts independentes, importe `render_seletor_tema_sidebar` de
 `components.sidebar` e chame essa função após
 `st.set_page_config()` e antes de `aplicar_estilo()`.
@@ -193,6 +199,8 @@ Edite o `.streamlit/secrets.toml` com suas credenciais reais do Google Cloud e u
 6. Compartilhe sua planilha com o e-mail da service account
 7. Preencha os dados no `secrets.toml`
 
+Na página **Quebra de Agenda**, o vínculo de monitores usa a aba `lista_ativos` da mesma planilha da Gestão de Ativos. A aba deve conter `Login` e `Monitor` (e, opcionalmente, `Técnico`, `Base` e `Situação`). O login do arquivo operacional deve corresponder ao da lista. A leitura autenticada usa `[gcp_service_account]`; confira se a planilha foi compartilhada com o `client_email` dessa conta. Quando a base já estiver carregada, clique em **Atualizar Lista de Ativos** na barra lateral para refazer o vínculo sem enviar o arquivo novamente. A página mostra a quantidade de registros vinculados e alerta quando a aba não puder ser lida ou os logins não coincidirem.
+
 ### 6. Execute o Aplicativo
 \```bash
 streamlit run streamlit_app.py
@@ -223,30 +231,26 @@ Acesse: **http://localhost:8501**
 
 ## 📁 Estrutura do Projeto
 
-\```
+```text
 totale-kpi/
-├── 📄 streamlit_app.py           # Aplicação principal
-├── 📄 componentes.py             # Componentes reutilizáveis
-├── 📄 requirements.txt           # Dependências Python
-├── 📄 README.md                  # Este arquivo
-├── 📄 LICENSE                    # Licença
-├── 📄 .gitignore                 # Arquivos ignorados
-├── 📁 .streamlit/
-│   ├── config.toml               # Configurações Streamlit
-│   └── secrets.example.toml      # Exemplo de credenciais
-├── 📁 pages/
-│   ├── gestao_ativos.py          # Gestão de Ativos
-│   ├── gerador_assinatura.py     # Gerador de Assinatura
-│   └── ...                       # Outras páginas
-├── 📁 assets/
-│   ├── icons/                    # Ícones
-│   └── images/                   # Imagens e templates
-├── 📁 fonts/
-│   ├── Oscine-Regular.ttf        # Fonte corporativa
-│   └── Oscine-Bold.ttf
-└── 📁 docs/
-    └── screenshots/              # Documentação visual
-\```
+├── streamlit_app.py                # Entrada e navegação
+├── components/
+│   ├── componentes.py             # Design system (heros, cards, tabelas)
+│   ├── paleta.py                  # Cores compartilhadas
+│   ├── sidebar.py                 # Tema da barra lateral
+│   └── criterios.py               # Regras de classificação operacional
+├── pages/                         # Painéis e Gestão de Ativos independente
+├── assets/
+│   ├── icons/totale.ico           # Ícone do app
+│   └── images/novo-logo-totale.png # Logo da navegação
+├── tests/                         # Testes de interface e de dados
+├── .streamlit/                    # Configuração e exemplo de credenciais
+├── requirements.txt
+└── README.md
+```
+
+Foram removidas imagens antigas sem referências no código; as páginas e
+arquivos de configuração utilizados continuam preservados.
 
 ---
 

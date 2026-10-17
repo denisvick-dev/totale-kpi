@@ -13,6 +13,7 @@ from components.componentes import (
     render_insight,
     render_kpi,
     render_section_header,
+    render_painel_link,
 )
 
 
@@ -74,11 +75,7 @@ def _texto_ultima_atualizacao() -> str:
 
 
 def _render_card_painel(painel: tuple[str, str, str]) -> None:
-    caminho, titulo, descricao = painel
-    with st.container(border=True):
-        st.markdown(f"#### {titulo}")
-        st.caption(descricao)
-        st.page_link(caminho, label="Abrir painel", icon="➡️")
+    render_painel_link(*painel)
 
 
 def _render_grupo_paineis(titulo: str, icone: str, paineis: list[tuple[str, str, str]]) -> None:

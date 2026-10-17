@@ -8,9 +8,13 @@ Integrado ao novo Design System (componentes.py) e às Regras Oficiais (criterio
 from __future__ import annotations
 
 import csv
+import logging
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
+
+import gspread
+from google.oauth2.service_account import Credentials
 
 import numpy as np
 import pandas as pd
@@ -19,66 +23,37 @@ import streamlit as st
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-# ═══════════════════════════════════════════════════════
-# IMPORT DOS COMPONENTES (NOVO DESIGN SYSTEM)
-# ═══════════════════════════════════════════════════════
-try:
-    from components.componentes import (
-        aplicar_estilo,
-        render_hero,
-        render_section_header,
-        render_kpi,
-        render_insight,
-        render_dataframe,
-    )
-except ImportError:
-    from components.componentes import (
-        aplicar_estilo,
-        render_hero,
-        render_section_header,
-        render_kpi,
-        render_insight,
-        render_dataframe,
-    )
-
-# ═══════════════════════════════════════════════════════
-# IMPORT DAS REGRAS OFICIAIS DE CLASSIFICAÇÃO
-# ═══════════════════════════════════════════════════════
-try:
-    from components.criterios import (
-        VAZIOS_CONTRATO,
-        classificar_tipo_servico,
-        detectar_col_contrato,
-        detectar_col_status_atividade,
-        detectar_col_habilidade,
-        detectar_col_tipo_os_1,
-        detectar_col_flag_gpon,
-        extrair_metricas_criterios,
-        render_painel_criterios,
-        render_debug_criterios,
-        render_card_destaque_migracao,
-        render_lista_colunas,
-    )
-except ImportError:
-    from components.criterios import (
-        VAZIOS_CONTRATO,
-        classificar_tipo_servico,
-        detectar_col_contrato,
-        detectar_col_status_atividade,
-        detectar_col_habilidade,
-        detectar_col_tipo_os_1,
-        detectar_col_flag_gpon,
-        extrair_metricas_criterios,
-        render_painel_criterios,
-        render_debug_criterios,
-        render_card_destaque_migracao,
-        render_lista_colunas,
-    )
+from components.componentes import (
+    aplicar_estilo,
+    render_hero,
+    render_section_header,
+    render_kpi,
+    render_insight,
+    render_dataframe,
+    estilizar_dataframe,
+)
+from components.criterios import (
+    VAZIOS_CONTRATO,
+    classificar_tipo_servico,
+    detectar_col_contrato,
+    detectar_col_status_atividade,
+    detectar_col_habilidade,
+    detectar_col_tipo_os_1,
+    detectar_col_flag_gpon,
+    extrair_metricas_criterios,
+    render_painel_criterios,
+    render_debug_criterios,
+    render_card_destaque_migracao,
+    render_lista_colunas,
+)
 
 
 # ═══════════════════════════════════════════════════════
 # CONFIGURAÇÕES E CONSTANTES
 # ═══════════════════════════════════════════════════════
+logger = logging.getLogger(__name__)
+
+
 class Config:
     SLA_GERAL = 0.20
     SLA_MIGRACAO = 0.25
@@ -201,32 +176,67 @@ class DataLoader:
             return pd.DataFrame()
 
     @staticmethod
-    @st.cache_data(ttl=600, show_spinner="🔗 Vinculando Lista de Ativos...")
+    @st.cache_data(ttl=300, show_spinner="🔗 Vinculando Lista de Ativos...")
     def buscar_gsheets() -> pd.DataFrame:
-        SHEET_ID = Config.SHEET_ID_ATIVOS
+        """Lê a mesma aba privada da Gestão de Ativos; só recorre ao CSV público se necessário."""
+
+        def validar(raw: pd.DataFrame, fonte: str) -> pd.DataFrame:
+            ativos = DataLoader._normalizar_lista_ativos(raw)
+            if ativos.empty:
+                raise ValueError("A aba não contém uma coluna Login com registros válidos")
+            ativos.attrs["fonte_ativos"] = fonte
+            return ativos
+
+        # A Gestão de Ativos lê esta planilha com a conta de serviço, não com
+        # acesso público. Usar a mesma conta evita falhas silenciosas em abas privadas.
+        try:
+            info = dict(st.secrets["gcp_service_account"])
+        except (KeyError, FileNotFoundError):
+            info = {}
+
+        if info:
+            try:
+                scopes = [
+                    "https://spreadsheets.google.com/feeds",
+                    "https://www.googleapis.com/auth/drive",
+                ]
+                creds = Credentials.from_service_account_info(info, scopes=scopes)
+                ws = gspread.authorize(creds).open_by_key(Config.SHEET_ID_ATIVOS).worksheet(
+                    Config.WORKSHEET_ATIVOS
+                )
+                registros = pd.DataFrame(ws.get_all_records(default_blank=""))
+                return validar(registros, "Google Sheets (autenticado)")
+            except Exception as exc:
+                logger.warning("Falha na leitura autenticada da lista_ativos: %s", exc)
+
         try:
             from streamlit_gsheets import GSheetsConnection
 
             conn = st.connection("gsheets", type=GSheetsConnection)
             raw = conn.read(
-                spreadsheet=Config.URL_LISTA_ATIVOS, worksheet=Config.WORKSHEET_ATIVOS
+                spreadsheet=Config.URL_LISTA_ATIVOS,
+                worksheet=Config.WORKSHEET_ATIVOS,
+                ttl=0,  # o cache desta função é a única fonte de expiração
             )
-            if raw is not None and not raw.empty:
-                return DataLoader._normalizar_lista_ativos(raw)
-        except Exception:
-            pass
+            return validar(raw, "Google Sheets (conexão)")
+        except Exception as exc:
+            logger.warning("Falha na conexão da lista_ativos: %s", exc)
 
         try:
             url = (
-                f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
+                f"https://docs.google.com/spreadsheets/d/{Config.SHEET_ID_ATIVOS}"
                 f"/gviz/tq?tqx=out:csv&sheet={Config.WORKSHEET_ATIVOS}"
             )
-            raw = pd.read_csv(url)
-            if raw is not None and not raw.empty:
-                return DataLoader._normalizar_lista_ativos(raw)
-        except Exception:
-            pass
-        return pd.DataFrame()
+            return validar(pd.read_csv(url), "Google Sheets (CSV público)")
+        except Exception as exc:
+            logger.warning("Falha na leitura pública da lista_ativos: %s", exc)
+
+        vazia = pd.DataFrame()
+        vazia.attrs["erro_ativos"] = (
+            "Não foi possível ler a aba lista_ativos. Verifique a conta de serviço, "
+            "o compartilhamento da planilha e a coluna Login."
+        )
+        return vazia
 
     @staticmethod
     def _normalizar_lista_ativos(raw: pd.DataFrame) -> pd.DataFrame:
@@ -241,43 +251,57 @@ class DataLoader:
             if cu in ("LOGIN", "MATRICULA", "MATRÍCULA", "ID", "USUARIO", "USUÁRIO"):
                 rename_map[col] = "Login"
             elif cu in (
-                "TECNICO",
-                "TÉCNICO",
-                "NOME",
-                "NOME TECNICO",
-                "NOME DO TECNICO",
+                "TECNICO", "TÉCNICO", "NOME", "NOME TECNICO", "NOME DO TECNICO",
             ):
                 rename_map[col] = "Técnico"
             elif cu in (
-                "MONITOR",
-                "GESTOR",
-                "SUPERVISOR",
-                "COORDENADOR",
-                "NOME MONITOR",
+                "MONITOR", "GESTOR", "SUPERVISOR", "COORDENADOR", "NOME MONITOR",
             ):
                 rename_map[col] = "Monitor"
             elif cu in ("BASE", "REGIAO", "REGIÃO", "CIDADE"):
                 rename_map[col] = "Base"
+            elif cu in ("SITUACAO", "SITUAÇÃO"):
+                rename_map[col] = "Situação"
 
+        # Colunas alternativas podem coexistir com as oficiais (ex.: Login e RE).
+        # Nunca produzir nomes duplicados, para manter o merge determinístico.
+        usados = set()
+        for col, destino in list(rename_map.items()):
+            if (destino != col and destino in raw.columns) or destino in usados:
+                del rename_map[col]
+            else:
+                usados.add(destino)
         raw = raw.rename(columns=rename_map)
-        cols = [c for c in ["Login", "Técnico", "Monitor", "Base"] if c in raw.columns]
-        if "Login" not in cols:
+        if "Login" not in raw.columns:
             return pd.DataFrame()
 
+        # Ignorar desligados/inativos caso estejam na aba de ativos por engano.
+        if "Situação" in raw.columns:
+            situacao = raw["Situação"].fillna("").astype(str).str.strip().str.upper()
+            raw = raw[~situacao.isin(["DESLIGADO", "INATIVO"])]
+
+        cols = [c for c in ["Login", "Técnico", "Monitor", "Base"] if c in raw.columns]
         raw = raw[cols].copy()
-        raw["Login"] = (
-            raw["Login"]
-            .astype(str)
-            .str.replace(r"\.0$", "", regex=True)
-            .str.strip()
-            .str.upper()
-        )
-        raw = raw[~raw["Login"].isin(["NAN", "NONE", "NULL", "N/A", "0", "-", ""])]
+        raw["Login"] = DataLoader._normalizar_login(raw["Login"])
+        invalidos = ["NAN", "NONE", "NULL", "N/A", "<NA>", "0", "-", ""]
+        raw = raw[~raw["Login"].isin(invalidos)]
         return raw.drop_duplicates(subset=["Login"], keep="last").reset_index(drop=True)
 
     @staticmethod
+    def _normalizar_login(serie: pd.Series) -> pd.Series:
+        return (
+            serie.fillna("").astype(str)
+            .str.strip()
+            .str.replace(r"\.0$", "", regex=True)
+            .str.upper()
+        )
+
+    @staticmethod
     @st.cache_data(show_spinner=False)
-    def preparar_base(df: pd.DataFrame, df_gs: pd.DataFrame) -> pd.DataFrame:
+    def preparar_base(
+        df: pd.DataFrame, df_gs: pd.DataFrame,
+        fonte_ativos: str = "", erro_ativos: str = "",
+    ) -> pd.DataFrame:
         if df.empty:
             return pd.DataFrame()
 
@@ -339,25 +363,20 @@ class DataLoader:
             df,
             ["LOGIN DO TÉCNICO", "LOGIN DO TECNICO", "LOGIN", "USUÁRIO", "MATRÍCULA"],
         )
+        if col_login:
+            df["LOGIN"] = DataLoader._normalizar_login(df[col_login])
+        else:
+            df["LOGIN"] = "SEM LOGIN"
         if col_login and not df_gs.empty and "Login" in df_gs.columns:
-            df["LOGIN"] = (
-                df[col_login]
-                .astype(str)
-                .str.replace(r"\.0$", "", regex=True)
-                .str.strip()
-                .str.upper()
-            )
             df = df.merge(
                 df_gs,
                 left_on="LOGIN",
                 right_on="Login",
                 how="left",
                 suffixes=("", "_GS"),
+                validate="many_to_one",
             )
-        elif col_login:
-            df["LOGIN"] = df[col_login].astype(str).str.strip().str.upper()
-        else:
-            df["LOGIN"] = "SEM LOGIN"
+        n_vinculados = int(df["Login"].notna().sum()) if "Login" in df.columns else 0
 
         # 5. Fallback Monitor
         mon_gs = (
@@ -495,6 +514,11 @@ class DataLoader:
         df.attrs["diag_susp"] = n_susp
         df.attrs["diag_inv"] = n_inv
         df.attrs["diag_final"] = len(df)
+        df.attrs["diag_vinculados"] = n_vinculados
+        df.attrs["diag_ativos"] = len(df_gs)
+        df.attrs["fonte_ativos"] = fonte_ativos or df_gs.attrs.get("fonte_ativos", "")
+        df.attrs["erro_ativos"] = erro_ativos or df_gs.attrs.get("erro_ativos", "")
+        df.attrs["diag_login"] = col_login or ""
         return df
 
 
@@ -687,31 +711,27 @@ def view_executiva(df: pd.DataFrame, meta_pct: float):
     st.markdown("<br>", unsafe_allow_html=True)
     render_section_header("grid_view", "Matriz de Desempenho (Monitor × Segmento)")
 
-    # Aplicação de estilo condicional na matriz para o componente render_dataframe
+    # Mesmo visual das outras tabelas, com sinalização das quebras acima da meta.
     def _cor_celula(val):
-        if isinstance(val, (int, float)):
-            return f"color: {'#D13438' if val > meta_pct else '#0D9668'}; font-weight: 700;"
+        if pd.notna(val):
+            return f"color: {'#B4232E' if val > meta_pct else '#087A55'}; font-weight: 700;"
         return ""
 
-    df_render = df_matriz.copy()
-    try:
-        # cast() resolve o erro de tipagem do Pylance no subset
-        cols_pct = cast(Any, Config.ORDEM_TIPOS + ["Quebra Geral"])
-
-        sty = df_render.style.format({
-            "Novos Domicílios": "{:.1%}", "Migração": "{:.1%}", "PME": "{:.1%}",
-            "Quebra Geral": "{:.1%}", "Total Tarefas": "{:,}",
-        })
-
-        # pandas >= 2.1 usa .map(); versões antigas usam .applymap()
-        if hasattr(sty, "map"):
-            sty = sty.map(_cor_celula, subset=cols_pct)
-        else:
-            sty = sty.applymap(_cor_celula, subset=cols_pct)  # type: ignore[attr-defined]
-
-        st.dataframe(sty, use_container_width=True, hide_index=True, height=178)
-    except Exception:
-        render_dataframe(df_render, titulo="Resumo por Monitor", icone="table_view")
+    formatos = {
+        **{c: "{:.1%}" for c in Config.ORDEM_TIPOS},
+        "Quebra Geral": "{:.1%}",
+        "Total Tarefas": "{:,.0f}",
+    }
+    sty = estilizar_dataframe(df_matriz, formatos)
+    cols_pct = Config.ORDEM_TIPOS + ["Quebra Geral"]
+    if hasattr(sty, "map"):
+        sty = sty.map(_cor_celula, subset=cols_pct)
+    else:
+        sty = sty.applymap(_cor_celula, subset=cols_pct)  # type: ignore[attr-defined]
+    st.dataframe(
+        sty, use_container_width=True, hide_index=True,
+        height=min(520, 40 + 36 * len(df_matriz)),
+    )
 
     st.markdown("<br>", unsafe_allow_html=True)
     render_section_header("show_chart", "Distribuição Visual por Segmento")
@@ -1014,15 +1034,24 @@ def main():
             badge="SISTEMA TOTALE",
         )
         render_section_header("folder_open", "Carregar Base de Dados", "CSV / XLSX")
-        arq = st.file_uploader("", type=["xlsx", "csv"], key="uploader_principal")
+        arq = st.file_uploader(
+            "Base operacional", type=["xlsx", "csv"], key="uploader_principal",
+            label_visibility="collapsed",
+        )
 
         if arq:
             with st.spinner(
                 "🔄 Processando base, classificando segmentos e sincronizando monitores..."
             ):
-                raw = DataLoader.ler_arquivo(arq.getvalue(), arq.name)
+                conteudo = arq.getvalue()
+                raw = DataLoader.ler_arquivo(conteudo, arq.name)
+                if raw.empty:
+                    return
                 gs = DataLoader.buscar_gsheets()
-                df_proc = DataLoader.preparar_base(raw, gs)
+                df_proc = DataLoader.preparar_base(
+                    raw, gs, gs.attrs.get("fonte_ativos", ""), gs.attrs.get("erro_ativos", "")
+                )
+                st.session_state["quebra_arquivo"] = (conteudo, arq.name)
                 st.session_state["df_memoria"] = df_proc
                 st.rerun()
         return
@@ -1060,8 +1089,21 @@ def main():
                 df = df[df[Config.COL_REGIAO] == sel_reg]
 
         st.divider()
+        if st.button("🔗 Atualizar Lista de Ativos", use_container_width=True):
+            arquivo = st.session_state.get("quebra_arquivo")
+            if arquivo:
+                DataLoader.buscar_gsheets.clear()
+                gs = DataLoader.buscar_gsheets()
+                raw = DataLoader.ler_arquivo(*arquivo)
+                st.session_state["df_memoria"] = DataLoader.preparar_base(
+                    raw, gs, gs.attrs.get("fonte_ativos", ""), gs.attrs.get("erro_ativos", "")
+                )
+                st.rerun()
+            else:
+                st.warning("Reenvie a base para atualizar o vínculo nesta sessão antiga.")
         if st.button("🔄 Trocar Base de Dados", use_container_width=True):
             st.session_state["df_memoria"] = None
+            st.session_state.pop("quebra_arquivo", None)
             st.rerun()
 
     # ── HERO TOPO ──
@@ -1087,6 +1129,29 @@ def main():
         f"🏢 AND PME: **{_fmt_int(met.get('criterio_and_pme', 0))}** tarefas",
         tipo="info" if n_mon > 0 else "alerta",
     )
+
+    # Nunca apresentar "SEM MONITOR" como se fosse um resultado válido do Sheets.
+    erro_ativos = df_full.attrs.get("erro_ativos", "")
+    vinculados = df_full.attrs.get("diag_vinculados", 0)
+    if erro_ativos:
+        st.warning(f"⚠️ {erro_ativos} Os dados da matriz podem usar apenas o arquivo enviado.")
+    elif not vinculados:
+        st.warning(
+            "⚠️ Nenhum login da base corresponde à lista_ativos. "
+            "Confira a coluna de login no arquivo e na planilha "
+            f"(coluna detectada: {df_full.attrs.get('diag_login') or 'nenhuma'})."
+        )
+    elif n_mon == 0:
+        st.warning(
+            "⚠️ Logins vinculados, mas nenhum monitor preenchido. "
+            "Confira a coluna Monitor na lista_ativos."
+        )
+    else:
+        st.caption(
+            f"🔗 Lista de Ativos: {df_full.attrs.get('fonte_ativos', 'Google Sheets')} · "
+            f"{_fmt_int(vinculados)} de {_fmt_int(len(df_full))} registros vinculados "
+            f"({_fmt_int(df_full.attrs.get('diag_ativos', 0))} logins na lista)."
+        )
 
     # ── ABAS PRINCIPAIS ──
     tab1, tab2, tab3, tab4, tab5 = st.tabs(

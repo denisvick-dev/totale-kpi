@@ -14,6 +14,7 @@ from components.componentes import (
     render_kpi,
     render_insight,
     render_section_header,
+    estilizar_dataframe,
     FONTE_TEXTO,
     COR_TEXTO_3,
 )
@@ -75,27 +76,8 @@ class ComponenteVisual:
             return
 
         badge_txt = badge or f"{len(df)} equipes"
-        modo_txt = "📅 Meta Diária" if modo_diario else "📆 Acumulado do Mês"
-
-        st.markdown(
-            f"""
-            <div style="background:#FFFFFF;border-radius:12px 12px 0 0;
-                 padding:14px 20px;border:1px solid #E2E8F0;border-bottom:none;
-                 display:flex;align-items:center;gap:12px;">
-                <span style="font-size:1.4rem;">{icone}</span>
-                <div style="flex:1;">
-                    <div style="font-size:0.95rem;font-weight:800;color:#0F172A;">{titulo}</div>
-                    <div style="font-size:0.72rem;color:#64748B;
-                         text-transform:uppercase;letter-spacing:0.05em;
-                         font-weight:600;margin-top:2px;">{modo_txt}</div>
-                </div>
-                <span style="background:#EFF6FF;color:#1D4ED8;
-                     padding:5px 12px;border-radius:999px;
-                     font-size:0.75rem;font-weight:700;">{badge_txt}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        modo_txt = "Meta Diária" if modo_diario else "Acumulado do Mês"
+        render_section_header(icone, titulo, f"{modo_txt} · {badge_txt}")
 
         df_display = df.copy()
         renomear = {
@@ -121,43 +103,14 @@ class ComponenteVisual:
         if "Proj. Fechamento" in df_display.columns:
             formatos["Proj. Fechamento"] = "{:,.1f}"
 
-        styler = df_display.style.format(formatter=formatos)  # type: ignore[arg-type]
+        styler = estilizar_dataframe(df_display, formatos)
 
         if "Pontos" in df_display.columns:
             styler = styler.map(Utilitarios.colorir_metas, subset=["Pontos"])  # type: ignore[arg-type]
         if "Proj. Fechamento" in df_display.columns:
             styler = styler.map(Utilitarios.colorir_projecao, subset=["Proj. Fechamento"])  # type: ignore[arg-type]
 
-        styler = styler.set_table_styles([
-            {"selector": "thead th", "props": [
-                ("background", "linear-gradient(180deg,#012869 0%,#1E3A8A 100%)"),
-                ("color", "#FFFFFF"), ("font-weight", "700"),
-                ("font-size", "0.72rem"), ("text-align", "center"),
-                ("padding", "12px 10px"), ("letter-spacing", "0.04em"),
-                ("text-transform", "uppercase"), ("border", "none"),
-                ("border-right", "1px solid rgba(255,255,255,0.12)"),
-            ]},
-            {"selector": "tbody td", "props": [
-                ("font-size", "0.82rem"), ("padding", "10px 12px"),
-                ("border-bottom", "1px solid #F1F5F9"),
-                ("font-variant-numeric", "tabular-nums"),
-            ]},
-            {"selector": "tbody tr:nth-child(even) td", "props": [("background-color", "#FAFBFC")]},
-            {"selector": "tbody tr:hover td", "props": [("background-color", "#EFF6FF !important")]},
-            {"selector": "table", "props": [
-                ("border-collapse", "separate"), ("border-spacing", "0"),
-                ("width", "100%"), ("font-family", FONTE_TEXTO),
-            ]},
-        ])
-
-        st.markdown(
-            '<div style="background:#FFFFFF;border-radius:0 0 12px 12px;'
-            'border:1px solid #E2E8F0;border-top:none;overflow:hidden;'
-            'box-shadow:0 4px 12px rgba(0,0,0,0.05);margin-bottom:16px;">',
-            unsafe_allow_html=True,
-        )
         st.dataframe(styler, use_container_width=True, hide_index=True, height=450)
-        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
