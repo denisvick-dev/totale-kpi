@@ -5,7 +5,7 @@ Módulo central de estilos, fontes e componentes reutilizáveis
 para todo o projeto Streamlit.
 
 Uso em qualquer página:
-    from componentes import aplicar_estilo, render_kpi, render_insight
+    from components.componentes import aplicar_estilo, render_kpi, render_insight
     aplicar_estilo()
 """
 
@@ -20,6 +20,19 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 import streamlit.components.v1 as components
+
+from components.paleta import (
+    COR_PRIMARIA, COR_SECUNDARIA, COR_SUCESSO, COR_ALERTA, COR_NEUTRO,
+    COR_TEXTO, COR_TEXTO_2, COR_TEXTO_3, COR_BORDA, COR_FUNDO,
+    COR_FUNDO_CARD, COR_DIVIDER,
+)
+from components.sidebar import gerar_css_sidebar
+# Compatibilidade com os imports usados antes da extração para sidebar.py.
+from components.sidebar import (
+    TEMAS_SIDEBAR as TEMAS_SIDEBAR,
+    TemaSidebar as TemaSidebar,
+    render_seletor_tema_sidebar as render_seletor_tema_sidebar,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,18 +68,6 @@ _GOOGLE_FONTS_URLS = (
 # ====================================================
 # PALETA CORPORATIVA
 # ====================================================
-COR_PRIMARIA = "#0A2F6B"       # Azul institucional
-COR_SECUNDARIA = "#E8700A"     # Laranja Totale
-COR_SUCESSO = "#0D9668"
-COR_ALERTA = "#D13438"
-COR_NEUTRO = "#6B7280"
-COR_TEXTO = "#111827"
-COR_TEXTO_2 = "#4B5563"
-COR_TEXTO_3 = "#9CA3AF"
-COR_BORDA = "#E5E7EB"
-COR_FUNDO = "#F9FAFB"
-COR_FUNDO_CARD = "#FFFFFF"
-COR_DIVIDER = "#F3F4F6"
 
 _TEMA_CORES: dict[str, str] = {
     "azul": COR_PRIMARIA,
@@ -443,120 +444,7 @@ def _injetar_css_global() -> None:
         border: 1px solid var(--cor-borda);
     }}
 
-    /* ═══════════════════════════════════════════════════
-       SIDEBAR — PRATA METÁLICO + FONTE ESCURA / LARANJA
-       ═══════════════════════════════════════════════════ */
-    section[data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, #E8EAED 0%, #D8DCE0 40%, #CDD2D7 100%) !important;
-        border-right: 1px solid #A0A7B0 !important;
-        box-shadow: inset -1px 0 0 rgba(255,255,255,0.6);
-    }}
-
-    section[data-testid="stSidebar"] *,
-    section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] span,
-    section[data-testid="stSidebar"] div,
-    section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {{
-        color: #0F172A !important;
-        font-weight: 500;
-    }}
-
-    section[data-testid="stSidebar"] h1,
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3,
-    section[data-testid="stSidebar"] h4 {{
-        color: #000000 !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.3px;
-        border-bottom: 2px solid #E8700A !important;
-        padding-bottom: 8px;
-        margin-bottom: 12px;
-    }}
-
-    section[data-testid="stSidebar"] hr {{
-        border-color: rgba(160,167,176,0.6) !important;
-        margin: 12px 0 !important;
-    }}
-
-    /* Navegação de Páginas */
-    section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a,
-    section[data-testid="stSidebar"] li a {{
-        border-radius: 6px !important;
-        padding: 8px 12px !important;
-        transition: all 0.15s ease;
-        border-left: 3px solid transparent;
-    }}
-
-    section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a span,
-    section[data-testid="stSidebar"] li a span {{
-        color: #0F172A !important;
-        font-weight: 600 !important;
-    }}
-
-    section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a:hover,
-    section[data-testid="stSidebar"] li a:hover {{
-        background: rgba(255,255,255,0.65) !important;
-        border-left-color: #E8700A !important;
-    }}
-
-    section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a:hover span,
-    section[data-testid="stSidebar"] li a:hover span {{
-        color: #000000 !important;
-    }}
-
-    section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a[aria-current="page"],
-    section[data-testid="stSidebar"] li a[aria-current="page"] {{
-        background: linear-gradient(90deg, rgba(232,112,10,0.20) 0%, rgba(232,112,10,0.05) 100%) !important;
-        border-left-color: #E8700A !important;
-    }}
-
-    section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a[aria-current="page"] span,
-    section[data-testid="stSidebar"] li a[aria-current="page"] span {{
-        color: #000000 !important;
-        font-weight: 800 !important;
-    }}
-
-    /* Botões dentro do Sidebar */
-    section[data-testid="stSidebar"] .stButton button,
-    section[data-testid="stSidebar"] .stDownloadButton button {{
-        background: linear-gradient(180deg, #FFFFFF 0%, #E8EAED 100%) !important;
-        color: #0F172A !important;
-        border: 1px solid #A0A7B0 !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-        font-weight: 700 !important;
-    }}
-
-    section[data-testid="stSidebar"] .stButton button:hover,
-    section[data-testid="stSidebar"] .stDownloadButton button:hover {{
-        background: linear-gradient(180deg, #E8700A 0%, #C85D08 100%) !important;
-        color: #FFFFFF !important;
-        border-color: #A64D06 !important;
-    }}
-
-    /* Inputs e Controles */
-    section[data-testid="stSidebar"] [data-baseweb="select"] > div,
-    section[data-testid="stSidebar"] [data-baseweb="input"] > div,
-    section[data-testid="stSidebar"] input,
-    section[data-testid="stSidebar"] textarea {{
-        background: #FFFFFF !important;
-        border: 1px solid #A0A7B0 !important;
-        color: #000000 !important;
-        border-radius: 6px !important;
-        font-weight: 600 !important;
-    }}
-
-    section[data-testid="stSidebar"] [data-baseweb="select"] span {{
-        color: #000000 !important;
-        font-weight: 600 !important;
-    }}
-
-    section[data-testid="stSidebar"] [data-baseweb="select"] > div:focus-within,
-    section[data-testid="stSidebar"] [data-baseweb="input"] > div:focus-within,
-    section[data-testid="stSidebar"] input:focus {{
-        border-color: #E8700A !important;
-        box-shadow: 0 0 0 2px rgba(232,112,10,0.25) !important;
-    }}
+    {gerar_css_sidebar()}
 
     /* ═══════════════════════════════════════════════════
        MATERIAL ICONS OVERRIDE (Força a fonte do ícone)
@@ -583,13 +471,6 @@ def _injetar_css_global() -> None:
     }}
     svg, svg * {{ font-family: inherit !important; }}
 
-    section[data-testid="stSidebar"] [data-testid*="Icon"],
-    section[data-testid="stSidebar"] [class*="material"] {{
-        color: #E8700A !important;
-        font-size: 16px !important;
-        width: 16px !important;
-        height: 16px !important;
-    }}
     </style>
     """
 
@@ -600,7 +481,10 @@ def _injetar_css_global() -> None:
 # API PÚBLICA & HELPERS
 # ====================================================
 def aplicar_estilo() -> None:
-    """Aplica fonte corporativa, tema Plotly e CSS global."""
+    """Aplica fontes, Plotly e CSS respeitando a preferência da sessão.
+
+    Pode ser chamada pelas páginas sem duplicar o seletor de aparência.
+    """
     _configurar_plotly_global()
     _injetar_fontes_no_head_pai()
     _injetar_css_global()
