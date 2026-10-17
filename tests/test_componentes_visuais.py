@@ -98,3 +98,26 @@ def test_fonte_auto_hospedada_em_assets_fonts(monkeypatch, tmp_path):
     assert "@font-face" in css
     assert "font-family: 'Oscine'" in css
     assert "data:font/woff2;base64" in css
+
+
+def test_oscine_vale_para_heros_h1_e_titulos_de_secao(monkeypatch):
+    css = _css_global(monkeypatch)
+
+    bloco_titulos = re.search(
+        r"h1, h2, h3, h4, h5, h6,\s*\.hero-title, \.section-title \{[^}]*\}", css
+    )
+    assert bloco_titulos is not None
+    assert "font-family: var(--font-hero) !important;" in bloco_titulos.group(0)
+
+    bloco_secao = re.search(r"\.section-title \{[^}]*\}", css)
+    assert "font-family: var(--font-hero) !important;" in bloco_secao.group(0)
+
+
+def test_valores_de_kpi_mantem_a_fonte_institucional(monkeypatch):
+    css = _css_global(monkeypatch)
+
+    blocos_kpi = re.findall(r"\.kpi-value(?:,|\s*\{)[^}]*\}", css)
+    assert blocos_kpi
+    assert any(
+        "font-family: var(--font-titulo) !important;" in bloco for bloco in blocos_kpi
+    )

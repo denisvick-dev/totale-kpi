@@ -285,3 +285,44 @@ def test_ignora_temporarios_do_excel(ambiente):
     os.utime(temporario, (time.time() + 500, time.time() + 500))
 
     assert bo.localizar_base(ambiente["entrada"]).name == "base.xlsx"
+
+
+def test_instalador_de_fonte_normaliza_os_pesos(tmp_path):
+    from scripts import instalar_fonte_hero
+
+    origem = tmp_path / "origem"
+    origem.mkdir()
+    for nome in ("Oscine-Regular.otf", "Oscine-Bold.otf", "Oscine-ExtraBold.otf"):
+        (origem / nome).write_bytes(b"fonte")
+
+    destino = tmp_path / "assets" / "fonts"
+    instalados = instalar_fonte_hero.instalar([origem], destino=destino)
+
+    assert sorted(p.name for _, p in instalados) == [
+        "oscine-bold.otf",
+        "oscine-extrabold.otf",
+        "oscine-regular.otf",
+    ]
+    assert (destino / "oscine-regular.otf").read_bytes() == b"fonte"
+    assert instalar_fonte_hero.detectar_peso("Oscine-Black.ttf") == 800
+    assert instalar_fonte_hero.detectar_peso("Oscine-Medium.ttf") == 500
+    assert instalar_fonte_hero.detectar_peso("Oscine.ttf") == 400
+
+
+def test_instalador_lista_sem_copiar(tmp_path):
+    from scripts import instalar_fonte_hero
+
+    origem = tmp_path / "origem"
+    origem.mkdir()
+    (origem / "Oscine-Bold.otf").write_bytes(b"fonte")
+    destino = tmp_path / "assets" / "fonts"
+
+    planejado = instalar_fonte_hero.instalar(
+        [origem], destino=destino, simular=True
+    )
+
+    assert len(planejado) == 1
+    assert not destino.exists()
+
+    # e depois limpa o que existir
+    assert instalar_fonte_hero.limpar(destino=destino) == 0

@@ -378,14 +378,19 @@ def _injetar_css_global() -> None:
         font-family: var(--font-texto) !important;
     }}
 
-    /* ── Títulos ── */
+    /* ── Títulos (Oscine) ── */
     h1, h2, h3, h4, h5, h6,
-    .hero-title, .section-title, .kpi-value {{
-        font-family: var(--font-titulo) !important;
+    .hero-title, .section-title {{
+        font-family: var(--font-hero) !important;
         font-weight: 700;
         letter-spacing: -0.2px;
     }}
     h1, .hero-title {{ font-weight: 800; }}
+    /* Valores de KPI/métrica seguem com a fonte institucional (numérica). */
+    .kpi-value, [data-testid="stMetricValue"] {{
+        font-family: var(--font-titulo) !important;
+        font-weight: 700;
+    }}
 
     /* ── Widgets ── */
     [data-testid="stWidgetLabel"],
@@ -595,7 +600,7 @@ def _injetar_css_global() -> None:
         border-bottom: 1px solid var(--cor-borda);
     }}
     .section-title {{
-        font-family: var(--font-titulo) !important;
+        font-family: var(--font-hero) !important;
         font-size: 17px;
         font-weight: 700;
         color: var(--cor-texto);

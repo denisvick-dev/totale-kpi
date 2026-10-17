@@ -354,16 +354,25 @@ Cores oficiais Totale Tecnologia:
 **Tipografia**
 | Uso | Fonte |
 |-----|-------|
-| 🅰️ **Títulos dos heros** | **Oscine** (com fallback para Manrope → Segoe UI) |
-| Títulos, KPIs e métricas | Manrope |
+| 🅰️ **Títulos** (heros, `h1`–`h6`, seções) | **Oscine** (com fallback para Manrope → Segoe UI) |
+| 🔢 Valores de KPI e métricas | Manrope |
 | Textos e tabelas | Inter |
 | Códigos | JetBrains Mono |
 
-A **Oscine** é uma fonte licenciada (Dalton Maag / Adobe Fonts). Ela é usada
-quando está ativa no computador; para servir aos demais usuários, configure o
-kit web (`[tipografia] fonte_hero_url` nos secrets ou `TOTALE_FONTE_HERO_URL`)
-ou coloque os arquivos em `assets/fonts/` (`oscine-regular.woff2`,
-`oscine-bold.woff2`, `oscine-extrabold.woff2`). Sem isso, cai no Manrope.
+A **Oscine** é uma fonte licenciada (Dalton Maag / Adobe Fonts) e vale para
+**heros, `h1`–`h6` e títulos de seção**; valores de KPI seguem em Manrope.
+
+Para instalá-la:
+```bash
+python scripts/instalar_fonte_hero.py ~/Downloads/Oscine   # normaliza os nomes
+python scripts/instalar_fonte_hero.py --listar              # confere sem copiar
+```
+
+Sem os arquivos, o app usa a Oscine se ela estiver ativa no computador
+(Adobe Creative Cloud) e cai no **Manrope** caso contrário — nada quebra.
+Para servir a todos os usuários (Streamlit Cloud), configure o kit web:
+`[tipografia] fonte_hero_url` nos secrets ou `TOTALE_FONTE_HERO_URL`.
+Detalhes em `assets/fonts/LEIA-ME.md`.
 
 ---
 
