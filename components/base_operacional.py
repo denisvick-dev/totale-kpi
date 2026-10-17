@@ -5,7 +5,8 @@ Fonte única dos dados operacionais compartilhados por **volumetria.py**,
 **quebra.py** e pelo **robô** (``scripts/robot_base.py``).
 
 Fluxo do robô:
-    1. localiza o arquivo mais recente em ``dados/entrada/``;
+    1. localiza o arquivo mais recente na pasta monitorada
+       (por padrão a pasta **Downloads** do usuário);
     2. lê e trata a base bruta (Excel/CSV);
     3. gera as bases prontas de Volumetria e de Quebra de Agenda;
     4. grava o cache em ``dados/cache/`` + ``manifesto.json``;
@@ -18,7 +19,7 @@ de serviço, depois a conexão nativa e, por fim, o CSV público da planilha.
 Configuração (ordem de precedência):
     secrets ``[base_operacional]``  →  variáveis de ambiente  →  padrões
 
-    pasta_entrada   TOTALE_BASE_ENTRADA    dados/entrada
+    pasta_entrada   TOTALE_BASE_ENTRADA    Downloads do usuário
     pasta_cache     TOTALE_BASE_CACHE      dados/cache
     arquivo_glob    TOTALE_BASE_ARQUIVO    "" (qualquer .xlsx/.xls/.csv)
     ttl_minutos     TOTALE_BASE_TTL         0 (sem expiração)
@@ -103,13 +104,60 @@ _ARQUIVO_MANIFESTO = "manifesto.json"
 # ═══════════════════════════════════════════════════════════════════════
 # CONFIGURAÇÃO
 # ═══════════════════════════════════════════════════════════════════════
+def _caminho_downloads(
+    sistema: Optional[str] = None, home: Optional[Path] = None
+) -> str:
+    """
+    Caminho (string) da pasta Downloads — isolado para facilitar os testes.
+
+    ``sistema`` e ``home`` existem só para injeção em testes; em produção usa
+    ``os.name`` e ``Path.home()``.
+    """
+    sistema = sistema or os.name
+    home = Path(home) if home else Path.home()
+
+    if sistema == "nt":
+        perfil = os.getenv("USERPROFILE") or str(home)
+        return os.path.join(perfil, "Downloads")
+
+    xdg = home / ".config" / "user-dirs.dirs"
+    if xdg.is_file():
+        try:
+            for linha in xdg.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if not linha.strip().startswith("XDG_DOWNLOAD_DIR"):
+                    continue
+                valor = linha.split("=", 1)[-1].strip().strip('"').strip("'")
+                valor = os.path.expandvars(
+                    valor.replace("$HOME", str(home)).replace("${HOME}", str(home))
+                )
+                if valor:
+                    return os.path.expanduser(valor)
+        except OSError:
+            pass
+
+    return str(home / "Downloads")
+
+
+def pasta_downloads() -> Path:
+    """
+    Pasta de **Downloads** do usuário — origem padrão das bases do robô.
+
+    - Windows: ``%USERPROFILE%\\Downloads``
+    - Linux: respeita ``XDG_DOWNLOAD_DIR`` (``~/.config/user-dirs.dirs``)
+    - macOS: ``~/Downloads``
+    """
+    return Path(_caminho_downloads())
+
+
 @dataclass(frozen=True)
 class ConfigBase:
     pasta_entrada: Path
     pasta_cache: Path
     arquivo_glob: str = ""
     ttl_minutos: int = 0
-    recursivo: bool = True
+    #: Varre também as subpastas. Desligado por padrão porque a pasta
+    #: Downloads costuma ser grande e cheia de arquivos temporários.
+    recursivo: bool = False
 
 
 def _secrets_base() -> Dict[str, Any]:
@@ -143,11 +191,13 @@ def config(**sobreescrever: Any) -> ConfigBase:
         return padrao
 
     cfg = ConfigBase(
-        pasta_entrada=Path(str(valor("pasta_entrada", "TOTALE_BASE_ENTRADA", "dados/entrada"))),
+        pasta_entrada=Path(
+            str(valor("pasta_entrada", "TOTALE_BASE_ENTRADA", pasta_downloads()))
+        ),
         pasta_cache=Path(str(valor("pasta_cache", "TOTALE_BASE_CACHE", "dados/cache"))),
         arquivo_glob=str(valor("arquivo_glob", "TOTALE_BASE_ARQUIVO", "")).strip(),
         ttl_minutos=int(valor("ttl_minutos", "TOTALE_BASE_TTL", 0) or 0),
-        recursivo=_como_bool(valor("recursivo", "TOTALE_BASE_RECURSIVO", True), True),
+        recursivo=_como_bool(valor("recursivo", "TOTALE_BASE_RECURSIVO", False), False),
     )
 
     dados = {k: v for k, v in sobreescrever.items() if v is not None}
@@ -335,7 +385,9 @@ def localizar_base(
     """
     Retorna o arquivo de base **mais recente** da pasta monitorada.
 
-    Critério de desempate: maior ``mtime``; em caso de empate, o nome.
+    Considera apenas os arquivos diretamente na pasta (a não ser que
+    ``recursivo`` esteja ligado), ignorando temporários do Excel (``~$``) e
+    arquivos ocultos. Critério: maior ``mtime``; em caso de empate, o nome.
     """
     cfg = config(recursivo=recursivo)
     pasta_path = Path(pasta) if pasta else cfg.pasta_entrada
@@ -356,7 +408,13 @@ def localizar_base(
             if p.is_file() and p.suffix.lower() in extensoes
         ]
 
-    candidatos = [p for p in candidatos if p.is_file() and p.suffix.lower() in extensoes]
+    candidatos = [
+        p
+        for p in candidatos
+        if p.is_file()
+        and p.suffix.lower() in extensoes
+        and not p.name.startswith(("~$", "."))
+    ]
     if not candidatos:
         return None
 

@@ -67,7 +67,7 @@ python -m pytest -q
 ```
 
 ### 🤖 Robô de Bases (Volumetria + Quebra de Agenda)
-- **Puxa a base automaticamente**: vigia a pasta `dados/entrada/` e processa sempre o arquivo **mais recente** (`.xlsx`, `.xls` ou `.csv`)
+- **Puxa a base automaticamente**: vigia a pasta **Downloads** do usuário (padrão) e processa sempre o arquivo **mais recente** (`.xlsx`, `.xls` ou `.csv`)
 - **Atualiza os dois painéis de uma vez**: gera as bases prontas de `volumetria.py` e `quebra.py` com o mesmo pipeline (sem upload manual)
 - **Só reprocessa quando muda**: compara o hash SHA-256 do arquivo; base inalterada reaproveita o cache
 - **Modo contínuo ou agendado**: `--modo loop --intervalo 15`, cron (Linux/macOS) ou Agendador de Tarefas (Windows)
@@ -92,15 +92,21 @@ Configuração (`.streamlit/secrets.toml` ou variáveis de ambiente):
 
 | Chave | Variável | Padrão |
 |-------|----------|--------|
-| `pasta_entrada` | `TOTALE_BASE_ENTRADA` | `dados/entrada` |
+| `pasta_entrada` | `TOTALE_BASE_ENTRADA` | `Downloads` do usuário |
 | `pasta_cache` | `TOTALE_BASE_CACHE` | `dados/cache` |
 | `arquivo_glob` | `TOTALE_BASE_ARQUIVO` | qualquer `.xlsx/.xls/.csv` |
 | `ttl_minutos` | `TOTALE_BASE_TTL` | `0` (sem expiração) |
 
 ```toml
 [base_operacional]
-pasta_entrada = "dados/entrada"
+# Opcional: por padrão o robô já usa a pasta Downloads do usuário.
+# pasta_entrada = "C:/Users/denis/Downloads"
 pasta_cache   = "dados/cache"
+```
+
+Para apontar outra pasta na execução:
+```bash
+python scripts/robot_base.py --pasta-entrada "C:/caminho/das/bases"
 ```
 
 ### 🗓️ Projeções em dias úteis (Seg–Sáb)
@@ -306,7 +312,7 @@ totale-kpi/
 ├── scripts/
 │   └── robot_base.py              # 🤖 Robô de atualização das bases
 ├── dados/                         # (não versionado)
-│   ├── entrada/                   # Bases monitoradas pelo robô
+│   ├── entrada/                   # Opcional: pasta alternativa às bases
 │   ├── cache/                     # Bases tratadas + manifesto.json
 │   └── logs/                      # Log das execuções do robô
 ├── assets/
@@ -344,6 +350,20 @@ Cores oficiais Totale Tecnologia:
 | 🟠 Laranja Marca | `#F37C04` | Destaques, botões, acentos |
 | ⚪ Branco | `#FFFFFF` | Backgrounds |
 | ⬜ Cinza Claro | `#F1F5F9` | Backgrounds secundários |
+
+**Tipografia**
+| Uso | Fonte |
+|-----|-------|
+| 🅰️ **Títulos dos heros** | **Oscine** (com fallback para Manrope → Segoe UI) |
+| Títulos, KPIs e métricas | Manrope |
+| Textos e tabelas | Inter |
+| Códigos | JetBrains Mono |
+
+A **Oscine** é uma fonte licenciada (Dalton Maag / Adobe Fonts). Ela é usada
+quando está ativa no computador; para servir aos demais usuários, configure o
+kit web (`[tipografia] fonte_hero_url` nos secrets ou `TOTALE_FONTE_HERO_URL`)
+ou coloque os arquivos em `assets/fonts/` (`oscine-regular.woff2`,
+`oscine-bold.woff2`, `oscine-extrabold.woff2`). Sem isso, cai no Manrope.
 
 ---
 

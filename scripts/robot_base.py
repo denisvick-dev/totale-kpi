@@ -1,12 +1,13 @@
 #!/usr/bin/env python
-"""
+r"""
 scripts/robot_base.py
 =====================
 🤖 Robô de atualização das bases operacionais (Volumetria + Quebra de Agenda).
 
 O que ele faz
 -------------
-1. Procura o arquivo **mais recente** na pasta monitorada (``dados/entrada``);
+1. Procura o arquivo **mais recente** na pasta monitorada
+   (por padrão, a pasta **Downloads** do usuário);
 2. Lê a base (Excel/CSV);
 3. Vincula a ``lista_ativos`` do Google Sheets (quando houver rede/credenciais);
 4. Gera as bases tratadas de **volumetria.py** e **quebra.py**;
@@ -188,7 +189,7 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--pasta-entrada",
-        help="Pasta monitorada (padrão: dados/entrada).",
+        help="Pasta monitorada (padrão: Downloads do usuário).",
     )
     parser.add_argument(
         "--pasta-cache",
@@ -210,6 +211,11 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
         type=int,
         default=15,
         help="Minutos entre execuções no modo loop (padrão: 15).",
+    )
+    parser.add_argument(
+        "--recursivo",
+        action="store_true",
+        help="Varrer também as subpastas da pasta monitorada (padrão: só a raiz).",
     )
     parser.add_argument(
         "--forcar",
@@ -242,6 +248,9 @@ def main(argv: Optional[list] = None) -> int:
     if args.padrao:
         # lido por components.base_operacional.config() em cada execução
         os.environ["TOTALE_BASE_ARQUIVO"] = args.padrao
+
+    if args.recursivo:
+        os.environ["TOTALE_BASE_RECURSIVO"] = "1"
 
     if args.limpar_cache:
         limpar_cache(args)

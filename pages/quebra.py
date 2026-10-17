@@ -182,7 +182,8 @@ class DataLoader:
         """
         Base gerada pelo robô (``dados/cache``).
 
-        O robô lê o arquivo mais recente de ``dados/entrada``. Se a pasta não
+        O robô lê o arquivo mais recente da pasta monitorada (por padrão,
+        ``Downloads``). Se a pasta não
         existir ou estiver vazia, devolve um DataFrame vazio e a página cai no
         upload manual.
         """
@@ -814,7 +815,7 @@ def main():
         if st.button(
             "🤖 Atualizar base (robô)",
             use_container_width=True,
-            help="Roda o robô: relê o arquivo mais recente de dados/entrada e refaz o cache.",
+            help="Roda o robô: relê o arquivo mais recente da pasta monitorada e refaz o cache.",
         ):
             DataLoader.carregar_base_automatica.clear()
             with st.spinner("🤖 Robô processando a base ..."):

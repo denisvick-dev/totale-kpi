@@ -227,3 +227,61 @@ def test_cli_status_e_limpar_cache(ambiente, monkeypatch, capsys):
 
     assert robot_base.main(["--pasta-cache", str(ambiente["cache"]), "--limpar-cache"]) == 0
     assert not (ambiente["cache"] / "manifesto.json").exists()
+
+
+def test_pasta_padrao_do_robo_e_o_downloads(monkeypatch):
+    monkeypatch.delenv("TOTALE_BASE_ENTRADA", raising=False)
+
+    assert bo.config().pasta_entrada == bo.pasta_downloads()
+
+
+def test_downloads_no_windows(monkeypatch, tmp_path):
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+
+    assert bo._caminho_downloads(sistema="nt", home=tmp_path / "nao-usado") == str(
+        tmp_path / "Downloads"
+    )
+
+
+def test_downloads_respeita_xdg_no_linux(tmp_path):
+    home = tmp_path / "home"
+    (home / ".config").mkdir(parents=True)
+    (home / ".config" / "user-dirs.dirs").write_text(
+        'XDG_DOWNLOAD_DIR="$HOME/MeusDownloads"\n', encoding="utf-8"
+    )
+
+    assert bo._caminho_downloads(sistema="posix", home=home) == str(
+        home / "MeusDownloads"
+    )
+
+
+def test_downloads_sem_xdg_cai_no_home(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+
+    assert bo._caminho_downloads(sistema="posix", home=home) == str(home / "Downloads")
+
+
+def test_pasta_downloads_devolve_path():
+    assert isinstance(bo.pasta_downloads(), Path)
+
+
+def test_por_padrao_nao_varre_subpastas(ambiente):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+    subpasta = ambiente["entrada"] / "subpasta"
+    subpasta.mkdir()
+    base_sintetica(subpasta / "base_sub.xlsx")
+    os.utime(subpasta / "base_sub.xlsx", (time.time() + 500, time.time() + 500))
+
+    assert bo.config().recursivo is False
+    assert bo.localizar_base(ambiente["entrada"]).name == "base.xlsx"
+    assert bo.localizar_base(ambiente["entrada"], recursivo=True).name == "base_sub.xlsx"
+
+
+def test_ignora_temporarios_do_excel(ambiente):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+    temporario = ambiente["entrada"] / "~$base.xlsx"
+    temporario.write_bytes(b"")
+    os.utime(temporario, (time.time() + 500, time.time() + 500))
+
+    assert bo.localizar_base(ambiente["entrada"]).name == "base.xlsx"
