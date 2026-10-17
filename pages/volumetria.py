@@ -4,9 +4,8 @@ Arquivo: pages/volumetria.py
 """
 from __future__ import annotations
 
-import unicodedata
 from io import BytesIO
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, cast
 
 import numpy as np
 import pandas as pd
@@ -18,6 +17,8 @@ import streamlit as st
 # ====================================================
 # IMPORTAÇÃO DOS COMPONENTES CORPORATIVOS
 # ====================================================
+from components import base_operacional as bo
+from components.calendario import InfoCalendario
 from components.componentes import (
     aplicar_estilo,
     render_hero,
@@ -54,182 +55,60 @@ class Config:
 # ==========================================================
 # UTILITÁRIOS
 # ==========================================================
-class Utils:
-    @staticmethod
-    def remover_acentos(valor: Any) -> str:
-        if pd.isna(valor):
-            return ""
-        return unicodedata.normalize("NFKD", str(valor)).encode("ASCII", "ignore").decode("ASCII")
-
-    @staticmethod
-    def normalizar_chave(serie: pd.Series) -> pd.Series:
-        s = serie.copy()
-        return (
-            s.where(s.notna(), "")
-            .astype(str)
-            .str.strip()
-            .str.upper()
-            .apply(Utils.remover_acentos)
-        )
-
-    @staticmethod
-    def normalizar_login(serie: pd.Series) -> pd.Series:
-        return Utils.normalizar_chave(serie).str.replace(r"\.0$", "", regex=True)
-
-    @staticmethod
-    def buscar_coluna(df: pd.DataFrame, aliases: List[str]) -> Optional[str]:
-        cols_map = {Utils.normalizar_chave(pd.Series([c]))[0]: c for c in df.columns}
-        for alias in aliases:
-            chave = Utils.normalizar_chave(pd.Series([alias]))[0]
-            if chave in cols_map:
-                return cols_map[chave]
-        return None
-
-    @staticmethod
-    def classificar_status(status_os: pd.Series) -> pd.Series:
-        s = Utils.normalizar_chave(status_os)
-        nao_exec = s.str.contains(r"NAO\s*EXECUT", regex=True, na=False)
-        exec_ = s.str.contains(r"EXECUT", regex=True, na=False) & ~nao_exec
-        return pd.Series(
-            np.select(
-                [exec_, nao_exec],
-                ["Executada", "Não Executada"],
-                default="Pendente",
-            ),
-            index=status_os.index,
-            dtype="object",
-        )
-
-    @staticmethod
-    def contrato_valido(serie: pd.Series) -> pd.Series:
-        norm = serie.astype(str).str.strip().str.upper().apply(Utils.remover_acentos)
-        return ~norm.isin(Config.CONTRATO_VALORES_VAZIOS)
-
-
-# ==========================================================
-# CARREGAMENTO DE DADOS
-# ==========================================================
 class DataLoader:
+    """Leitura e tratamento — reaproveita o mesmo pipeline do robô."""
+
     @staticmethod
     @st.cache_data(show_spinner=False)
     def ler_arquivo(file_bytes: bytes, filename: str) -> pd.DataFrame:
-        if not file_bytes:
-            raise ValueError("O arquivo enviado está vazio.")
-
-        nome = filename.lower()
-        if nome.endswith(".xlsx") or nome.endswith(".xls"):
-            return pd.read_excel(BytesIO(file_bytes), engine="openpyxl" if nome.endswith(".xlsx") else None)
-        if nome.endswith(".csv"):
-            try:
-                return pd.read_csv(BytesIO(file_bytes), sep=None, engine="python", encoding="utf-8-sig")
-            except UnicodeDecodeError:
-                return pd.read_csv(BytesIO(file_bytes), sep=None, engine="python", encoding="latin1")
-        raise ValueError("Formato não suportado. Use .xlsx, .xls ou .csv.")
+        return bo.ler_arquivo_bytes(file_bytes, filename)
 
     @staticmethod
     @st.cache_data(ttl=600, show_spinner=False)
     def buscar_hierarquia_gsheets() -> pd.DataFrame:
+        """Lista de ativos (mesma aba da Gestão de Ativos) via robô/base_operacional."""
         try:
-            conn = st.connection("gsheets", type=GSheetsConnection)
-            raw = conn.read(spreadsheet=Config.URL_GSHEETS)
-            if raw is None or raw.empty:
-                return pd.DataFrame()
-            
-            col_login = Utils.buscar_coluna(raw, ["LOGIN", "MATRÍCULA", "ID"])
-            col_tec = Utils.buscar_coluna(raw, ["TÉCNICO", "NOME"])
-            col_mon = Utils.buscar_coluna(raw, ["MONITOR", "GESTOR"])
-            
-            if not col_login:
-                return pd.DataFrame()
-                
-            df_gs = pd.DataFrame({
-                "__LOGIN_KEY": Utils.normalizar_login(raw[col_login]),
-                "__TEC_GS": raw[col_tec] if col_tec else "",
-                "__MON_GS": raw[col_mon] if col_mon else "",
-            })
-            return df_gs.drop_duplicates("__LOGIN_KEY")
+            return bo.carregar_hierarquia(
+                segredos=lambda: dict(st.secrets["gcp_service_account"]),
+                conexao=lambda: st.connection("gsheets", type=GSheetsConnection),
+                read_csv=pd.read_csv,
+            )
         except Exception:
             return pd.DataFrame()
 
     @staticmethod
+    @st.cache_data(ttl=900, show_spinner="🤖 Carregando a base automática do robô...")
+    def carregar_base_automatica(forcar: bool = False) -> pd.DataFrame:
+        """
+        Base gerada pelo robô (``dados/cache``).
+
+        O robô lê o arquivo mais recente de ``dados/entrada``. Se a pasta não
+        existir ou estiver vazia, devolve um DataFrame vazio e a página cai no
+        upload manual.
+        """
+        try:
+            base = bo.carregar_base_volumetria(
+                forcar=forcar,
+                segredos=lambda: dict(st.secrets["gcp_service_account"]),
+                conexao=lambda: st.connection("gsheets", type=GSheetsConnection),
+                read_csv=pd.read_csv,
+            )
+        except Exception as exc:
+            st.error(f"Falha ao carregar a base automática: {exc}")
+            return pd.DataFrame()
+        return base if base is not None else pd.DataFrame()
+
+    @staticmethod
     def preparar_base(df: pd.DataFrame, df_gs: pd.DataFrame) -> pd.DataFrame:
-        df = df.copy()
-        diag = {"Inicial": len(df)}
-
-        col_con = Utils.buscar_coluna(df, ["CONTRATO", "Nº CONTRATO", "NUMERO CONTRATO", "NUM CONTRATO"])
-        if col_con:
-            valida = Utils.contrato_valido(df[col_con])
-            rem = (~valida).sum()
-            df = df[valida].copy()
-            diag["Removidos por contrato vazio"] = int(rem)
-        else:
-            st.warning("⚠️ Coluna de contrato não encontrada.")
-
-        col_atv = Utils.buscar_coluna(df, ["STATUS DA ATIVIDADE"])
-        if col_atv:
-            susp = Utils.normalizar_chave(df[col_atv]).str.contains("SUSP", na=False)
-            df = df[~susp].copy()
-
-        col_os1 = Utils.buscar_coluna(df, ["STATUS DA O.S 1", "STATUS OS 1"])
-        if not col_os1:
-            st.error("Coluna 'Status da O.S 1' não encontrada!")
+        base = bo.preparar_base_volumetria(df, df_gs)
+        diagnostico = base.attrs.get("diagnostico", {})
+        for aviso in diagnostico.get("avisos", []):
+            st.warning(f"⚠️ {aviso}")
+        for erro in diagnostico.get("erros", []):
+            st.error(f"❌ {erro}")
+        if diagnostico.get("erros"):
             st.stop()
-        df[Config.COL_STATUS] = Utils.classificar_status(df[col_os1])
-
-        col_qtd = Utils.buscar_coluna(df, ["TOTAL DE TAREFAS", "QUANTIDADE"])
-        if col_qtd:
-            df[Config.COL_TOTAL] = pd.to_numeric(df[col_qtd], errors="coerce").fillna(1)
-        else:
-            df[Config.COL_TOTAL] = 1
-        df[Config.COL_TOTAL] = df[Config.COL_TOTAL].clip(lower=0)
-
-        col_log = Utils.buscar_coluna(df, ["LOGIN DO TÉCNICO", "LOGIN", "USUÁRIO"])
-        if col_log and not df_gs.empty:
-            df["__LOGIN_KEY"] = Utils.normalizar_login(df[col_log])
-            df = df.merge(df_gs, on="__LOGIN_KEY", how="left")
-            
-        for c in ("__TEC_GS", "__MON_GS"):
-            if c not in df.columns:
-                df[c] = np.nan
-
-        col_tec_b = Utils.buscar_coluna(df, ["TÉCNICO", "NOME"]) or col_log
-        col_mon_b = Utils.buscar_coluna(df, ["MONITOR", "GESTOR"])
-
-        base_tec = df[col_tec_b] if col_tec_b else pd.Series(np.nan, index=df.index)
-        base_mon = df[col_mon_b] if col_mon_b else pd.Series(np.nan, index=df.index)
-
-        tec_gs = df["__TEC_GS"].where(df["__TEC_GS"].notna(), "")
-        mon_gs = df["__MON_GS"].where(df["__MON_GS"].notna(), "")
-        
-        df[Config.COL_TECNICO] = tec_gs.mask(tec_gs.astype(str).str.strip().eq(""), base_tec)
-        df[Config.COL_MONITOR] = mon_gs.mask(mon_gs.astype(str).str.strip().eq(""), base_mon)
-        
-        df[Config.COL_TECNICO] = df[Config.COL_TECNICO].where(
-            df[Config.COL_TECNICO].notna() & df[Config.COL_TECNICO].astype(str).str.strip().ne(""),
-            "NÃO MAPEADO",
-        )
-        df[Config.COL_MONITOR] = df[Config.COL_MONITOR].where(
-            df[Config.COL_MONITOR].notna() & df[Config.COL_MONITOR].astype(str).str.strip().ne(""),
-            "SEM MONITOR",
-        )
-
-        col_cid = Utils.buscar_coluna(df, ["CIDADE", "LOCALIDADE"])
-        cidade = Utils.normalizar_chave(df[col_cid]) if col_cid else pd.Series("", index=df.index)
-        
-        df[Config.COL_REGIAO] = np.select(
-            [
-                cidade.isin(["SAO PAULO"]),
-                cidade.isin(["GUARULHOS", "ARUJA", "MOGI DAS CRUZES", "SUZANO", "ITAQUAQUECETUBA", "FERRAZ DE VASCONCELOS", "POA"]),
-                cidade.isin(["SANTO ANDRE", "SAO BERNARDO DO CAMPO", "SAO CAETANO DO SUL", "DIADEMA", "MAUA", "RIBEIRAO PIRES", "RIO GRANDE DA SERRA"]),
-            ],
-            ["LESTE", "GRU", "ABCDM"],
-            default="OUTRAS",
-        )
-
-        diag["Final"] = len(df)
-        df.attrs["diagnostico"] = diag
-        return df
-
+        return base
 
 # ==========================================================
 # CÁLCULOS
@@ -327,9 +206,35 @@ def main():
     # ── SIDEBAR CONFIGURAÇÕES ─────────────────────────────
     with st.sidebar:
         st.header("⚙️ Configurações")
-        if st.button("🔄 Reiniciar Painel", use_container_width=True):
+
+        c_atualizar, c_reiniciar = st.columns(2)
+        with c_atualizar:
+            atualizar = st.button(
+                "🤖 Atualizar base",
+                use_container_width=True,
+                help="Roda o robô: relê o arquivo mais recente de dados/entrada e refaz o cache.",
+            )
+        with c_reiniciar:
+            reiniciar = st.button("🧹 Reiniciar", use_container_width=True)
+
+        if atualizar:
+            DataLoader.carregar_base_automatica.clear()
+            with st.spinner("🤖 Robô processando a base ..."):
+                base = DataLoader.carregar_base_automatica(forcar=True)
+            if base is not None and not base.empty:
+                st.session_state.base_data = base
+                st.rerun()
+            st.warning(
+                "O robô não encontrou uma base em "
+                f"`{bo.config().pasta_entrada}` — envie o arquivo abaixo."
+            )
+
+        if reiniciar:
             st.session_state.base_data = None
             st.rerun()
+
+        st.divider()
+        bo.render_status_base()
 
         st.divider()
 
@@ -339,9 +244,25 @@ def main():
             st.write(f"🗑️ **Vazios:** {diag.get('Removidos por contrato vazio', 0)}")
             st.write(f"📈 **Processadas:** {diag.get('Final', 0)}")
 
-    # ── UPLOAD ─────────────────────────────────────────────
+    # ── BASE AUTOMÁTICA (ROBÔ) ─────────────────────────────
     if st.session_state.base_data is None:
-        render_section_header("upload_file", "Importação de Dados")
+        with st.spinner("🤖 Buscando a base gerada pelo robô ..."):
+            base_auto = DataLoader.carregar_base_automatica()
+        if base_auto is not None and not base_auto.empty:
+            st.session_state.base_data = base_auto
+            st.rerun()
+        # Sem arquivo agora: limpa o cache para a próxima tentativa já encontrar
+        # um arquivo novo chegado na pasta monitorada.
+        DataLoader.carregar_base_automatica.clear()
+
+    # ── UPLOAD (FALLBACK) ──────────────────────────────────
+    if st.session_state.base_data is None:
+        render_section_header("upload_file", "Importação Manual")
+        st.caption(
+            "O robô lê automaticamente o arquivo mais recente de "
+            f"`{bo.config().pasta_entrada}`. "
+            "Use o upload apenas quando quiser analisar outro arquivo."
+        )
         u = st.file_uploader("Selecione a base (Excel/CSV)", type=["xlsx", "xls", "csv"])
         
         if u:
@@ -410,6 +331,19 @@ def main():
     render_kpi(c2, "Executadas", f"{kpis['executadas']:,}", f"Taxa: {kpis['taxa']:.1%}", tema="verde")
     render_kpi(c3, "Não Executadas", f"{kpis['nao_executadas']:,}", f"Quebra: {kpis['quebra']:.1%}", tema="vermelho")
     render_kpi(c4, "Projeção Final", f"{kpis['projecao']:,}", "Baseado na taxa atual", tema="laranja")
+
+    # ── CALENDÁRIO (SEG–SÁB, SEM DOMINGOS NEM FERIADOS) ────
+    cal = InfoCalendario.calcular()
+    feriados_restantes = ", ".join(
+        f"{d.strftime('%d/%m')} ({nome})" for d, nome in cal.feriados_restantes[:4]
+    )
+    render_insight(
+        f"🗓️ **{cal.nome_mes}:** {cal.dias_passados} dias úteis já passados e "
+        f"**{cal.dias_faltantes}** restantes (segunda a sábado, sem domingos "
+        f"nem feriados)."
+        + (f" Feriados restantes: {feriados_restantes}." if feriados_restantes else ""),
+        tipo="info",
+    )
 
     # ── ABAS PRINCIPAIS ────────────────────────────────────
     t1, t2 = st.tabs(["👥 Equipes", "📋 Base de Dados"])

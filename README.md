@@ -66,6 +66,49 @@ Teste de regressão (com as dependências do projeto e `pytest` instalados):
 python -m pytest -q
 ```
 
+### 🤖 Robô de Bases (Volumetria + Quebra de Agenda)
+- **Puxa a base automaticamente**: vigia a pasta `dados/entrada/` e processa sempre o arquivo **mais recente** (`.xlsx`, `.xls` ou `.csv`)
+- **Atualiza os dois painéis de uma vez**: gera as bases prontas de `volumetria.py` e `quebra.py` com o mesmo pipeline (sem upload manual)
+- **Só reprocessa quando muda**: compara o hash SHA-256 do arquivo; base inalterada reaproveita o cache
+- **Modo contínuo ou agendado**: `--modo loop --intervalo 15`, cron (Linux/macOS) ou Agendador de Tarefas (Windows)
+- **Funciona offline da planilha**: se a `lista_ativos` não estiver acessível, o robô segue e avisa no painel
+- Botão **🤖 Atualizar base** na barra lateral das duas páginas roda o robô sob demanda
+
+```bash
+# execução única
+python scripts/robot_base.py
+
+# forçar reprocessamento
+python scripts/robot_base.py --forcar
+
+# vigiar a pasta a cada 15 minutos
+python scripts/robot_base.py --modo loop --intervalo 15
+
+# ver a situação do cache
+python scripts/robot_base.py --status
+```
+
+Configuração (`.streamlit/secrets.toml` ou variáveis de ambiente):
+
+| Chave | Variável | Padrão |
+|-------|----------|--------|
+| `pasta_entrada` | `TOTALE_BASE_ENTRADA` | `dados/entrada` |
+| `pasta_cache` | `TOTALE_BASE_CACHE` | `dados/cache` |
+| `arquivo_glob` | `TOTALE_BASE_ARQUIVO` | qualquer `.xlsx/.xls/.csv` |
+| `ttl_minutos` | `TOTALE_BASE_TTL` | `0` (sem expiração) |
+
+```toml
+[base_operacional]
+pasta_entrada = "dados/entrada"
+pasta_cache   = "dados/cache"
+```
+
+### 🗓️ Projeções em dias úteis (Seg–Sáb)
+- A semana útil é de **segunda a sábado** — **domingos não contam**
+- **Feriados** também são descontados: nacionais (fixos e móveis: Carnaval, Paixão de Cristo, Corpus Christi) e **estaduais de SP** (09/07)
+- Regra única em `components/calendario.py`, usada por **Qtde. de O.S.**, **Ranking de Pontos** e **Consultivos**
+- Feriados extras (municipais, pontos facultativos da operação) podem ser adicionados em `config/feriados_extra.json` ou na variável `TOTALE_FERIADOS_EXTRA`
+
 ### 📊 Dashboard Operacional
 - Panorama em tempo real com KPIs essenciais
 - Filtros dinâmicos por Base, Monitor e Situação
@@ -103,6 +146,20 @@ python -m pytest -q
 - Ajustes finos de posicionamento
 
 ---
+
+## 🎯 Critérios de Classificação (Quebra de Agenda)
+
+Regras oficiais implementadas em `components/criterios.py`:
+
+| Segmento | Critério |
+|----------|----------|
+| 🏠 **Novos Domicílios** | `TIPO O.S 1` contém `ADESAO`, `ADESÃO`, `NOVO`, `NOVA`, `INSTALACAO`, `INSTALAÇÃO`, `INST`, `NOVO DOMICÍLIO`, `PRIMEIRA`, `1 VIA` ou `PRIMEIRO ACESSO` |
+| 🔄 **Migração** | `TIPO O.S 1` contém `MUDANCA DE PACOTE` **E** `HABILIDADE DE TRABALHO` contém `PON` |
+| 🏢 **PME** | É **Novos Domicílios** **E** `HABILIDADE DE TRABALHO` contém `PME` (sobrepõe ND) |
+| ⚪ **Outros** | Não atende a nenhum dos critérios acima |
+
+- 🔦 `FLAG_GPON` é derivada automaticamente: `HABILIDADE` contém `PON` → `Sim`
+- A detecção das colunas aceita variações de nome (`TIPO OS 1`, `tipo_os_1`, `HABILIDADES`, `SKILL`...)
 
 ## 🚀 Demonstração
 
@@ -201,6 +258,10 @@ Edite o `.streamlit/secrets.toml` com suas credenciais reais do Google Cloud e u
 
 Na página **Quebra de Agenda**, o vínculo de monitores usa a aba `lista_ativos` da mesma planilha da Gestão de Ativos. A aba deve conter `Login` e `Monitor` (e, opcionalmente, `Técnico`, `Base` e `Situação`). O login do arquivo operacional deve corresponder ao da lista. A leitura autenticada usa `[gcp_service_account]`; confira se a planilha foi compartilhada com o `client_email` dessa conta. Quando a base já estiver carregada, clique em **Atualizar Lista de Ativos** na barra lateral para refazer o vínculo sem enviar o arquivo novamente. A página mostra a quantidade de registros vinculados e alerta quando a aba não puder ser lida ou os logins não coincidirem.
 
+As páginas **Volumetria de O.S.** e **Quebra de Agenda** carregam sozinhas a base
+gerada pelo robô (`dados/cache`). O upload manual continua disponível como
+alternativa — veja a seção [🤖 Robô de Bases](#-robô-de-bases-volumetria--quebra-de-agenda).
+
 ### 6. Execute o Aplicativo
 \```bash
 streamlit run streamlit_app.py
@@ -238,8 +299,16 @@ totale-kpi/
 │   ├── componentes.py             # Design system (heros, cards, tabelas)
 │   ├── paleta.py                  # Cores compartilhadas
 │   ├── sidebar.py                 # Tema da barra lateral
+│   ├── calendario.py              # Dias úteis (Seg–Sáb) e feriados
+│   ├── base_operacional.py        # Pipeline único do robô (volumetria + quebra)
 │   └── criterios.py               # Regras de classificação operacional
 ├── pages/                         # Painéis e Gestão de Ativos independente
+├── scripts/
+│   └── robot_base.py              # 🤖 Robô de atualização das bases
+├── dados/                         # (não versionado)
+│   ├── entrada/                   # Bases monitoradas pelo robô
+│   ├── cache/                     # Bases tratadas + manifesto.json
+│   └── logs/                      # Log das execuções do robô
 ├── assets/
 │   ├── icons/totale.ico           # Ícone do app
 │   └── images/novo-logo-totale.png # Logo da navegação
