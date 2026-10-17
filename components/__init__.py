@@ -62,6 +62,13 @@ from components.criterios import (
     render_lista_colunas,
 )
 
+from components.robo_local import (
+    TotaleRoboEngine,
+    executar_ciclo_headless,
+    renderizar_robo_local,
+    renderizar_sidebar_robo,
+)
+
 __all__ = [
     # Base operacional (robô)
     "carregar_base_quebra",
@@ -75,6 +82,11 @@ __all__ = [
     "preparar_base_quebra",
     "preparar_base_volumetria",
     "status_base",
+    # Robô local
+    "TotaleRoboEngine",
+    "executar_ciclo_headless",
+    "renderizar_robo_local",
+    "renderizar_sidebar_robo",
     # Calendário
     "InfoCalendario",
     "carregar_feriados",

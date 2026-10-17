@@ -15,7 +15,8 @@ Como a licença não permite redistribuir os arquivos, a fonte é aplicada nesta
 
    ou na variável de ambiente `TOTALE_FONTE_HERO_URL`.
 
-2. **Arquivos auto-hospedados** nesta pasta (embutidos em base64 no CSS).
+2. **Arquivos auto-hospedados** nesta pasta ou em `fonts/` na raiz do
+   repositório (embutidos em base64 no CSS).
    O jeito mais fácil é deixar que o instalador normalize os nomes:
 
    ```bash
@@ -24,7 +25,8 @@ Como a licença não permite redistribuir os arquivos, a fonte é aplicada nesta
    python scripts/instalar_fonte_hero.py --limpar                     # desfaz
    ```
 
-   Ele aceita arquivos soltos ou a pasta inteira e grava:
+   Ele aceita arquivos soltos ou a pasta inteira e grava em `assets/fonts`
+   (o leitor também procura `fonts/` na raiz, sem precisar mover nada):
 
    ```text
    assets/fonts/oscine-regular.woff2

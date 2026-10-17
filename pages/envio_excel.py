@@ -1,11 +1,24 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
+import logging
 import time
-import requests
+from datetime import datetime, timedelta, timezone
 from io import BytesIO, StringIO
-from datetime import datetime, timezone, timedelta
-from components.componentes import aplicar_estilo, render_hero, render_kpi, render_section_header, render_dataframe
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import requests
+import streamlit as st
+
+from components.componentes import (
+    aplicar_estilo,
+    render_dataframe,
+    render_hero,
+    render_kpi,
+    render_section_header,
+)
+from components.robo_local import renderizar_robo_local
+
+logger = logging.getLogger(__name__)
 
 # ====================================================
 # BLOCO 1: CONFIGURAÇÕES GLOBAIS
@@ -271,6 +284,64 @@ render_hero(
     "Sincronização e gestão de bases operacionais",
     "Bases compartilhadas",
 )
+
+
+# ====================================================
+# BLOCO 4.1: ROBÔ LOCAL (PASTA MONITORADA)
+# ====================================================
+
+
+def _ativos_da_sessao() -> pd.DataFrame:
+    """Lista de ativos já baixada nesta sessão, sem disparar nova conexão."""
+    ativos = st.session_state.get("dados_ativos")
+    return ativos if isinstance(ativos, pd.DataFrame) else pd.DataFrame()
+
+
+def _etl_base_local(bruto: pd.DataFrame, ativos: pd.DataFrame) -> pd.DataFrame | None:
+    """Reaproveita o pipeline da Quebra para publicar uma base pronta.
+
+    A base bruta continua disponível em ``df_memoria_raw``; ``df_memoria`` recebe
+    a versão tratada que os painéis operacionais consomem.
+    """
+    if bruto is None or bruto.empty:
+        return None
+    try:
+        from components import base_operacional as bo
+
+        return bo.preparar_base_quebra(bruto, ativos)
+    except Exception:
+        # Nunca derrubar a Central por causa de uma base fora do layout da Quebra.
+        logger.exception("ETL local falhou; publicando a base bruta.")
+        return bruto
+
+
+renderizar_robo_local(
+    etl_fn=_etl_base_local,
+    gsheets_fn=_ativos_da_sessao,
+    ciclos_estabilidade=2,
+)
+
+# Prévia imediata do que o robô publicou para os demais painéis.
+df_local = st.session_state.get("df_memoria")
+if (
+    isinstance(df_local, pd.DataFrame)
+    and not df_local.empty
+    and st.session_state.get("robo_ultimo_processado_path")
+):
+    caminho_local = Path(st.session_state["robo_ultimo_processado_path"])
+    render_section_header(
+        "table_view",
+        "Prévia da base local",
+        f"{len(df_local):,} linhas".replace(",", "."),
+    )
+    st.caption(
+        f"Última leitura: `{caminho_local.name}` · "
+        f"{len(df_local.columns)} coluna(s) · publicada em `df_memoria`."
+    )
+    render_dataframe(df_local.head(50), height=340)
+
+st.divider()
+render_section_header("cloud_sync", "Bases compartilhadas", "Google Sheets")
 
 
 def executar_atualizacao() -> bool:

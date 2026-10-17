@@ -65,9 +65,9 @@ FONTE_HERO = "'Oscine', 'Oscine Trial', " + FONTE_TITULO
 
 #: Pesos procurados em ``assets/fonts`` para auto-hospedar a Oscine.
 _PESOS_FONTE_HERO: tuple = (
-    (400, ("oscine-regular", "oscine_regular", "oscine")),
+    (400, ("oscine-regular", "oscine_regular", "oscine", "oscine-book", "oscine-roman")),
     (500, ("oscine-medium", "oscine_medium")),
-    (700, ("oscine-bold", "oscine_bold")),
+    (700, ("oscine-bold", "oscine_bold", "oscine-semibold", "oscine-demi")),
     (800, ("oscine-extrabold", "oscine_extrabold", "oscine-heavy", "oscine-black")),
 )
 _FORMATOS_FONTE = {
@@ -77,6 +77,9 @@ _FORMATOS_FONTE = {
     ".ttf": "truetype",
 }
 _PASTA_FONTES = Path(__file__).resolve().parents[1] / "assets" / "fonts"
+# A pasta ``fonts`` na raiz também é aceita: alguns checkouts baixam o kit da
+# Oscine fora de ``assets`` (a licença não permite versionar os binários).
+_PASTA_FONTES_ALT = Path(__file__).resolve().parents[1] / "fonts"
 
 _GOOGLE_FONTS_URLS = (
     "https://fonts.googleapis.com/icon?family=Material+Icons",
@@ -110,12 +113,33 @@ def _url_kit_fonte_hero() -> str:
     return (url or os.getenv("TOTALE_FONTE_HERO_URL", "")).strip()
 
 
+def _pastas_de_fontes() -> tuple[Path, ...]:
+    """Pastas procuradas para auto-hospedar a Oscine, em ordem de prioridade."""
+    return (_PASTA_FONTES, _PASTA_FONTES_ALT)
+
+
+def _normalizar_nome_fonte(nome: str) -> str:
+    """Compara nomes de fonte sem depender de caixa, espaços ou separadores.
+
+    Aceita tanto os nomes canônicos do instalador (``oscine-bold.woff2``)
+    quanto os arquivos originais do kit (``Oscine Bold.otf``).
+    """
+    return re.sub(r"[^a-z0-9]+", "-", str(nome).lower()).strip("-")
+
+
 def _localizar_arquivo_fonte(pastas_nomes: tuple) -> Path | None:
-    for nome in pastas_nomes:
+    desejados = {_normalizar_nome_fonte(nome) for nome in pastas_nomes}
+    for pasta in _pastas_de_fontes():
+        if not pasta.is_dir():
+            continue
         for extensao in _FORMATOS_FONTE:
-            candidato = _PASTA_FONTES / f"{nome}{extensao}"
-            if candidato.is_file():
-                return candidato
+            for arquivo in sorted(pasta.iterdir()):
+                if (
+                    arquivo.is_file()
+                    and arquivo.suffix.lower() == extensao
+                    and _normalizar_nome_fonte(arquivo.stem) in desejados
+                ):
+                    return arquivo
     return None
 
 
@@ -129,7 +153,8 @@ def _css_fonte_hero_selfhosted(assinatura: str) -> str:
     continua dependendo da instalação local/kit web.
     """
     del assinatura  # usado apenas como chave de cache
-    if not _PASTA_FONTES.is_dir():
+    pastas = [pasta for pasta in _pastas_de_fontes() if pasta.is_dir()]
+    if not pastas:
         return ""
 
     regras = []
@@ -161,11 +186,13 @@ def _css_fonte_hero() -> str:
     try:
         assinatura = "|".join(
             sorted(
-                f"{p.name}:{p.stat().st_mtime_ns}"
-                for p in _PASTA_FONTES.glob("*")
+                f"{pasta}:{p.name}:{p.stat().st_mtime_ns}"
+                for pasta in _pastas_de_fontes()
+                if pasta.is_dir()
+                for p in pasta.glob("*")
                 if p.is_file()
             )
-        ) if _PASTA_FONTES.is_dir() else ""
+        )
         return _css_fonte_hero_selfhosted(assinatura)
     except Exception as exc:  # nunca derrubar a página por causa de fonte
         logger.warning("Falha ao preparar a fonte dos heros: %s", exc)
