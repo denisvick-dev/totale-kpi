@@ -21,6 +21,7 @@ from components.componentes import (
     render_kpi,
     render_section,
     render_section_header,
+    estilizar_dataframe,
     render_insight,
     FONTE_TEXTO,
     FONTE_TITULO,
@@ -80,17 +81,6 @@ MAPEAMENTO_PERIODOS = {
     "16:00 - 18:00": "Tarde II",
     "17:00 - 20:00": "Tarde II",
     "Imediata": "Imediata",
-}
-
-TEMAS_CARD = {
-    "amarelo":  {"fundo": "#FEF9C3", "texto": "#854D0E", "borda": "#EAB308", "titulo": "#A16207"},
-    "azul":     {"fundo": "#F0F9FF", "texto": "#0369A1", "borda": "#0EA5E9", "titulo": "#075985"},
-    "verde":    {"fundo": "#F0FDF4", "texto": "#15803D", "borda": "#22C55E", "titulo": "#166534"},
-    "roxo":     {"fundo": "#FAF5FF", "texto": "#7E22CE", "borda": "#A855F7", "titulo": "#6B21A8"},
-    "cinza":    {"fundo": "#F8FAFC", "texto": "#334155", "borda": "#94A3B8", "titulo": "#64748B"},
-    "escuro":   {"fundo": "#1E293B", "texto": "#FFFFFF", "borda": "#475569", "titulo": "#E2E8F0"},
-    "laranja":  {"fundo": "#FFF7ED", "texto": "#C2410C", "borda": "#F97316", "titulo": "#9A3412"},
-    "vermelho": {"fundo": "#FEF2F2", "texto": "#B91C1C", "borda": "#EF4444", "titulo": "#991B1B"},
 }
 
 CORES_REGIAO = {
@@ -233,20 +223,6 @@ def _injetar_css_local() -> None:
         table.rota-tab tbody tr:hover:not(.total-escalados):not(.total-montados) td
             { background: #F1F5F9; }
 
-        /* ── DataFrames estilizados ── */
-        .styled-table-wrapper {
-            background: #FFFFFF; border-radius: 0.75rem;
-            padding: 1rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            margin-bottom: 0.5rem;
-        }
-        .styled-table-title {
-            font-size: 1rem; font-weight: 700; color: #0F172A;
-            margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem;
-        }
-        .styled-table-badge {
-            font-size: 0.68rem; background: #E0F2FE; color: #0369A1;
-            padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600;
-        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -289,17 +265,7 @@ def render_dataframe_local(
     height: int | Literal["auto", "stretch", "content"] = "auto",
 ) -> None:
     badge_text = badge or f"{len(df)} registros"
-    st.markdown(
-        f"""
-        <div class="styled-table-wrapper">
-            <div class="styled-table-title">
-                <span>{icone}</span><span>{titulo}</span>
-                <span class="styled-table-badge">{badge_text}</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    render_section_header(icone, titulo, badge_text)
 
     df_display = df.copy()
     colunas_para_renomear: Dict[str, str] = {}
@@ -335,9 +301,7 @@ def render_dataframe_local(
                 pd.to_numeric(df_display[c], errors="coerce").fillna(0).astype(int)
             )
 
-    styler = df_display.style
-    if fmt:
-        styler = styler.format(fmt)
+    styler = estilizar_dataframe(df_display, fmt)
 
     if color_col and color_col in df_display.columns and color_meta is not None:
         def _cor(val: Any) -> str:
@@ -360,21 +324,7 @@ def render_dataframe_local(
 
         styler = styler.map(_cor, subset=pd.Index([color_col]))
 
-    styler = styler.set_table_styles([
-        {"selector": "th", "props": [
-            ("background-color", "#0F172A"), ("color", "#FFFFFF"),
-            ("font-size", "0.78rem"), ("font-weight", "700"),
-            ("text-transform", "uppercase"), ("letter-spacing", "0.03em"),
-            ("padding", "0.6rem 0.8rem"), ("border", "none"),
-        ]},
-        {"selector": "td", "props": [
-            ("font-size", "0.82rem"), ("padding", "0.5rem 0.8rem"),
-            ("border-bottom", "1px solid #F1F5F9"),
-        ]},
-        {"selector": "tr:hover td", "props": [("background-color", "#F8FAFC")]},
-    ])
-
-    st.dataframe(styler, use_container_width=True, hide_index=True, height="auto")
+    st.dataframe(styler, use_container_width=True, hide_index=True, height=height)
 
 
 def gerar_excel(df: pd.DataFrame, aba: str = "Dados") -> bytes:

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+from html import escape
 from typing import Any, Callable, Literal, Union
 
 import pandas as pd
@@ -299,7 +300,18 @@ def _injetar_css_global() -> None:
         border-radius: 6px !important;
     }}
 
-    /* ── Tabelas ── */
+    /* ── Tabelas: moldura consistente inclusive nos st.dataframe das páginas ── */
+    [data-testid="stDataFrame"], [data-testid="stTable"] {{
+        border: 1px solid var(--cor-borda);
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--cor-fundo-card, #FFFFFF);
+        box-shadow: 0 4px 16px rgba(10, 47, 107, 0.06);
+    }}
+    [data-testid="stDataFrame"]:hover {{
+        border-color: #C7D7E8;
+        box-shadow: 0 6px 20px rgba(10, 47, 107, 0.10);
+    }}
     .stDataFrame, .stTable,
     table, thead, tbody, tr, th, td {{
         font-family: var(--font-texto) !important;
@@ -326,92 +338,138 @@ def _injetar_css_global() -> None:
     ::-webkit-scrollbar-thumb:hover {{ background: #9CA3AF; }}
 
     /* ═══════════════════════════════════════════════════
-       HERO CORPORATIVO — Clean
+       HERO CORPORATIVO — uma identidade para todas as páginas
        ═══════════════════════════════════════════════════ */
     .hero-corp {{
-        background: {COR_PRIMARIA};
-        padding: 32px 36px;
-        border-radius: var(--radius);
-        color: #FFFFFF;
-        margin-bottom: 28px;
         position: relative;
+        isolation: isolate;
         overflow: hidden;
+        padding: clamp(26px, 3vw, 42px) clamp(24px, 3.5vw, 48px);
+        margin-bottom: 26px;
+        border-radius: 18px;
+        background: linear-gradient(115deg, #092452 0%, {COR_PRIMARIA} 56%, #164583 100%);
+        border: 1px solid rgba(255, 255, 255, .14);
+        box-shadow: 0 16px 38px rgba(10, 47, 107, .16);
+        color: #FFFFFF;
+    }}
+    .hero-corp::before {{
+        content: ''; position: absolute; z-index: -1;
+        width: 420px; height: 420px; right: -85px; top: -260px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255, 181, 95, .27), transparent 68%);
+        pointer-events: none;
     }}
     .hero-corp::after {{
-        content: '';
-        position: absolute;
-        bottom: 0; left: 0;
-        width: 100%; height: 3px;
-        background: linear-gradient(90deg, {COR_SECUNDARIA} 0%, transparent 60%);
+        content: ''; position: absolute; bottom: 0; left: 0;
+        width: 100%; height: 4px;
+        background: linear-gradient(90deg, {COR_SECUNDARIA}, #FFC182 42%, transparent 82%);
     }}
-    .hero-content {{ position: relative; z-index: 1; }}
+    .hero-content {{ position: relative; z-index: 1; max-width: 840px; }}
+    .hero-badge {{
+        display: inline-flex; align-items: center;
+        background: rgba(255, 255, 255, .12);
+        border: 1px solid rgba(255, 255, 255, .23);
+        border-radius: 999px; padding: 5px 12px;
+        font-size: 11px; font-weight: 700; letter-spacing: .08em;
+        text-transform: uppercase; color: #FFFFFF;
+        margin-bottom: 14px;
+    }}
     .hero-title {{
-        font-size: 28px;
-        font-weight: 800;
-        margin: 0;
-        letter-spacing: -0.4px;
         font-family: var(--font-titulo) !important;
-        color: #FFFFFF;
-        line-height: 1.2;
+        font-size: clamp(25px, 2.7vw, 38px);
+        font-weight: 800; letter-spacing: -.035em;
+        line-height: 1.18; margin: 0; color: #FFFFFF;
     }}
     .hero-subtitle {{
-        font-size: 14px;
-        color: rgba(255,255,255,0.72);
-        margin: 6px 0 0 0;
-        font-weight: 400;
-        line-height: 1.5;
-    }}
-    .hero-badge {{
-        display: inline-block;
-        background: rgba(255,255,255,0.12);
-        padding: 4px 12px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 600;
-        margin-top: 12px;
-        letter-spacing: 0.4px;
-        text-transform: uppercase;
-        color: rgba(255,255,255,0.85);
-        border: 1px solid rgba(255,255,255,0.15);
+        font-size: clamp(13px, 1.2vw, 15px);
+        color: #DCE7FA; line-height: 1.6;
+        max-width: 680px; margin: 12px 0 0;
     }}
 
     /* ═══════════════════════════════════════════════════
-       KPI CARDS — Minimalistas
+       CARDS — altura e tipografia consistentes entre painéis
        ═══════════════════════════════════════════════════ */
     .kpi-card {{
-        background: {COR_FUNDO_CARD};
-        border-radius: var(--radius);
-        padding: 18px 20px;
-        border: 1px solid var(--cor-borda);
-        border-left: 3px solid var(--cor-primaria);
-        transition: border-color 0.15s ease;
+        --kpi-accent: {COR_PRIMARIA}; --kpi-tint: #EAF2FC;
+        position: relative; overflow: hidden;
+        display: flex; flex-direction: column; justify-content: space-between;
+        min-height: 142px; height: 100%; box-sizing: border-box;
+        padding: 19px 21px; margin-bottom: 12px;
+        background: var(--card-surface, #FFFFFF);
+        border: 1px solid var(--card-border, {COR_BORDA});
+        border-radius: 14px;
+        box-shadow: 0 6px 18px rgba(10, 47, 107, .055);
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }}
+    .kpi-card::before {{
+        content: ''; position: absolute; inset: 0 auto 0 0;
+        width: 4px; background: var(--kpi-accent);
     }}
     .kpi-card:hover {{
-        border-color: #D1D5DB;
+        transform: translateY(-2px);
+        border-color: var(--kpi-accent);
+        box-shadow: 0 12px 26px rgba(10, 47, 107, .11);
+    }}
+    .kpi-top {{ display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }}
+    .kpi-icon {{
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 32px; height: 32px; flex: none;
+        border-radius: 10px; background: var(--kpi-tint);
+        color: var(--kpi-accent); font-size: 19px !important;
     }}
     .kpi-label {{
         font-family: var(--font-texto) !important;
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--cor-texto-3);
-        text-transform: uppercase;
-        letter-spacing: 0.6px;
-        margin-bottom: 4px;
+        font-size: 11px; font-weight: 700;
+        color: var(--card-muted, {COR_TEXTO_2});
+        text-transform: uppercase; letter-spacing: .07em;
+        line-height: 1.4; padding-top: 3px;
     }}
     .kpi-value {{
         font-family: var(--font-titulo) !important;
-        font-size: 26px;
-        font-weight: 800;
-        color: var(--cor-texto);
-        line-height: 1.15;
+        font-size: clamp(24px, 2vw, 31px);
+        font-weight: 800; letter-spacing: -.035em;
+        color: var(--card-text, {COR_TEXTO});
+        line-height: 1.15; overflow-wrap: anywhere;
         font-variant-numeric: tabular-nums;
+        margin: 10px 0 0;
     }}
     .kpi-sub {{
         font-family: var(--font-texto) !important;
-        font-size: 12px;
-        color: var(--cor-texto-3);
-        margin-top: 4px;
-        font-weight: 400;
+        font-size: 12px; line-height: 1.4;
+        color: var(--card-muted, {COR_TEXTO_2});
+        margin-top: 6px;
+    }}
+    .kpi-card--sm {{ min-height: 96px; padding: 12px 15px; margin-bottom: 6px; }}
+    .kpi-card--sm .kpi-value {{ font-size: 20px; margin-top: 5px; }}
+    .kpi-card--sm .kpi-icon {{ width: 27px; height: 27px; font-size: 16px !important; }}
+    @media (max-width: 640px) {{
+        .hero-corp {{ padding: 24px; border-radius: 14px; }}
+        .kpi-card {{ min-height: 120px; }}
+    }}
+    @media (prefers-reduced-motion: reduce) {{
+        .kpi-card {{ transition: none; }}
+        .kpi-card:hover {{ transform: none; }}
+    }}
+
+    /* Links de navegação da home: cards clicáveis com ação nativa do Streamlit. */
+    [class*="st-key-totale_painel_"] {{
+        min-height: 174px;
+        padding: 19px 20px;
+        border: 1px solid var(--cor-borda);
+        border-radius: 14px;
+        background: #FFFFFF;
+        box-shadow: 0 6px 18px rgba(10, 47, 107, .055);
+        transition: border-color .18s ease, box-shadow .18s ease;
+    }}
+    [class*="st-key-totale_painel_"]:hover {{
+        border-color: #A7C4E5;
+        box-shadow: 0 10px 24px rgba(10, 47, 107, .11);
+    }}
+    [class*="st-key-totale_painel_"] h4 {{
+        color: {COR_PRIMARIA}; font-size: 16px; margin-bottom: 3px;
+    }}
+    [class*="st-key-totale_painel_"] [data-testid="stPageLink"] a {{
+        color: {COR_PRIMARIA}; font-weight: 700;
     }}
 
     /* ═══════════════════════════════════════════════════
@@ -499,6 +557,7 @@ def _resolver_cor_tema(tema: str) -> str:
 
 
 def _markdown_inline_para_html(texto: str) -> str:
+    texto = escape(texto)
     texto = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", texto)
     texto = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<em>\1</em>", texto)
     texto = re.sub(r"`([^`]+)`", r"<code>\1</code>", texto)
@@ -508,21 +567,30 @@ def _markdown_inline_para_html(texto: str) -> str:
 # ====================================================
 # COMPONENTES REUTILIZÁVEIS
 # ====================================================
+_TEMA_TINTS = {
+    "azul": "#EAF2FC", "verde": "#E5F7EF", "vermelho": "#FDEBED",
+    "laranja": "#FFF0E1", "cinza": "#EFF2F6",
+}
+_TEMA_ICONES = {
+    "azul": "analytics", "verde": "trending_up", "vermelho": "warning",
+    "laranja": "bolt", "cinza": "bar_chart",
+}
+
+
 def render_hero(titulo: str, subtitulo: str = "", badge: str = "") -> None:
     if not titulo:
         raise ValueError("render_hero: 'titulo' não pode ser vazio.")
 
-    sub_html = f'<p class="hero-subtitle">{subtitulo}</p>' if subtitulo else ""
-    badge_html = f'<span class="hero-badge">{badge}</span>' if badge else ""
+    sub_html = f'<p class="hero-subtitle">{escape(str(subtitulo))}</p>' if subtitulo else ""
+    badge_html = f'<span class="hero-badge">{escape(str(badge))}</span>' if badge else ""
 
     st.markdown(
         f'<div class="hero-corp">'
         f'<div class="hero-content">'
-        f'<h1 class="hero-title">{titulo}</h1>'
-        f'{sub_html}'
         f'{badge_html}'
-        f'</div>'
-        f'</div>',
+        f'<h1 class="hero-title">{escape(str(titulo))}</h1>'
+        f'{sub_html}'
+        f'</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -532,24 +600,32 @@ def render_section(titulo: str, divider: str = "gray") -> None:
 
 
 def render_section_header(icon: str, title: str, badge: str = "") -> None:
-    """
-    Renderiza um cabeçalho de seção com ícone do Material Symbols.
-    """
+    """Cabeçalho de seção com Material Symbol ou emoji, conforme o ícone recebido."""
     if not title:
         raise ValueError("render_section_header: 'title' vazio.")
-    
-    badge_html = f'<span class="section-badge">{badge}</span>' if badge else ""
-    
-    # Adicionada a classe material-symbols-rounded para desenhar os ícones corretamente
+
+    badge_html = f'<span class="section-badge">{escape(str(badge))}</span>' if badge else ""
+    icon_class = "material-symbols-rounded" if re.fullmatch(r"[a-z_]+", icon) else ""
     st.markdown(
-        f"""
-        <div class="section-header">
-            <span class="material-symbols-rounded" style="font-size:22px;line-height:1;color:{COR_SECUNDARIA};">{icon}</span>
-            <h2 class="section-title">{title}</h2>
-            {badge_html}
-        </div>
-        """,
+        f'<div class="section-header">'
+        f'<span class="{icon_class}" style="font-size:22px;line-height:1;color:{COR_SECUNDARIA};" '
+        f'aria-hidden="true">{escape(icon)}</span>'
+        f'<h2 class="section-title">{escape(title)}</h2>{badge_html}</div>',
         unsafe_allow_html=True,
+    )
+
+
+def _html_kpi(label: str, valor: object, sub: str, tema: TemaKPI, pequeno: bool) -> str:
+    cor = _resolver_cor_tema(tema)
+    tint = _TEMA_TINTS.get(tema, _TEMA_TINTS["azul"])
+    icone = _TEMA_ICONES.get(tema, _TEMA_ICONES["azul"])
+    tamanho = " kpi-card--sm" if pequeno else ""
+    sub_html = f'<div class="kpi-sub">{escape(str(sub))}</div>' if sub else ""
+    return (
+        f'<div class="kpi-card{tamanho}" style="--kpi-accent:{cor};--kpi-tint:{tint};">'
+        f'<div class="kpi-top"><div class="kpi-label">{escape(str(label))}</div>'
+        f'<span class="material-symbols-rounded kpi-icon" aria-hidden="true">{icone}</span></div>'
+        f'<div class="kpi-value">{escape(str(valor))}</div>{sub_html}</div>'
     )
 
 
@@ -560,17 +636,7 @@ def render_kpi(
     sub: str = "",
     tema: TemaKPI = "azul",
 ) -> None:
-    cor = _resolver_cor_tema(tema)
-    col.markdown(
-        f"""
-        <div class="kpi-card" style="border-left-color:{cor};">
-            <div class="kpi-label">{label}</div>
-            <div class="kpi-value" style="color:{cor};">{valor}</div>
-            <div class="kpi-sub">{sub}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    col.markdown(_html_kpi(label, valor, sub, tema, pequeno=False), unsafe_allow_html=True)
 
 
 def render_kpi_sm(
@@ -580,25 +646,16 @@ def render_kpi_sm(
     sub: str = "",
     tema: TemaKPI = "azul",
 ) -> None:
-    cor = _resolver_cor_tema(tema)
-    container.markdown(
-        f"""
-        <div style="background:{COR_FUNDO_CARD};border-radius:6px;
-             padding:10px 14px;border-left:2px solid {cor};
-             margin-bottom:6px;border:1px solid {COR_BORDA};
-             border-left:2px solid {cor};">
-            <div style="font-family:{FONTE_TEXTO};font-size:10px;
-                 color:{COR_TEXTO_3};text-transform:uppercase;
-                 letter-spacing:0.5px;font-weight:600;">{label}</div>
-            <div style="font-family:{FONTE_TITULO};font-size:18px;
-                 color:{cor};font-weight:800;line-height:1.2;
-                 margin-top:2px;font-variant-numeric:tabular-nums;">{valor}</div>
-            <div style="font-family:{FONTE_TEXTO};font-size:11px;
-                 color:{COR_TEXTO_3};margin-top:2px;">{sub}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    container.markdown(_html_kpi(label, valor, sub, tema, pequeno=True), unsafe_allow_html=True)
+
+
+def render_painel_link(caminho: str, titulo: str, descricao: str) -> None:
+    """Card de navegação sem HTML envolvendo widgets interativos."""
+    chave = re.sub(r"[^a-z0-9]+", "_", caminho.lower()).strip("_")
+    with st.container(key=f"totale_painel_{chave}"):
+        st.markdown(f"#### {titulo}")
+        st.caption(descricao)
+        st.page_link(caminho, label="Abrir painel", icon="➡️")
 
 
 def render_insight(msg: str, tipo: TipoInsight = "info") -> None:
@@ -626,6 +683,28 @@ def render_insight(msg: str, tipo: TipoInsight = "info") -> None:
     )
 
 
+def estilizar_dataframe(
+    df: pd.DataFrame, fmt: FmtDict | None = None
+) -> pd.io.formats.style.Styler:
+    """Faixas leves e totais destacados, sem alterar os valores exportáveis do DataFrame."""
+    styler = df.reset_index(drop=True).style
+    if fmt:
+        formatos = {c: f for c, f in fmt.items() if c in df.columns}
+        styler = styler.format(formatos)  # type: ignore[arg-type]
+    # A aplicação célula a célula em bases grandes tornaria a navegação lenta.
+    if len(df) <= 1000:
+        def faixa(linha: pd.Series) -> list[str]:
+            total = str(linha.iloc[0]).strip().casefold().startswith("total geral")
+            fundo = "#EAF2FC" if total else ("#F5F8FC" if int(linha.name) % 2 else "#FFFFFF")
+            estilo = f"background-color: {fundo};"
+            if total:
+                estilo += "font-weight: 700;"
+            return [estilo] * len(linha)
+
+        styler = styler.apply(faixa, axis=1)
+    return styler
+
+
 def render_dataframe(
     df: pd.DataFrame,
     titulo: str = "",
@@ -644,25 +723,21 @@ def render_dataframe(
     if titulo:
         st.markdown(
             f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">'
-            f'<span class="material-symbols-rounded" style="font-size:18px;color:{COR_SECUNDARIA};">{icone}</span>'
-            f'<span style="font-size:14px;font-weight:700;color:{COR_TEXTO};">{titulo}</span>'
+            f'<span class="material-symbols-rounded" style="font-size:18px;color:{COR_SECUNDARIA};">{escape(icone)}</span>'
+            f'<span style="font-size:14px;font-weight:700;color:{COR_TEXTO};">{escape(titulo)}</span>'
             f'</div>',
             unsafe_allow_html=True,
         )
 
-    if fmt:
-        fmt_valido: FmtDict = {c: f for c, f in fmt.items() if c in df.columns}
-        if fmt_valido:
-            try:
-                st.dataframe(
-                    df.style.format(fmt_valido),  # type: ignore[arg-type]
-                    height=height,
-                    use_container_width=True,
-                    hide_index=True,
-                    **kwargs,
-                )
-                return
-            except Exception:
-                logger.exception("Falha ao formatar. Exibindo sem formatação.")
-
-    st.dataframe(df, height=height, use_container_width=True, hide_index=True, **kwargs)
+    altura = min(height, 40 + 36 * len(df))
+    try:
+        st.dataframe(
+            estilizar_dataframe(df, fmt),
+            height=altura,
+            use_container_width=True,
+            hide_index=True,
+            **kwargs,
+        )
+    except Exception:
+        logger.exception("Falha ao estilizar tabela. Exibindo dados sem formatação.")
+        st.dataframe(df, height=altura, use_container_width=True, hide_index=True, **kwargs)

@@ -1,8 +1,7 @@
 """
 ═══════════════════════════════════════════════════════════════════════════════
  GESTÃO DE ATIVOS TOTALE — V 4.0.0
- LEITURA : streamlit-gsheets  (conn.read  — sem erro 404)
- ESCRITA : gspread direto      (sem erro 400)
+ LEITURA/ESCRITA: gspread com conta de serviço
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
@@ -19,7 +18,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 from google.oauth2.service_account import Credentials
-from streamlit_gsheets import GSheetsConnection
+
+from components.componentes import aplicar_estilo, render_hero, render_kpi, render_section_header
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # [0] SAFE — converte qualquer valor para str limpa
@@ -218,8 +218,8 @@ class Config:
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # [3] REPOSITÓRIO
-#   LEITURA  → streamlit-gsheets  (conn.read)
-#   ESCRITA  → gspread direto     (_gravar_gspread)
+#   LEITURA  → gspread direto (_fetch)
+#   ESCRITA  → gspread direto (_gravar_gspread)
 # ═══════════════════════════════════════════════════════════════════════════════
 @st.cache_data(ttl=Config.CACHE_TTL, show_spinner=False)
 def _fetch(chave: str, colunas: Tuple[str, ...]) -> pd.DataFrame:
@@ -416,34 +416,33 @@ class DS:
     }
     @classmethod
     def css(cls,m="light"):
+        aplicar_estilo()
         t=cls._T.get(m,cls._T["light"])
         st.markdown(f"""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Manrope:wght@800&display=swap');
         html,body,[data-testid="stAppViewContainer"]{{background:{t['f']}!important;font-family:'Inter',sans-serif!important;color:{t['t']}!important;}}
         [data-testid="stSidebar"]{{background:{t['su']}!important;border-right:1px solid {t['b']};}}
-        .kpi{{background:{t['su']};padding:1.2rem 1.4rem;border-radius:14px;border-left:5px solid {t['p']};
-              box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .15s;margin-bottom:.5rem;}}
-        .kpi:hover{{transform:translateY(-2px);}}
-        .kpi.v{{border-left-color:{t['s']};}} .kpi.a{{border-left-color:{t['a']};}} .kpi.av{{border-left-color:{t['av']};}}
-        .kpi-l{{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.55;}}
-        .kpi-n{{font-size:1.9rem;font-weight:800;font-family:'Manrope',sans-serif;color:{t['p']};}}
-        .kpi-s{{font-size:.72rem;opacity:.45;margin-top:.2rem;}}
-        .hero{{background:linear-gradient(120deg,#0F172A 0%,#1E3A5F 55%,#1E40AF 100%);padding:2rem 2.5rem;border-radius:18px;color:#fff;margin-bottom:1.6rem;box-shadow:0 10px 28px rgba(0,0,0,.22);}}
-        .hero h1{{margin:0;font-size:1.85rem;font-family:'Manrope',sans-serif;font-weight:800;}}
-        .hero p{{opacity:.75;margin:.4rem 0 0;}} .hero-b{{display:inline-block;background:rgba(255,255,255,.15);padding:3px 14px;border-radius:20px;font-size:11px;font-weight:700;margin-top:.6rem;}}
-        .sec{{font-family:'Manrope',sans-serif;font-weight:800;font-size:1.15rem;color:{t['p']};margin:1.2rem 0 .7rem;}}
+        .stApp{{--card-surface:{t['su']};--card-text:{t['t']};--card-muted:{t['p']};--card-border:{t['b']};}}
+        .section-title{{color:{t['t']}!important;}}
+        .section-badge{{background:{t['su']};border-color:{t['b']};color:{t['t']};}}
+        [data-testid="stDataFrame"]{{background:{t['su']};border:1px solid {t['b']};border-radius:10px;
+            overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08);}}
+        [data-testid="stDataFrame"]:hover{{border-color:{t['p']};}}
         ::-webkit-scrollbar{{width:5px;height:5px;}} ::-webkit-scrollbar-thumb{{background:{t['b']};border-radius:3px;}}
         </style>""",unsafe_allow_html=True)
 
     @staticmethod
-    def hero(t,s,b=""): st.markdown(f'<div class="hero"><h1>{t}</h1><p>{s}</p><span class="hero-b">{b}</span></div>',unsafe_allow_html=True)
+    def hero(t,s,b=""):
+        render_hero(t,s,b)
+
     @staticmethod
-    def sec(i,t): st.markdown(f'<div class="sec">{i}&nbsp;{t}</div>',unsafe_allow_html=True)
+    def sec(i,t):
+        render_section_header(i,t)
+
     @staticmethod
     def kpi(col,l,v,s="",tema=""):
-        c={"v":"v","a":"a","av":"av"}.get(tema,"")
-        col.markdown(f'<div class="kpi {c}"><div class="kpi-l">{l}</div><div class="kpi-n">{v}</div><div class="kpi-s">{s}</div></div>',unsafe_allow_html=True)
+        render_kpi(col,l,v,s,{"v":"verde","a":"vermelho","av":"laranja"}.get(tema,"azul"))
+
     @staticmethod
     def vazio(m="Sem dados."): st.markdown(f'<div style="text-align:center;padding:3rem;opacity:.38;"><div style="font-size:3rem">📭</div><p>{m}</p></div>',unsafe_allow_html=True)
     @staticmethod
