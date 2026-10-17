@@ -36,6 +36,30 @@ O **Totale KPI** é uma plataforma corporativa completa desenvolvida em **Stream
 
 ## ✨ Funcionalidades
 
+### 🎨 Aparência TOTALE
+Na barra lateral, abra **Aparência TOTALE → Cor da barra lateral** e escolha:
+- **Prata TOTALE** (padrão): acabamento prata com detalhes institucionais.
+- **Azul institucional**: fundo azul com textos claros.
+- **Laranja TOTALE**: tons suaves de laranja com textos escuros.
+- **Claro corporativo**: fundo claro com destaques em azul.
+
+A escolha vale para todas as páginas durante a sessão atual, sem alterar as
+cores semânticas dos indicadores ou os dados e filtros dos painéis.
+
+Os temas, o seletor e o CSS da barra lateral ficam em `components/sidebar.py`.
+As cores compartilhadas ficam em `components/paleta.py`, evitando dependências
+circulares com `componentes.py`. O seletor é renderizado uma única vez em
+`streamlit_app.py`, antes de `aplicar_estilo()`. As páginas continuam chamando
+apenas `aplicar_estilo()`.
+Para scripts independentes, importe `render_seletor_tema_sidebar` de
+`components.sidebar` e chame essa função após
+`st.set_page_config()` e antes de `aplicar_estilo()`.
+
+Teste de regressão (com as dependências do projeto e `pytest` instalados):
+```bash
+python -m pytest -q
+```
+
 ### 📊 Dashboard Operacional
 - Panorama em tempo real com KPIs essenciais
 - Filtros dinâmicos por Base, Monitor e Situação
