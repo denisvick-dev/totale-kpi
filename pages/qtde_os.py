@@ -4,18 +4,15 @@ Arquivo: pages/producao.py
 """
 from __future__ import annotations
 
-import calendar
-import datetime
-from dataclasses import dataclass
 from typing import Any, Optional
 
-import numpy as np
 import pandas as pd
 import streamlit as st
 
 # ====================================================
 # IMPORTAÇÃO DOS COMPONENTES CORPORATIVOS
 # ====================================================
+from components.calendario import InfoCalendario
 from components.componentes import (
     aplicar_estilo,
     render_hero,
@@ -35,43 +32,10 @@ st.set_page_config(
 
 
 # ====================================================
-# 2. CÁLCULO DE CALENDÁRIO (Exclui apenas domingos)
+# 2. CALENDÁRIO (Seg–Sáb, sem domingos nem feriados)
 # ====================================================
-@dataclass
-class InfoCalendario:
-    """Informações de dias úteis (Seg–Sáb) do mês de referência."""
-
-    ano: int
-    mes: int
-    data_ref: datetime.date
-    total_dias_uteis: int
-    dias_passados: int
-    dias_faltantes: int
-
-    @classmethod
-    def calcular(cls, data_referencia: Optional[datetime.date] = None) -> "InfoCalendario":
-        data_ref = data_referencia or datetime.date.today()
-        ano, mes = data_ref.year, data_ref.month
-        _, ultimo_dia_num = calendar.monthrange(ano, mes)
-
-        primeiro = np.datetime64(datetime.date(ano, mes, 1))
-        ultimo   = np.datetime64(datetime.date(ano, mes, ultimo_dia_num))
-        ref      = np.datetime64(data_ref)
-
-        mask = "1111110"  # Segunda a Sábado ativos, Domingo (0) inativo
-        total = int(np.busday_count(primeiro, ultimo + np.timedelta64(1, "D"), weekmask=mask))
-        passados = int(np.busday_count(primeiro, ref + np.timedelta64(1, "D"), weekmask=mask))
-        faltantes = max(0, total - passados)
-
-        return cls(
-            ano=ano,
-            mes=mes,
-            data_ref=data_ref,
-            total_dias_uteis=total,
-            dias_passados=passados,
-            dias_faltantes=faltantes,
-        )
-
+# Regra única do projeto: InfoCalendario vem de components/calendario.py e
+# desconta domingos e feriados (nacionais + estaduais de SP).
 
 # ====================================================
 # 3. PROCESSAMENTO DE DADOS
@@ -239,8 +203,14 @@ def main() -> None:
     cal = InfoCalendario.calcular(data_ref)
     
     # Exibe um alerta dinâmico com o status do mês
+    feriados_txt = ", ".join(
+        f"{d.strftime('%d/%m')} ({nome})" for d, nome in cal.feriados_restantes[:4]
+    )
     render_insight(
-        f"**Status do Mês:** Já se passaram **{cal.dias_passados} dias úteis** e restam **{cal.dias_faltantes} dias úteis** para o fechamento.", 
+        f"**Status do Mês ({cal.nome_mes}):** Já se passaram **{cal.dias_passados} dias úteis** "
+        f"e restam **{cal.dias_faltantes} dias úteis** para o fechamento "
+        f"(segunda a sábado, sem domingos nem feriados)."
+        + (f" Feriados restantes: {feriados_txt}." if feriados_txt else ""),
         tipo="info"
     )
 

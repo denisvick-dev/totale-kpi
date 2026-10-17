@@ -1,0 +1,6 @@
+{
+  "_como_usar": "Copie as datas para o nível principal (sem o _) para valerem de verdade. Formato: {\"2026-07-10\": \"Feriado municipal\"}. Chaves iniciadas por _ são ignoradas e servem só de exemplo.",
+  "_exemplo_nao_aplicado": {
+    "2026-07-10": "Feriado municipal (exemplo)"
+  }
+}

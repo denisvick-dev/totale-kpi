@@ -1,0 +1,328 @@
+"""Regressões do robô de bases (pasta monitorada → cache → páginas)."""
+
+import os
+import time
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from components import base_operacional as bo
+from scripts import robot_base
+
+
+#: Padrão de 6 linhas: 2 ND, 2 Migração, 1 PME e 1 Outros.
+PADRAO_LINHAS = [
+    ("EXECUTADA", "ADESAO", "HFC(1/100)", "SAO PAULO"),
+    ("EXECUTADA", "ADESAO", "HFC(1/100)", "SAO PAULO"),
+    ("EXECUTADA", "MUDANCA DE PACOTE", "PON(1/100)", "GUARULHOS"),
+    ("NÃO EXECUTADA", "MUDANCA DE PACOTE", "PON(1/100)", "GUARULHOS"),
+    ("NÃO EXECUTADA", "ADESAO", "PME(1/100)", "DIADEMA"),
+    ("PENDENTE", "REPARO", "HFC(1/100)", "MAUA"),
+]
+
+
+def base_sintetica(caminho: Path, registros: int = 6) -> Path:
+    """Cria uma base de teste (ciclo do padrão + 1 linha sem contrato)."""
+    linhas = []
+    for i in range(registros):
+        status, tipo, habilidade, cidade = PADRAO_LINHAS[i % len(PADRAO_LINHAS)]
+        linhas.append(
+            {
+                "CONTRATO": str(1000 + i),
+                "LOGIN DO TÉCNICO": f"login{i}",
+                "TÉCNICO": "TEC A",
+                "MONITOR": "MON A",
+                "STATUS DA ATIVIDADE": "ATIVA",
+                "STATUS DA O.S 1": status,
+                "TIPO O.S 1": tipo,
+                "HABILIDADE DE TRABALHO": habilidade,
+                "CIDADE": cidade,
+                "TOTAL DE TAREFAS": 1,
+            }
+        )
+
+    # Última linha sem contrato: precisa ser descartada no tratamento.
+    status, tipo, habilidade, cidade = PADRAO_LINHAS[0]
+    linhas.append(
+        {
+            "CONTRATO": "",
+            "LOGIN DO TÉCNICO": "sem.contrato",
+            "TÉCNICO": "TEC B",
+            "MONITOR": "MON B",
+            "STATUS DA ATIVIDADE": "ATIVA",
+            "STATUS DA O.S 1": status,
+            "TIPO O.S 1": tipo,
+            "HABILIDADE DE TRABALHO": habilidade,
+            "CIDADE": cidade,
+            "TOTAL DE TAREFAS": 1,
+        }
+    )
+
+    pd.DataFrame(linhas).to_excel(caminho, index=False)
+    return caminho
+
+
+@pytest.fixture()
+def ambiente(tmp_path, monkeypatch):
+    """Isola o robô em pastas temporárias e desliga a busca na nuvem."""
+    entrada = tmp_path / "entrada"
+    cache = tmp_path / "cache"
+    entrada.mkdir()
+    cache.mkdir()
+
+    ativos = pd.DataFrame(
+        {
+            "Login": ["LOGIN0", "LOGIN1"],
+            "Técnico": ["TEC SHEETS", "TEC SHEETS 2"],
+            "Monitor": ["MON SHEETS", "MON SHEETS"],
+        }
+    )
+    ativos.attrs["fonte_ativos"] = "Google Sheets (autenticado)"
+    monkeypatch.setattr(bo, "carregar_lista_ativos", lambda *a, **k: ativos)
+
+    return {"entrada": entrada, "cache": cache, "ativos": ativos}
+
+
+def test_localiza_o_arquivo_mais_recente(ambiente):
+    antigo = base_sintetica(ambiente["entrada"] / "antiga.xlsx")
+    os.utime(antigo, (time.time() - 500, time.time() - 500))
+    novo = base_sintetica(ambiente["entrada"] / "nova.xlsx")
+
+    assert bo.localizar_base(ambiente["entrada"]) == novo
+
+
+def test_sem_base_na_pasta_o_robo_avisa(ambiente):
+    resultado = bo.gerar_bases(
+        pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
+    )
+
+    assert resultado.ok is False
+    assert resultado.manifesto["status"] == "sem_arquivo"
+    assert resultado.volumetria is None
+
+
+def test_robo_gera_as_duas_bases_e_grava_cache(ambiente):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+
+    resultado = bo.gerar_bases(
+        pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
+    )
+
+    assert resultado.ok is True
+    assert (ambiente["cache"] / "volumetria.pkl").exists()
+    assert (ambiente["cache"] / "quebra.pkl").exists()
+    assert (ambiente["cache"] / "manifesto.json").exists()
+
+    # 7 registros − 1 contrato vazio = 6
+    assert len(resultado.volumetria) == 6
+    assert len(resultado.quebra) == 6
+
+
+def test_quebra_aplica_os_criterios_oficiais(ambiente):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+    resultado = bo.gerar_bases(
+        pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
+    )
+
+    quebra = resultado.quebra
+    segmentos = quebra["TIPO_SERVICO"].value_counts().to_dict()
+
+    assert segmentos["Novos Domicílios"] == 2   # ADESAO + HFC
+    assert segmentos["Migração"] == 2           # MUDANCA DE PACOTE + PON
+    assert segmentos["PME"] == 1                # ADESAO + PME
+    assert segmentos["Outros"] == 1             # REPARO
+    assert quebra.attrs["diag_susp"] == 0
+    assert quebra.attrs["diag_inv"] == 1
+    assert quebra.attrs["diag_vinculados"] == 2
+
+
+def test_volumetria_devolve_status_e_regiao(ambiente):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+    resultado = bo.gerar_bases(
+        pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
+    )
+
+    volumetria = resultado.volumetria
+    assert set(volumetria["STATUS CONTRATO"].unique()) == {
+        "Executada",
+        "Não Executada",
+        "Pendente",
+    }
+    assert "LESTE" in set(volumetria["REGIÃO"])
+    assert "GRU" in set(volumetria["REGIÃO"])
+    assert "ABCDM" in set(volumetria["REGIÃO"])
+    # Técnico/Monitor vindos da lista de ativos prevalecem sobre o arquivo
+    assert "TEC SHEETS" in set(volumetria["TÉCNICO"])
+
+
+def test_cache_e_reaproveitado_quando_o_arquivo_nao_muda(ambiente):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+
+    primeiro = bo.gerar_bases(
+        pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
+    )
+    segundo = bo.gerar_bases(
+        pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
+    )
+
+    assert primeiro.do_cache is False
+    assert segundo.do_cache is True
+    assert segundo.manifesto["hash"] == primeiro.manifesto["hash"]
+    assert len(segundo.volumetria) == len(primeiro.volumetria)
+
+
+def test_arquivo_novo_reprocessa(ambiente):
+    antigo = base_sintetica(ambiente["entrada"] / "base.xlsx", registros=6)
+    os.utime(antigo, (time.time() - 300, time.time() - 300))
+    bo.gerar_bases(pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"])
+
+    base_sintetica(ambiente["entrada"] / "base_nova.xlsx", registros=12)
+    resultado = bo.gerar_bases(
+        pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
+    )
+
+    assert resultado.do_cache is False
+    assert len(resultado.volumetria) == 12
+
+
+def test_status_base_reflete_o_cache(ambiente):
+    assert bo.status_base(ambiente["cache"])["status"] == "sem_cache"
+
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+    bo.gerar_bases(pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"])
+
+    status = bo.status_base(ambiente["cache"])
+    assert status["status"] == "ok"
+    assert status["arquivo"] == "base.xlsx"
+    assert status["arquivos"]["quebra.pkl"]["registros"] == 6
+
+
+def test_cli_do_robo_gera_o_cache(ambiente, monkeypatch):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+    monkeypatch.setattr(robot_base, "ARQUIVO_LOG", ambiente["cache"] / "logs" / "robo.log")
+
+    codigo = robot_base.main(
+        [
+            "--pasta-entrada",
+            str(ambiente["entrada"]),
+            "--pasta-cache",
+            str(ambiente["cache"]),
+        ]
+    )
+
+    assert codigo == 0
+    assert bo.status_base(ambiente["cache"])["status"] == "ok"
+
+
+def test_cli_status_e_limpar_cache(ambiente, monkeypatch, capsys):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+    monkeypatch.setattr(robot_base, "ARQUIVO_LOG", ambiente["cache"] / "logs" / "robo.log")
+    robot_base.main(
+        ["--pasta-entrada", str(ambiente["entrada"]), "--pasta-cache", str(ambiente["cache"])]
+    )
+
+    assert robot_base.main(["--pasta-cache", str(ambiente["cache"]), "--status"]) == 0
+    assert "base.xlsx" in capsys.readouterr().out
+
+    assert robot_base.main(["--pasta-cache", str(ambiente["cache"]), "--limpar-cache"]) == 0
+    assert not (ambiente["cache"] / "manifesto.json").exists()
+
+
+def test_pasta_padrao_do_robo_e_o_downloads(monkeypatch):
+    monkeypatch.delenv("TOTALE_BASE_ENTRADA", raising=False)
+
+    assert bo.config().pasta_entrada == bo.pasta_downloads()
+
+
+def test_downloads_no_windows(monkeypatch, tmp_path):
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+
+    assert bo._caminho_downloads(sistema="nt", home=tmp_path / "nao-usado") == str(
+        tmp_path / "Downloads"
+    )
+
+
+def test_downloads_respeita_xdg_no_linux(tmp_path):
+    home = tmp_path / "home"
+    (home / ".config").mkdir(parents=True)
+    (home / ".config" / "user-dirs.dirs").write_text(
+        'XDG_DOWNLOAD_DIR="$HOME/MeusDownloads"\n', encoding="utf-8"
+    )
+
+    assert bo._caminho_downloads(sistema="posix", home=home) == str(
+        home / "MeusDownloads"
+    )
+
+
+def test_downloads_sem_xdg_cai_no_home(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+
+    assert bo._caminho_downloads(sistema="posix", home=home) == str(home / "Downloads")
+
+
+def test_pasta_downloads_devolve_path():
+    assert isinstance(bo.pasta_downloads(), Path)
+
+
+def test_por_padrao_nao_varre_subpastas(ambiente):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+    subpasta = ambiente["entrada"] / "subpasta"
+    subpasta.mkdir()
+    base_sintetica(subpasta / "base_sub.xlsx")
+    os.utime(subpasta / "base_sub.xlsx", (time.time() + 500, time.time() + 500))
+
+    assert bo.config().recursivo is False
+    assert bo.localizar_base(ambiente["entrada"]).name == "base.xlsx"
+    assert bo.localizar_base(ambiente["entrada"], recursivo=True).name == "base_sub.xlsx"
+
+
+def test_ignora_temporarios_do_excel(ambiente):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+    temporario = ambiente["entrada"] / "~$base.xlsx"
+    temporario.write_bytes(b"")
+    os.utime(temporario, (time.time() + 500, time.time() + 500))
+
+    assert bo.localizar_base(ambiente["entrada"]).name == "base.xlsx"
+
+
+def test_instalador_de_fonte_normaliza_os_pesos(tmp_path):
+    from scripts import instalar_fonte_hero
+
+    origem = tmp_path / "origem"
+    origem.mkdir()
+    for nome in ("Oscine-Regular.otf", "Oscine-Bold.otf", "Oscine-ExtraBold.otf"):
+        (origem / nome).write_bytes(b"fonte")
+
+    destino = tmp_path / "assets" / "fonts"
+    instalados = instalar_fonte_hero.instalar([origem], destino=destino)
+
+    assert sorted(p.name for _, p in instalados) == [
+        "oscine-bold.otf",
+        "oscine-extrabold.otf",
+        "oscine-regular.otf",
+    ]
+    assert (destino / "oscine-regular.otf").read_bytes() == b"fonte"
+    assert instalar_fonte_hero.detectar_peso("Oscine-Black.ttf") == 800
+    assert instalar_fonte_hero.detectar_peso("Oscine-Medium.ttf") == 500
+    assert instalar_fonte_hero.detectar_peso("Oscine.ttf") == 400
+
+
+def test_instalador_lista_sem_copiar(tmp_path):
+    from scripts import instalar_fonte_hero
+
+    origem = tmp_path / "origem"
+    origem.mkdir()
+    (origem / "Oscine-Bold.otf").write_bytes(b"fonte")
+    destino = tmp_path / "assets" / "fonts"
+
+    planejado = instalar_fonte_hero.instalar(
+        [origem], destino=destino, simular=True
+    )
+
+    assert len(planejado) == 1
+    assert not destino.exists()
+
+    # e depois limpa o que existir
+    assert instalar_fonte_hero.limpar(destino=destino) == 0

@@ -11,9 +11,12 @@ Uso em qualquer página:
 
 from __future__ import annotations
 
+import base64
 import logging
+import os
 import re
 from html import escape
+from pathlib import Path
 from typing import Any, Callable, Literal, Union
 
 import pandas as pd
@@ -54,6 +57,27 @@ FONTE_TITULO = "'Manrope', 'Segoe UI', Arial, sans-serif"
 FONTE_TEXTO = "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 FONTE_CODIGO = "'JetBrains Mono', Consolas, 'Courier New', monospace"
 
+#: Fonte exclusiva dos títulos dos heros.
+#: Se a Oscine não estiver disponível — ativa no computador (Adobe Fonts /
+#: Creative Cloud), kit web configurado ou arquivo em ``assets/fonts`` —,
+#: a cadeia anterior (Manrope → Segoe UI) assume automaticamente.
+FONTE_HERO = "'Oscine', 'Oscine Trial', " + FONTE_TITULO
+
+#: Pesos procurados em ``assets/fonts`` para auto-hospedar a Oscine.
+_PESOS_FONTE_HERO: tuple = (
+    (400, ("oscine-regular", "oscine_regular", "oscine")),
+    (500, ("oscine-medium", "oscine_medium")),
+    (700, ("oscine-bold", "oscine_bold")),
+    (800, ("oscine-extrabold", "oscine_extrabold", "oscine-heavy", "oscine-black")),
+)
+_FORMATOS_FONTE = {
+    ".woff2": "woff2",
+    ".woff": "woff",
+    ".otf": "opentype",
+    ".ttf": "truetype",
+}
+_PASTA_FONTES = Path(__file__).resolve().parents[1] / "assets" / "fonts"
+
 _GOOGLE_FONTS_URLS = (
     "https://fonts.googleapis.com/icon?family=Material+Icons",
     "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded"
@@ -64,6 +88,88 @@ _GOOGLE_FONTS_URLS = (
     "&family=Manrope:wght@400;500;600;700;800"
     "&family=JetBrains+Mono:wght@400;500&display=swap",
 )
+
+
+def _url_kit_fonte_hero() -> str:
+    """
+    URL do kit da Oscine (Adobe Fonts/Typekit ou CDN própria).
+
+    Configure em ``.streamlit/secrets.toml``::
+
+        [tipografia]
+        fonte_hero_url = "https://use.typekit.net/XXXXXXX.css"
+
+    ou na variável de ambiente ``TOTALE_FONTE_HERO_URL``.
+    """
+    url = ""
+    try:
+        secao = st.secrets.get("tipografia", {})
+        url = str(secao.get("fonte_hero_url", "") or "")
+    except Exception:
+        url = ""
+    return (url or os.getenv("TOTALE_FONTE_HERO_URL", "")).strip()
+
+
+def _localizar_arquivo_fonte(pastas_nomes: tuple) -> Path | None:
+    for nome in pastas_nomes:
+        for extensao in _FORMATOS_FONTE:
+            candidato = _PASTA_FONTES / f"{nome}{extensao}"
+            if candidato.is_file():
+                return candidato
+    return None
+
+
+@st.cache_data(show_spinner=False)
+def _css_fonte_hero_selfhosted(assinatura: str) -> str:
+    """
+    Gera os ``@font-face`` da Oscine a partir de ``assets/fonts``.
+
+    Os arquivos são embutidos em base64 (o Streamlit Cloud não serve arquivos
+    estáticos por padrão). Se a pasta estiver vazia, nada é gerado e a fonte
+    continua dependendo da instalação local/kit web.
+    """
+    del assinatura  # usado apenas como chave de cache
+    if not _PASTA_FONTES.is_dir():
+        return ""
+
+    regras = []
+    for peso, nomes in _PESOS_FONTE_HERO:
+        arquivo = _localizar_arquivo_fonte(nomes)
+        if arquivo is None:
+            continue
+        formato = _FORMATOS_FONTE.get(arquivo.suffix.lower(), "woff2")
+        try:
+            dados = base64.b64encode(arquivo.read_bytes()).decode("ascii")
+        except OSError as exc:
+            logger.warning("Não foi possível ler a fonte %s: %s", arquivo, exc)
+            continue
+        regras.append(
+            "@font-face {{ font-family: 'Oscine'; font-style: normal; "
+            "font-weight: {peso}; font-display: swap; "
+            "src: url(data:font/{formato};base64,{dados}) "
+            "format('{formato}'); }}".format(peso=peso, formato=formato, dados=dados)
+        )
+    return "\n".join(regras)
+
+
+def _css_fonte_hero() -> str:
+    """CSS que disponibiliza a Oscine para os títulos dos heros."""
+    kit = _url_kit_fonte_hero()
+    if kit:
+        return f"@import url('{kit}');"
+
+    try:
+        assinatura = "|".join(
+            sorted(
+                f"{p.name}:{p.stat().st_mtime_ns}"
+                for p in _PASTA_FONTES.glob("*")
+                if p.is_file()
+            )
+        ) if _PASTA_FONTES.is_dir() else ""
+        return _css_fonte_hero_selfhosted(assinatura)
+    except Exception as exc:  # nunca derrubar a página por causa de fonte
+        logger.warning("Falha ao preparar a fonte dos heros: %s", exc)
+        return ""
 
 
 # ====================================================
@@ -211,9 +317,13 @@ def _build_links_html() -> str:
 # ====================================================
 def _injetar_css_global() -> None:
     links_html = _build_links_html()
+    css_fonte_hero = _css_fonte_hero()
 
     css = f"""{links_html}
     <style>
+    /* ── Fonte dos títulos dos heros (Oscine) ── */
+    {css_fonte_hero}
+
     /* ── Font-face fallback ── */
     @font-face {{
         font-family: 'Material Icons';
@@ -236,6 +346,7 @@ def _injetar_css_global() -> None:
         --font-titulo:    {FONTE_TITULO};
         --font-texto:     {FONTE_TEXTO};
         --font-codigo:    {FONTE_CODIGO};
+        --font-hero:      {FONTE_HERO};
         --cor-primaria:   {COR_PRIMARIA};
         --cor-secundaria: {COR_SECUNDARIA};
         --cor-sucesso:    {COR_SUCESSO};
@@ -267,14 +378,19 @@ def _injetar_css_global() -> None:
         font-family: var(--font-texto) !important;
     }}
 
-    /* ── Títulos ── */
+    /* ── Títulos (Oscine) ── */
     h1, h2, h3, h4, h5, h6,
-    .hero-title, .section-title, .kpi-value {{
-        font-family: var(--font-titulo) !important;
+    .hero-title, .section-title {{
+        font-family: var(--font-hero) !important;
         font-weight: 700;
         letter-spacing: -0.2px;
     }}
     h1, .hero-title {{ font-weight: 800; }}
+    /* Valores de KPI/métrica seguem com a fonte institucional (numérica). */
+    .kpi-value, [data-testid="stMetricValue"] {{
+        font-family: var(--font-titulo) !important;
+        font-weight: 700;
+    }}
 
     /* ── Widgets ── */
     [data-testid="stWidgetLabel"],
@@ -375,7 +491,7 @@ def _injetar_css_global() -> None:
         margin-bottom: 14px;
     }}
     .hero-title {{
-        font-family: var(--font-titulo) !important;
+        font-family: var(--font-hero) !important;
         font-size: clamp(25px, 2.7vw, 38px);
         font-weight: 800; letter-spacing: -.035em;
         line-height: 1.18; margin: 0; color: #FFFFFF;
@@ -484,7 +600,7 @@ def _injetar_css_global() -> None:
         border-bottom: 1px solid var(--cor-borda);
     }}
     .section-title {{
-        font-family: var(--font-titulo) !important;
+        font-family: var(--font-hero) !important;
         font-size: 17px;
         font-weight: 700;
         color: var(--cor-texto);

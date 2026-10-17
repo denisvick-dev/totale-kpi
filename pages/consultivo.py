@@ -14,6 +14,7 @@ from streamlit_gsheets import GSheetsConnection
 # ====================================================
 # IMPORTAÇÃO DOS COMPONENTES CORPORATIVOS
 # ====================================================
+from components.calendario import InfoCalendario, fator_projecao
 from components.componentes import (
     aplicar_estilo,
     render_hero,
@@ -43,6 +44,12 @@ class Calculos:
 
     @staticmethod
     def fator_projecao(df: pd.DataFrame) -> tuple[float, int]:
+        """
+        Projeção de fim de mês pelo calendário operacional.
+
+        Segunda a sábado, **sem domingos e sem feriados**
+        (``components.calendario`` — mesma regra das projeções).
+        """
         if df.empty or "DATA" not in df.columns or df["DATA"].isna().all():
             return 1.0, 0
             
@@ -50,16 +57,9 @@ class Calculos:
         if df["DATA"].max().month != hoje.month or df["DATA"].max().year != hoje.year:
             return 1.0, 0
 
-        inicio_mes = hoje.replace(day=1)
-        prox_mes = inicio_mes.replace(day=28) + pd.Timedelta(days=4)
-        fim_mes = prox_mes - pd.Timedelta(days=prox_mes.day)
-
-        dias_uteis_total = len([d for d in pd.date_range(inicio_mes, fim_mes) if d.dayofweek < 6])
-        dias_decorridos = len([d for d in pd.date_range(inicio_mes, hoje) if d.dayofweek < 6])
-        faltantes = dias_uteis_total - dias_decorridos
-
-        fator = dias_uteis_total / dias_decorridos if dias_decorridos > 0 and faltantes > 0 else 1.0
-        return fator, faltantes
+        calendario = InfoCalendario.calcular(hoje.date())
+        fator = fator_projecao(calendario.total_dias_uteis, calendario.dias_passados)
+        return fator, calendario.dias_faltantes
 
 
 class EstiloTabela:
@@ -238,7 +238,11 @@ def main():
     # ── UI: Projeções ────────────────────────────────────────────────
     if falt_dias > 0:
         st.markdown("<br>", unsafe_allow_html=True)
-        render_insight(f"Faltam **{falt_dias} dias úteis** para o fechamento do mês.", tipo="info")
+        render_insight(
+            f"Faltam **{falt_dias} dias úteis** para o fechamento do mês "
+            "(segunda a sábado, sem domingos nem feriados).",
+            tipo="info",
+        )
         
         render_section_header("trending_up", "Projeção Fim do Mês")
         p1, p2, _ = st.columns([1, 1, 3])

@@ -7,11 +7,10 @@ Integrado ao novo Design System (componentes.py) e às Regras Oficiais (criterio
 
 from __future__ import annotations
 
-import csv
 import logging
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -22,7 +21,9 @@ import plotly.graph_objects as go
 import streamlit as st
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
+from streamlit_gsheets import GSheetsConnection
 
+from components import base_operacional as bo
 from components.componentes import (
     aplicar_estilo,
     render_hero,
@@ -33,13 +34,7 @@ from components.componentes import (
     estilizar_dataframe,
 )
 from components.criterios import (
-    VAZIOS_CONTRATO,
     classificar_tipo_servico,
-    detectar_col_contrato,
-    detectar_col_status_atividade,
-    detectar_col_habilidade,
-    detectar_col_tipo_os_1,
-    detectar_col_flag_gpon,
     extrair_metricas_criterios,
     render_painel_criterios,
     render_debug_criterios,
@@ -118,16 +113,6 @@ class Utils:
         return None
 
     @staticmethod
-    def classificar_status(serie: pd.Series) -> pd.Series:
-        s = serie.fillna("").astype(str).str.strip().str.upper()
-        exe = s == "EXECUTADA"
-        nex = s.isin(["NÃO EXECUTADA", "NAO EXECUTADA"])
-        return pd.Series(
-            np.select([exe, nex], ["Executada", "Não Executada"], default="Pendente"),
-            index=serie.index,
-        )
-
-    @staticmethod
     def gerar_excel(df: pd.DataFrame, aba: str = "Dados") -> bytes:
         out = BytesIO()
         with pd.ExcelWriter(out, engine="openpyxl") as w:
@@ -157,20 +142,14 @@ class Utils:
 # CARREGAMENTO E TRATAMENTO DE DADOS
 # ═══════════════════════════════════════════════════════
 class DataLoader:
+    """Leitura e tratamento — reaproveita o mesmo pipeline do robô."""
+
     @staticmethod
     @st.cache_data(show_spinner=False)
     def ler_arquivo(file_bytes: bytes, filename: str) -> pd.DataFrame:
-        bio = BytesIO(file_bytes)
+        """Leitura compartilhada com o robô (tudo como texto, como na página)."""
         try:
-            if filename.lower().endswith(".csv"):
-                bio.seek(0)
-                amostra = bio.read(5000).decode("utf-8", errors="ignore")
-                bio.seek(0)
-                sep = csv.Sniffer().sniff(amostra).delimiter if amostra else ";"
-                return pd.read_csv(
-                    bio, sep=sep, encoding="utf-8", dtype=str, engine="python"
-                )
-            return pd.read_excel(bio, engine="openpyxl", dtype=str)
+            return bo.ler_arquivo_bytes(file_bytes, filename, dtype=str)
         except Exception as e:
             st.error(f"❌ Erro ao ler arquivo: {e}")
             return pd.DataFrame()
@@ -178,114 +157,54 @@ class DataLoader:
     @staticmethod
     @st.cache_data(ttl=300, show_spinner="🔗 Vinculando Lista de Ativos...")
     def buscar_gsheets() -> pd.DataFrame:
-        """Lê a mesma aba privada da Gestão de Ativos; só recorre ao CSV público se necessário."""
+        """
+        Lê a mesma aba privada da Gestão de Ativos; só recorre ao CSV público
+        se necessário.
 
-        def validar(raw: pd.DataFrame, fonte: str) -> pd.DataFrame:
-            ativos = DataLoader._normalizar_lista_ativos(raw)
-            if ativos.empty:
-                raise ValueError("A aba não contém uma coluna Login com registros válidos")
-            ativos.attrs["fonte_ativos"] = fonte
-            return ativos
-
-        # A Gestão de Ativos lê esta planilha com a conta de serviço, não com
-        # acesso público. Usar a mesma conta evita falhas silenciosas em abas privadas.
-        try:
-            info = dict(st.secrets["gcp_service_account"])
-        except (KeyError, FileNotFoundError):
-            info = {}
-
-        if info:
-            try:
-                scopes = [
-                    "https://spreadsheets.google.com/feeds",
-                    "https://www.googleapis.com/auth/drive",
-                ]
-                creds = Credentials.from_service_account_info(info, scopes=scopes)
-                ws = gspread.authorize(creds).open_by_key(Config.SHEET_ID_ATIVOS).worksheet(
-                    Config.WORKSHEET_ATIVOS
-                )
-                registros = pd.DataFrame(ws.get_all_records(default_blank=""))
-                return validar(registros, "Google Sheets (autenticado)")
-            except Exception as exc:
-                logger.warning("Falha na leitura autenticada da lista_ativos: %s", exc)
-
-        try:
-            from streamlit_gsheets import GSheetsConnection
-
-            conn = st.connection("gsheets", type=GSheetsConnection)
-            raw = conn.read(
-                spreadsheet=Config.URL_LISTA_ATIVOS,
-                worksheet=Config.WORKSHEET_ATIVOS,
-                ttl=0,  # o cache desta função é a única fonte de expiração
-            )
-            return validar(raw, "Google Sheets (conexão)")
-        except Exception as exc:
-            logger.warning("Falha na conexão da lista_ativos: %s", exc)
-
-        try:
-            url = (
-                f"https://docs.google.com/spreadsheets/d/{Config.SHEET_ID_ATIVOS}"
-                f"/gviz/tq?tqx=out:csv&sheet={Config.WORKSHEET_ATIVOS}"
-            )
-            return validar(pd.read_csv(url), "Google Sheets (CSV público)")
-        except Exception as exc:
-            logger.warning("Falha na leitura pública da lista_ativos: %s", exc)
-
-        vazia = pd.DataFrame()
-        vazia.attrs["erro_ativos"] = (
-            "Não foi possível ler a aba lista_ativos. Verifique a conta de serviço, "
-            "o compartilhamento da planilha e a coluna Login."
+        A implementação vive em ``components/base_operacional`` (mesma usada
+        pelo robô). As dependências são injetadas aqui para manter o cache do
+        Streamlit e os testes de regressão funcionando.
+        """
+        return bo.carregar_lista_ativos(
+            sheet_id=Config.SHEET_ID_ATIVOS,
+            worksheet=Config.WORKSHEET_ATIVOS,
+            url=Config.URL_LISTA_ATIVOS,
+            segredos=lambda: dict(st.secrets["gcp_service_account"]),
+            credenciais=Credentials.from_service_account_info,
+            autorizar=gspread.authorize,
+            conexao=lambda: st.connection("gsheets", type=GSheetsConnection),
+            read_csv=pd.read_csv,
         )
-        return vazia
+
+    @staticmethod
+    @st.cache_data(ttl=900, show_spinner="🤖 Carregando a base automática do robô...")
+    def carregar_base_automatica(forcar: bool = False) -> pd.DataFrame:
+        """
+        Base gerada pelo robô (``dados/cache``).
+
+        O robô lê o arquivo mais recente da pasta monitorada (por padrão,
+        ``Downloads``). Se a pasta não
+        existir ou estiver vazia, devolve um DataFrame vazio e a página cai no
+        upload manual.
+        """
+        try:
+            base = bo.carregar_base_quebra(
+                forcar=forcar,
+                segredos=lambda: dict(st.secrets["gcp_service_account"]),
+                credenciais=Credentials.from_service_account_info,
+                autorizar=gspread.authorize,
+                conexao=lambda: st.connection("gsheets", type=GSheetsConnection),
+                read_csv=pd.read_csv,
+            )
+        except Exception as exc:
+            st.error(f"Falha ao carregar a base automática: {exc}")
+            return pd.DataFrame()
+        return base if base is not None else pd.DataFrame()
 
     @staticmethod
     def _normalizar_lista_ativos(raw: pd.DataFrame) -> pd.DataFrame:
-        if raw is None or raw.empty:
-            return pd.DataFrame()
-        raw = raw.copy()
-        raw.columns = raw.columns.astype(str).str.strip()
-
-        rename_map = {}
-        for col in raw.columns:
-            cu = col.upper().strip().replace(".", "").replace("_", " ")
-            if cu in ("LOGIN", "MATRICULA", "MATRÍCULA", "ID", "USUARIO", "USUÁRIO"):
-                rename_map[col] = "Login"
-            elif cu in (
-                "TECNICO", "TÉCNICO", "NOME", "NOME TECNICO", "NOME DO TECNICO",
-            ):
-                rename_map[col] = "Técnico"
-            elif cu in (
-                "MONITOR", "GESTOR", "SUPERVISOR", "COORDENADOR", "NOME MONITOR",
-            ):
-                rename_map[col] = "Monitor"
-            elif cu in ("BASE", "REGIAO", "REGIÃO", "CIDADE"):
-                rename_map[col] = "Base"
-            elif cu in ("SITUACAO", "SITUAÇÃO"):
-                rename_map[col] = "Situação"
-
-        # Colunas alternativas podem coexistir com as oficiais (ex.: Login e RE).
-        # Nunca produzir nomes duplicados, para manter o merge determinístico.
-        usados = set()
-        for col, destino in list(rename_map.items()):
-            if (destino != col and destino in raw.columns) or destino in usados:
-                del rename_map[col]
-            else:
-                usados.add(destino)
-        raw = raw.rename(columns=rename_map)
-        if "Login" not in raw.columns:
-            return pd.DataFrame()
-
-        # Ignorar desligados/inativos caso estejam na aba de ativos por engano.
-        if "Situação" in raw.columns:
-            situacao = raw["Situação"].fillna("").astype(str).str.strip().str.upper()
-            raw = raw[~situacao.isin(["DESLIGADO", "INATIVO"])]
-
-        cols = [c for c in ["Login", "Técnico", "Monitor", "Base"] if c in raw.columns]
-        raw = raw[cols].copy()
-        raw["Login"] = DataLoader._normalizar_login(raw["Login"])
-        invalidos = ["NAN", "NONE", "NULL", "N/A", "<NA>", "0", "-", ""]
-        raw = raw[~raw["Login"].isin(invalidos)]
-        return raw.drop_duplicates(subset=["Login"], keep="last").reset_index(drop=True)
+        """Padroniza a aba ``lista_ativos`` (implementação em base_operacional)."""
+        return bo.normalizar_lista_ativos(raw)
 
     @staticmethod
     def _normalizar_login(serie: pd.Series) -> pd.Series:
@@ -302,224 +221,12 @@ class DataLoader:
         df: pd.DataFrame, df_gs: pd.DataFrame,
         fonte_ativos: str = "", erro_ativos: str = "",
     ) -> pd.DataFrame:
-        if df.empty:
-            return pd.DataFrame()
+        """
+        Tratamento compartilhado com o robô (``components/base_operacional``).
 
-        df = df.copy()
-        df.columns = df.columns.astype(str).str.strip().str.upper()
-        total_importado = len(df)
-
-        col_mon_orig = Utils.buscar_coluna(
-            df, ["MONITOR", "SUPERVISOR", "GESTOR", "COORDENADOR", "NOME MONITOR"]
-        )
-        col_tec_orig = Utils.buscar_coluna(
-            df, ["TECNICO", "NOME TECNICO", "NOME DO TECNICO", "TÉCNICO"]
-        )
-
-        # 1. Remover Suspensos
-        col_atv = detectar_col_status_atividade(df)
-        n_susp = 0
-        if col_atv:
-            serie_atv = df[col_atv].fillna("").astype(str).str.strip().str.upper()
-            mask_susp = serie_atv.str.contains("SUSP", na=False) | serie_atv.eq(
-                "SUSPENSO"
-            )
-            n_susp = int(mask_susp.sum())
-            df = df[~mask_susp].copy()
-
-        # 2. Remover Contratos Vazios
-        col_con = detectar_col_contrato(df)
-        n_inv = 0
-        if col_con:
-            serie_con = (
-                df[col_con]
-                .fillna("")
-                .astype(str)
-                .str.strip()
-                .str.upper()
-                .str.replace(r"\.0$", "", regex=True)
-            )
-            mask_inv = serie_con.isin(VAZIOS_CONTRATO)
-            n_inv = int(mask_inv.sum())
-            df = df[~mask_inv].copy()
-
-        # 3. Total de Tarefas
-        col_tot = Utils.buscar_coluna(
-            df, ["TOTAL DE TAREFAS", "QTD TAREFAS", "TOTAL TAREFAS"]
-        )
-        if col_tot:
-            df["TOTAL DE TAREFAS"] = (
-                pd.to_numeric(
-                    df[col_tot].astype(str).str.replace(",", "."), errors="coerce"
-                )
-                .fillna(1)
-                .astype(int)
-            )
-        else:
-            df["TOTAL DE TAREFAS"] = 1
-
-        # 4. Merge com Lista de Ativos
-        col_login = Utils.buscar_coluna(
-            df,
-            ["LOGIN DO TÉCNICO", "LOGIN DO TECNICO", "LOGIN", "USUÁRIO", "MATRÍCULA"],
-        )
-        if col_login:
-            df["LOGIN"] = DataLoader._normalizar_login(df[col_login])
-        else:
-            df["LOGIN"] = "SEM LOGIN"
-        if col_login and not df_gs.empty and "Login" in df_gs.columns:
-            df = df.merge(
-                df_gs,
-                left_on="LOGIN",
-                right_on="Login",
-                how="left",
-                suffixes=("", "_GS"),
-                validate="many_to_one",
-            )
-        n_vinculados = int(df["Login"].notna().sum()) if "Login" in df.columns else 0
-
-        # 5. Fallback Monitor
-        mon_gs = (
-            df["Monitor_GS"]
-            if "Monitor_GS" in df.columns
-            else (
-                df["Monitor"]
-                if "Monitor" in df.columns
-                else pd.Series(np.nan, index=df.index)
-            )
-        )
-        mon_file = (
-            df[col_mon_orig]
-            if col_mon_orig and col_mon_orig in df.columns
-            else pd.Series(np.nan, index=df.index)
-        )
-        mon_gs_c = (
-            mon_gs.fillna(pd.NA)
-            .astype("string")
-            .str.strip()
-            .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
-        )
-        mon_file_c = (
-            mon_file.fillna(pd.NA)
-            .astype("string")
-            .str.strip()
-            .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
-        )
-
-        df["ORIGEM_MAPEAMENTO"] = np.where(
-            mon_gs_c.notna(),
-            "Merge (Sheets)",
-            np.where(mon_file_c.notna(), "Arquivo Origem", "Não Mapeado"),
-        )
-        df["MONITOR"] = (
-            mon_gs_c.combine_first(mon_file_c)
-            .fillna("SEM MONITOR")
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-        df.loc[
-            df["MONITOR"].isin(["", "NAN", "NONE", "NULL", "0", "N/A"]), "MONITOR"
-        ] = "SEM MONITOR"
-
-        # 6. Fallback Técnico
-        tec_gs = (
-            df["Técnico_GS"]
-            if "Técnico_GS" in df.columns
-            else (
-                df["Técnico"]
-                if "Técnico" in df.columns
-                else pd.Series(np.nan, index=df.index)
-            )
-        )
-        tec_file = (
-            df[col_tec_orig]
-            if col_tec_orig and col_tec_orig in df.columns
-            else pd.Series(np.nan, index=df.index)
-        )
-        tec_gs_c = (
-            tec_gs.fillna(pd.NA)
-            .astype("string")
-            .str.strip()
-            .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
-        )
-        tec_file_c = (
-            tec_file.fillna(pd.NA)
-            .astype("string")
-            .str.strip()
-            .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
-        )
-
-        df["TÉCNICO"] = (
-            tec_gs_c.combine_first(tec_file_c)
-            .fillna("NÃO MAPEADO")
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-        df.loc[
-            df["TÉCNICO"].isin(["", "NAN", "NONE", "NULL", "0", "N/A"]), "TÉCNICO"
-        ] = "NÃO MAPEADO"
-
-        # 7. Contrato normalizado
-        if col_con and col_con in df.columns:
-            df["CONTRATO"] = df[col_con].astype(str).str.strip()
-
-        # 8. Região
-        col_cid = Utils.buscar_coluna(df, ["CIDADE", "LOCALIDADE"])
-        cidade = (
-            df[col_cid].fillna("").astype(str).str.strip().str.upper()
-            if col_cid
-            else pd.Series("", index=df.index)
-        )
-        df["REGIÃO"] = np.select(
-            [
-                cidade.isin(["SAO PAULO", "SÃO PAULO"]),
-                cidade.isin(
-                    ["GUARULHOS", "ARUJA", "MOGI", "SUZANO", "ITAQUAQUECETUBA", "POA"]
-                ),
-                cidade.isin(
-                    [
-                        "SANTO ANDRE",
-                        "SAO BERNARDO DO CAMPO",
-                        "SAO CAETANO DO SUL",
-                        "DIADEMA",
-                        "MAUA",
-                    ]
-                ),
-            ],
-            ["LESTE", "GRU", "ABCDM"],
-            default="OUTRAS",
-        )
-
-        # 9. Status Contrato
-        col_status_os = Utils.buscar_coluna(
-            df, ["STATUS DA O.S 1", "STATUS OS 1", "STATUS CONTRATO"]
-        )
-        df["Status Contrato"] = (
-            Utils.classificar_status(df[col_status_os]) if col_status_os else "Pendente"
-        )
-
-        # 10. ✅ CLASSIFICAÇÃO OFICIAL DE SEGMENTOS (criterios.py)
-        df, _ = classificar_tipo_servico(df)
-        df = df.drop(columns=["_TIPOS_OS_SET"], errors="ignore")
-
-        # 11. Motivo de Baixa
-        col_cod = Utils.buscar_coluna(
-            df, ["CÓD DE BAIXA 1", "MOTIVO DE BAIXA", "COD DE BAIXA 1", "MOTIVO BAIXA"]
-        )
-        df["_COL_BAIXA"] = df[col_cod].astype(str) if col_cod else ""
-
-        df.attrs["diag_importado"] = total_importado
-        df.attrs["diag_susp"] = n_susp
-        df.attrs["diag_inv"] = n_inv
-        df.attrs["diag_final"] = len(df)
-        df.attrs["diag_vinculados"] = n_vinculados
-        df.attrs["diag_ativos"] = len(df_gs)
-        df.attrs["fonte_ativos"] = fonte_ativos or df_gs.attrs.get("fonte_ativos", "")
-        df.attrs["erro_ativos"] = erro_ativos or df_gs.attrs.get("erro_ativos", "")
-        df.attrs["diag_login"] = col_login or ""
-        return df
+        Mantém os ``attrs`` de diagnóstico usados pelas abas da página.
+        """
+        return bo.preparar_base_quebra(df, df_gs, fonte_ativos, erro_ativos)
 
 
 # ═══════════════════════════════════════════════════════
@@ -1028,12 +735,28 @@ def main():
     aplicar_estilo()
 
     if "df_memoria" not in st.session_state or st.session_state["df_memoria"] is None:
+        # ── BASE AUTOMÁTICA (ROBÔ) ──────────────────────────────
+        with st.spinner("🤖 Buscando a base gerada pelo robô ..."):
+            base_auto = DataLoader.carregar_base_automatica()
+        if base_auto is not None and not base_auto.empty:
+            st.session_state["df_memoria"] = base_auto
+            st.rerun()
+        # Sem arquivo agora: limpa o cache para a próxima tentativa já encontrar
+        # um arquivo novo chegado na pasta monitorada.
+        DataLoader.carregar_base_automatica.clear()
+
+    if "df_memoria" not in st.session_state or st.session_state["df_memoria"] is None:
         render_hero(
             titulo="Gestão de Quebra de Agenda",
             subtitulo="Importe a base operacional para gerar o Super Relatório Consolidado",
             badge="SISTEMA TOTALE",
         )
         render_section_header("folder_open", "Carregar Base de Dados", "CSV / XLSX")
+        st.caption(
+            "O robô lê automaticamente o arquivo mais recente de "
+            f"`{bo.config().pasta_entrada}`. "
+            "Use o upload apenas quando quiser analisar outro arquivo."
+        )
         arq = st.file_uploader(
             "Base operacional", type=["xlsx", "csv"], key="uploader_principal",
             label_visibility="collapsed",
@@ -1089,6 +812,27 @@ def main():
                 df = df[df[Config.COL_REGIAO] == sel_reg]
 
         st.divider()
+        if st.button(
+            "🤖 Atualizar base (robô)",
+            use_container_width=True,
+            help="Roda o robô: relê o arquivo mais recente da pasta monitorada e refaz o cache.",
+        ):
+            DataLoader.carregar_base_automatica.clear()
+            with st.spinner("🤖 Robô processando a base ..."):
+                base = DataLoader.carregar_base_automatica(forcar=True)
+            if base is not None and not base.empty:
+                st.session_state["df_memoria"] = base
+                st.session_state.pop("quebra_arquivo", None)
+                st.rerun()
+            st.warning(
+                "O robô não encontrou uma base em "
+                f"`{bo.config().pasta_entrada}` — envie o arquivo manualmente."
+            )
+
+        st.divider()
+        bo.render_status_base()
+
+        st.divider()
         if st.button("🔗 Atualizar Lista de Ativos", use_container_width=True):
             arquivo = st.session_state.get("quebra_arquivo")
             if arquivo:
@@ -1100,7 +844,10 @@ def main():
                 )
                 st.rerun()
             else:
-                st.warning("Reenvie a base para atualizar o vínculo nesta sessão antiga.")
+                st.warning(
+                    "Reenvie a base (ou rode o robô) para atualizar o vínculo "
+                    "nesta sessão antiga."
+                )
         if st.button("🔄 Trocar Base de Dados", use_container_width=True):
             st.session_state["df_memoria"] = None
             st.session_state.pop("quebra_arquivo", None)

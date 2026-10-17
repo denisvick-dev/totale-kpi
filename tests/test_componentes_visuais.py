@@ -1,5 +1,6 @@
 """Contrato visual compartilhado por páginas independentes."""
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -53,3 +54,70 @@ def test_atualizacao_usa_hero_e_cards_sem_acessar_planilhas():
     assert not app.exception
     assert any('class="hero-corp"' in item.value for item in app.markdown)
     assert sum('class="kpi-card"' in item.value for item in app.markdown) == 6
+
+
+def _css_global(monkeypatch) -> str:
+    """Captura o CSS injetado por aplicar_estilo()."""
+    blocos = []
+    monkeypatch.setattr(componentes.st, "markdown", lambda html, **kw: blocos.append(html))
+    componentes._injetar_css_global()
+    return blocos[0]
+
+
+def test_titulos_dos_heros_usam_a_oscine_com_fallback(monkeypatch):
+    css = _css_global(monkeypatch)
+
+    assert componentes.FONTE_HERO.startswith("'Oscine'")
+    assert "Manrope" in componentes.FONTE_HERO  # cadeia de fallback preservada
+    assert f"--font-hero:      {componentes.FONTE_HERO};" in css
+
+    bloco_hero = next(
+        bloco for bloco in re.findall(r"\.hero-title\s*\{[^}]*\}", css)
+        if "clamp(25px" in bloco
+    )
+    assert "font-family: var(--font-hero) !important;" in bloco_hero
+    # os demais títulos (h1 soltos, KPIs...) seguem com a fonte institucional
+    assert "font-family: var(--font-titulo) !important;" in css
+
+
+def test_kit_web_da_oscine_e_configuravel(monkeypatch):
+    monkeypatch.setenv("TOTALE_FONTE_HERO_URL", "https://use.typekit.net/abc123.css")
+    css = _css_global(monkeypatch)
+
+    assert "@import url('https://use.typekit.net/abc123.css');" in css
+
+
+def test_fonte_auto_hospedada_em_assets_fonts(monkeypatch, tmp_path):
+    (tmp_path / "oscine-bold.woff2").write_bytes(b"wOF2conteudo-falso")
+    monkeypatch.setattr(componentes, "_PASTA_FONTES", tmp_path)
+    monkeypatch.delenv("TOTALE_FONTE_HERO_URL", raising=False)
+    componentes._css_fonte_hero_selfhosted.clear()
+
+    css = _css_global(monkeypatch)
+
+    assert "@font-face" in css
+    assert "font-family: 'Oscine'" in css
+    assert "data:font/woff2;base64" in css
+
+
+def test_oscine_vale_para_heros_h1_e_titulos_de_secao(monkeypatch):
+    css = _css_global(monkeypatch)
+
+    bloco_titulos = re.search(
+        r"h1, h2, h3, h4, h5, h6,\s*\.hero-title, \.section-title \{[^}]*\}", css
+    )
+    assert bloco_titulos is not None
+    assert "font-family: var(--font-hero) !important;" in bloco_titulos.group(0)
+
+    bloco_secao = re.search(r"\.section-title \{[^}]*\}", css)
+    assert "font-family: var(--font-hero) !important;" in bloco_secao.group(0)
+
+
+def test_valores_de_kpi_mantem_a_fonte_institucional(monkeypatch):
+    css = _css_global(monkeypatch)
+
+    blocos_kpi = re.findall(r"\.kpi-value(?:,|\s*\{)[^}]*\}", css)
+    assert blocos_kpi
+    assert any(
+        "font-family: var(--font-titulo) !important;" in bloco for bloco in blocos_kpi
+    )

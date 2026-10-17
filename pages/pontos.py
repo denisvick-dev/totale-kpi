@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import datetime
-import calendar
 from io import BytesIO
 from typing import Any, Optional
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+from components.calendario import InfoCalendario
 from components.componentes import (
     aplicar_estilo,
     render_hero,
@@ -181,26 +180,23 @@ class Utilitarios:
 
     @staticmethod
     def calcular_dias_uteis(df: pd.DataFrame) -> tuple[int, int, Any, int]:
+        """
+        Dias úteis do mês de referência.
+
+        Segunda a sábado, **sem domingos e sem feriados**
+        (``components.calendario`` — mesma regra das projeções).
+        """
         col_data = Utilitarios.encontrar_coluna_data(df)
         data_max: datetime.date = (
             pd.to_datetime(df[col_data].max()).date()
             if col_data and pd.notna(df[col_data].max())
             else datetime.date.today()
         )
-        ano, mes = data_max.year, data_max.month
-        primeiro = datetime.date(ano, mes, 1)
-        _, ult = calendar.monthrange(ano, mes)
-        ultimo = datetime.date(ano, mes, ult)
 
-        p_np = np.datetime64(primeiro)
-        m_np = np.datetime64(data_max)
-        u_np = np.datetime64(ultimo)
-
-        total = int(np.busday_count(p_np, u_np + np.timedelta64(1, "D"), weekmask="1111110"))
-        passados = int(np.busday_count(p_np, m_np + np.timedelta64(1, "D"), weekmask="1111110"))
-        brutos = max(0, total - passados)
+        calendario = InfoCalendario.calcular(data_max)
+        brutos = max(0, calendario.dias_faltantes)
         seguros = max(1, brutos)
-        return brutos, seguros, data_max, passados
+        return brutos, seguros, data_max, calendario.dias_passados
 
     @staticmethod
     def exportar_excel(dataframe: pd.DataFrame) -> bytes:
