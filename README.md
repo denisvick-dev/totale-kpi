@@ -114,8 +114,7 @@ python scripts/robot_base.py --pasta-entrada "C:/caminho/das/bases"
 A página **Atualização de Dados** também hospeda o painel do robô local:
 
 - monitora a pasta **Downloads** (ou o caminho configurado) a cada 5 s;
-- aceita `Atividades-*.csv`, `.xlsx`, `.xlsm`, `.xls` e arquivos com `SPO`,
-  `GRS` ou `ABCDM` no nome;
+- aceita somente arquivos iniciados com `Atividades-` (`*.csv`, `.xlsx`, `.xlsm`, `.xls`);
 - ignora temporários (`~$`, `.tmp`, `.crdownload`) e arquivos em gravação;
 - valida o ZIP do Excel, o encoding/separador do CSV e a estabilidade do arquivo;
 - publica a base tratada em `df_memoria` para os painéis e mantém a versão bruta

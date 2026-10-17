@@ -6,10 +6,10 @@ de leitura; o portal importa somente :func:`renderizar_robo_local`.
 
 Arquivos aceitos na pasta monitorada
 -----------------------------------
-``Atividades-*.csv``, ``Atividades-*.xlsx``, ``Atividades-*.xlsm``,
-``Atividades-*.xls`` e variantes com ``SPO``, ``GRS`` ou ``ABCDM`` no nome.
-Quando há mais de um arquivo, o pipeline usa **somente o mais recente** da
-pasta inteira; os demais aparecem na fila apenas como histórico.
+``Atividades-*.csv``, ``Atividades-*.xlsx``, ``Atividades-*.xlsm`` e
+``Atividades-*.xls`` — somente arquivos cujo nome inicia-se com
+``Atividades-``. Quando há mais de um arquivo, o pipeline usa **somente o mais
+recente** da pasta inteira; os demais aparecem na fila apenas como histórico.
 """
 
 from __future__ import annotations
@@ -418,18 +418,12 @@ def _listar_candidatos_com_stat(
         return []
 
     arquivos = [arq for arq in _listar_arquivos(p, recursivo) if not _arquivo_ignorado(arq.name)]
-    # A preferência pelo padrão não pode esconder um arquivo mais recente com
-    # nome alternativo (p.ex. GRS.csv ao lado de Atividades-SPO.csv).
-    marcadores = tuple(m.lower() for m in MAPA_BASES_ARQUIVO)
     encontrados = [
         arq
         for arq in arquivos
         if arq.suffix.lower() in EXTENSOES_VALIDAS
-        and (
-            _casa_padrao(arq.name, padroes)
-            or "atividades" in arq.stem.lower()
-            or any(m in arq.stem.lower() for m in marcadores)
-        )
+        and arq.name.lower().startswith("atividades-")
+        and _casa_padrao(arq.name, padroes)
     ]
 
     candidatos: list[Candidato] = []
@@ -1818,8 +1812,8 @@ def renderizar_robo_local(
             else:
                 st.error("Pasta não encontrada — confira o caminho digitado.")
             st.caption(
-                "Aceita Atividades-*.csv, .xlsx, .xlsm e .xls, além de arquivos com "
-                "SPO, GRS ou ABCDM no nome. Temporários (~$, .tmp, .crdownload) são ignorados."
+                "Aceita somente arquivos iniciados com Atividades- (*.csv, .xlsx, .xlsm, .xls). "
+                "Temporários (~$, .tmp, .crdownload) são ignorados."
             )
 
     cabecalho.markdown(
