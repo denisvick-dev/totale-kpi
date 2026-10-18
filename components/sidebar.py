@@ -231,12 +231,22 @@ def gerar_css_sidebar() -> str:
         outline: 2px solid var(--sidebar-destaque);
         outline-offset: 1px;
     }}
+    section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"] {{
+        gap: 0.5rem;
+    }}
+    section[data-testid="stSidebar"] :is(.stButton, .stDownloadButton, .stFormSubmitButton) [data-testid="stTooltipIcon"],
+    section[data-testid="stSidebar"] :is(.stButton, .stDownloadButton, .stFormSubmitButton) [data-testid="stTooltipHoverTarget"] {{
+        width: 100% !important;
+        height: auto !important;
+    }}
     section[data-testid="stSidebar"] .stButton button,
     section[data-testid="stSidebar"] .stDownloadButton button,
     section[data-testid="stSidebar"] .stFormSubmitButton button {{
         background: var(--sidebar-controle) !important;
         color: var(--sidebar-texto-controle) !important;
         border: 1px solid var(--sidebar-borda-controle) !important;
+        padding: 0.35rem 0.45rem !important;
+        min-height: 38px;
     }}
     section[data-testid="stSidebar"] :is(.stButton, .stDownloadButton, .stFormSubmitButton) button:hover,
     section[data-testid="stSidebar"] button[kind="primary"] {{
@@ -246,6 +256,8 @@ def gerar_css_sidebar() -> str:
     }}
     section[data-testid="stSidebar"] :is(.stButton, .stDownloadButton, .stFormSubmitButton) button p {{
         color: inherit !important;
+        font-size: 0.8125rem !important;
+        white-space: nowrap;
     }}
     section[data-testid="stSidebar"] .totale-paleta {{
         display: flex;
@@ -260,7 +272,7 @@ def gerar_css_sidebar() -> str:
         border: 1px solid var(--sidebar-borda);
     }}
 
-    section[data-testid="stSidebar"] [data-testid*="Icon"],
+    section[data-testid="stSidebar"] [data-testid="stIconMaterial"],
     section[data-testid="stSidebar"] [class*="material"] {{
         color: var(--sidebar-destaque) !important;
         font-size: 16px !important;
