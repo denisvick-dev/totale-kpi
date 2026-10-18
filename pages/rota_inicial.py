@@ -741,15 +741,32 @@ def main() -> None:
     # ── Sidebar — configurações ──────────────────────
     with st.sidebar:
         st.header("⚙️ Configurações")
-        if st.button("🔄 Reiniciar Painel", use_container_width=True):
-            st.session_state["df_master"] = None
-            if "sim_equipe" in st.session_state:
-                del st.session_state["sim_equipe"]
-            st.session_state["total_montados_manual"] = 0
-            st.session_state["_reset_counter"] = (
-                int(st.session_state.get("_reset_counter", 0)) + 1
-            )
-            st.rerun()
+        c_atualizar, c_reiniciar = st.columns(2)
+        with c_atualizar:
+            if st.button(
+                "🤖 Atualizar base",
+                use_container_width=True,
+                help="Reprocessa a base atual e reaplica os cálculos do painel.",
+            ):
+                if "df_master" in st.session_state:
+                    st.session_state["df_master"] = None
+                if "sim_equipe" in st.session_state:
+                    del st.session_state["sim_equipe"]
+                st.session_state["total_montados_manual"] = 0
+                st.session_state["_reset_counter"] = (
+                    int(st.session_state.get("_reset_counter", 0)) + 1
+                )
+                st.rerun()
+        with c_reiniciar:
+            if st.button("🧹 Reiniciar", use_container_width=True):
+                st.session_state["df_master"] = None
+                if "sim_equipe" in st.session_state:
+                    del st.session_state["sim_equipe"]
+                st.session_state["total_montados_manual"] = 0
+                st.session_state["_reset_counter"] = (
+                    int(st.session_state.get("_reset_counter", 0)) + 1
+                )
+                st.rerun()
         st.divider()
 
     reset_key = int(st.session_state.get("_reset_counter", 0))

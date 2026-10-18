@@ -906,12 +906,19 @@ def main():
             if sel_reg != "Todas":
                 df = df[df[Config.COL_REGIAO] == sel_reg]
 
-        st.divider()
-        if st.button(
-            "🤖 Atualizar base (robô)",
-            use_container_width=True,
-            help="Roda o robô: relê o arquivo mais recente da pasta monitorada e refaz o cache.",
-        ):
+        st.header("⚙️ Configurações")
+
+        c_atualizar, c_reiniciar = st.columns(2)
+        with c_atualizar:
+            atualizar = st.button(
+                "🤖 Atualizar base",
+                use_container_width=True,
+                help="Roda o robô: relê o arquivo mais recente da pasta monitorada e refaz o cache.",
+            )
+        with c_reiniciar:
+            reiniciar = st.button("🧹 Reiniciar", use_container_width=True)
+
+        if atualizar:
             with st.spinner("🤖 Robô processando a base ..."):
                 base = DataLoader.recarregar_base_automatica()
             if base is not None and not base.empty:
@@ -923,39 +930,44 @@ def main():
                 f"`{bo.config().pasta_entrada}` — envie o arquivo manualmente."
             )
 
-        st.divider()
-        bo.render_status_base()
-
-        st.divider()
-        if st.button("🔗 Atualizar Lista de Ativos", use_container_width=True):
-            arquivo = st.session_state.get("quebra_arquivo")
-            if arquivo:
-                DataLoader.buscar_gsheets.clear()
-                gs = DataLoader.buscar_gsheets()
-                raw = DataLoader.ler_arquivo(*arquivo)
-                st.session_state["df_memoria"] = DataLoader.preparar_base(
-                    raw,
-                    gs,
-                    gs.attrs.get("fonte_ativos", ""),
-                    gs.attrs.get("erro_ativos", ""),
-                )
-                st.rerun()
-            else:
-                with st.spinner(
-                    "🔗 Atualizando a lista de ativos na base automática..."
-                ):
-                    base = DataLoader.recarregar_base_automatica()
-                if base is not None and not base.empty:
-                    st.session_state["df_memoria"] = base
-                    st.rerun()
-                st.warning(
-                    "Não foi possível atualizar a lista de ativos. Verifique se a "
-                    "base original do robô ainda está disponível ou envie o arquivo."
-                )
-        if st.button("🔄 Trocar Base de Dados", use_container_width=True):
+        if reiniciar:
             st.session_state["df_memoria"] = None
             st.session_state.pop("quebra_arquivo", None)
             st.rerun()
+
+        st.divider()
+        bo.render_status_base()
+
+        with st.expander("Opções avançadas", expanded=False):
+            if st.button("🔗 Atualizar Lista de Ativos", use_container_width=True):
+                arquivo = st.session_state.get("quebra_arquivo")
+                if arquivo:
+                    DataLoader.buscar_gsheets.clear()
+                    gs = DataLoader.buscar_gsheets()
+                    raw = DataLoader.ler_arquivo(*arquivo)
+                    st.session_state["df_memoria"] = DataLoader.preparar_base(
+                        raw,
+                        gs,
+                        gs.attrs.get("fonte_ativos", ""),
+                        gs.attrs.get("erro_ativos", ""),
+                    )
+                    st.rerun()
+                else:
+                    with st.spinner(
+                        "🔗 Atualizando a lista de ativos na base automática..."
+                    ):
+                        base = DataLoader.recarregar_base_automatica()
+                    if base is not None and not base.empty:
+                        st.session_state["df_memoria"] = base
+                        st.rerun()
+                    st.warning(
+                        "Não foi possível atualizar a lista de ativos. Verifique se a "
+                        "base original do robô ainda está disponível ou envie o arquivo."
+                    )
+            if st.button("🔄 Trocar Base de Dados", use_container_width=True):
+                st.session_state["df_memoria"] = None
+                st.session_state.pop("quebra_arquivo", None)
+                st.rerun()
 
     # ── HERO TOPO ──
     render_hero(
