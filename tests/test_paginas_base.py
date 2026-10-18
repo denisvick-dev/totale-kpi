@@ -72,7 +72,7 @@ def test_quebra_aceita_sessao_antiga_sem_coluna_monitor():
 def test_volumetria_carrega_a_base_do_robo_sem_upload(monkeypatch, tmp_path):
     entrada, cache = tmp_path / "entrada", tmp_path / "cache"
     entrada.mkdir()
-    base_sintetica(entrada / "base.xlsx")
+    base_sintetica(entrada / "Atividades-exportacao.xlsx")
     monkeypatch.setenv("TOTALE_BASE_ENTRADA", str(entrada))
     monkeypatch.setenv("TOTALE_BASE_CACHE", str(cache))
 
@@ -93,7 +93,7 @@ def test_volumetria_carrega_a_base_do_robo_sem_upload(monkeypatch, tmp_path):
 def test_quebra_carrega_a_base_do_robo_e_mostra_os_segmentos(monkeypatch, tmp_path):
     entrada, cache = tmp_path / "entrada", tmp_path / "cache"
     entrada.mkdir()
-    base_sintetica(entrada / "base.xlsx")
+    base_sintetica(entrada / "Atividades-exportacao.xlsx")
     monkeypatch.setenv("TOTALE_BASE_ENTRADA", str(entrada))
     monkeypatch.setenv("TOTALE_BASE_CACHE", str(cache))
 

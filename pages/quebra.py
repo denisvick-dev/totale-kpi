@@ -1015,9 +1015,10 @@ def main():
         )
 
     # ── ABAS PRINCIPAIS ──
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         [
             "🏢 Visão Executiva",
+            "🏠 Novos Domicílios",
             "🔄 Migração",
             "🏢 PME",
             "🎯 Critérios",
@@ -1028,12 +1029,14 @@ def main():
     with tab1:
         view_executiva(df, Config.SLA_GERAL)
     with tab2:
-        view_segmento(df, "Migração", Config.SLA_MIGRACAO)
+        view_segmento(df, "Novos Domicílios", Config.SLA_GERAL)
     with tab3:
-        view_segmento(df, "PME", Config.SLA_PME)
+        view_segmento(df, "Migração", Config.SLA_MIGRACAO)
     with tab4:
-        view_criterios(df)
+        view_segmento(df, "PME", Config.SLA_PME)
     with tab5:
+        view_criterios(df)
+    with tab6:
         view_base_completa(df, df_full)
 
 

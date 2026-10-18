@@ -65,6 +65,7 @@ def base_sintetica(caminho: Path, registros: int = 6) -> Path:
 @pytest.fixture()
 def ambiente(tmp_path, monkeypatch):
     """Isola o robô em pastas temporárias e desliga a busca na nuvem."""
+    monkeypatch.setenv("TOTALE_BASE_ARQUIVO", "*.xlsx")
     entrada = tmp_path / "entrada"
     cache = tmp_path / "cache"
     entrada.mkdir()
@@ -104,6 +105,41 @@ def test_localiza_base_com_multiplos_globs(ambiente):
         ambiente["entrada"],
         arquivo_glob="Atividades-*.csv;Atividades-*.xlsx",
     ) == xlsx
+
+
+def test_volumetria_importa_exportacao_csv_e_ignora_planilha_de_outro_tipo(
+    ambiente, monkeypatch
+):
+    monkeypatch.delenv("TOTALE_BASE_ARQUIVO", raising=False)
+    assert bo.config().arquivo_glob == "Atividades-*.csv;Atividades-*.xlsx"
+
+    planilha = base_sintetica(ambiente["entrada"] / "Atividades-exportacao.xlsx")
+    os.utime(planilha, (time.time() - 100, time.time() - 100))
+    csv = ambiente["entrada"] / "Atividades-exportacao.csv"
+    pd.DataFrame(
+        {
+            "CONTRATO": ["2001"],
+            "TÉCNICO": ["TEC CSV"],
+            "MONITOR": ["MON CSV"],
+            "STATUS DA O.S 1": ["EXECUTADA"],
+            "CIDADE": ["SAO PAULO"],
+        }
+    ).to_csv(csv, index=False)
+    ficha = ambiente["entrada"] / "Ficha_Coleta_Receita_Saude.xlsx"
+    pd.DataFrame({"FICHA DE COLETA - RECEITA SAÚDE": [""]}).to_excel(
+        ficha, index=False
+    )
+    os.utime(ficha, (time.time() + 100, time.time() + 100))
+
+    volumetria = bo.carregar_base_volumetria(
+        pasta_entrada=ambiente["entrada"],
+        pasta_cache=ambiente["cache"],
+        usar_cache=False,
+    )
+
+    assert volumetria is not None
+    assert volumetria["STATUS CONTRATO"].tolist() == ["Executada"]
+    assert bo.status_base(ambiente["cache"])["arquivo"] == csv.name
 
 
 def test_sem_base_na_pasta_o_robo_avisa(ambiente):

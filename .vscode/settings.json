@@ -2,11 +2,10 @@
     "editor.fontFamily": "Fira Mono",
     "editor.fontSize": 13,
     "editor.fontVariations": false,
+    "liveServer.settings.CustomBrowser": "edge",
     "editor.defaultFormatter": "ms-python.black-formatter",
-<<<<<<< HEAD
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter"
-    }
-=======
->>>>>>> b6032ce7c518d531cd75ced8bb23c2698a99e3a9
+    },
+    "python-envs.defaultEnvManager": "ms-python.python:system",
 }

@@ -67,6 +67,7 @@ COL_LOGIN = "LOGIN"
 STATUS_ORDEM: list[str] = ["Executada", "Não Executada", "Pendente"]
 
 EXTENSOES_ACEITAS: tuple[str, ...] = (".xlsx", ".xls", ".csv")
+ARQUIVO_GLOB_PADRAO = "Atividades-*.csv;Atividades-*.xlsx"
 
 CIDADES_POR_REGIAO: dict[str, tuple[str, ...]] = {
     "LESTE": ("SAO PAULO",),
@@ -158,7 +159,7 @@ def pasta_downloads() -> Path:
 class ConfigBase:
     pasta_entrada: Path
     pasta_cache: Path
-    arquivo_glob: str = ""
+    arquivo_glob: str = ARQUIVO_GLOB_PADRAO
     ttl_minutos: int = 0
     #: Varre também as subpastas. Desligado por padrão porque a pasta
     #: Downloads costuma ser grande e cheia de arquivos temporários.
@@ -200,7 +201,9 @@ def config(**sobreescrever: Any) -> ConfigBase:
             str(valor("pasta_entrada", "TOTALE_BASE_ENTRADA", pasta_downloads()))
         ),
         pasta_cache=Path(str(valor("pasta_cache", "TOTALE_BASE_CACHE", "dados/cache"))),
-        arquivo_glob=str(valor("arquivo_glob", "TOTALE_BASE_ARQUIVO", "")).strip(),
+        arquivo_glob=str(
+            valor("arquivo_glob", "TOTALE_BASE_ARQUIVO", ARQUIVO_GLOB_PADRAO)
+        ).strip(),
         ttl_minutos=int(valor("ttl_minutos", "TOTALE_BASE_TTL", 0) or 0),
         recursivo=_como_bool(valor("recursivo", "TOTALE_BASE_RECURSIVO", False), False),
     )
