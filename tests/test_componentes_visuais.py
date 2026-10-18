@@ -168,3 +168,26 @@ def test_fonte_original_do_kit_e_normalizada_pelo_nome(monkeypatch, tmp_path):
 
     assert "font-weight: 800" in css
     assert "data:font/opentype;base64" in css
+
+
+def test_fontes_versionadas_do_kit_alimentam_a_oscine_dos_heros(monkeypatch):
+    """Os TTFs versionados em ``fonts/`` são a fonte real dos heros.
+
+    Regressão: ``Oscine-Regular.ttf`` e ``Oscine-Bold.ttf`` precisam casar com
+    o leitor de ``assets/fonts``/``fonts``; sem isso os títulos dos heros caem
+    silenciosamente no Manrope mesmo com os arquivos presentes no repositório.
+    """
+    monkeypatch.delenv("TOTALE_FONTE_HERO_URL", raising=False)
+    componentes._css_fonte_hero_selfhosted.clear()
+
+    pesos = {peso: nomes for peso, nomes in componentes._PESOS_FONTE_HERO}
+    regular = componentes._localizar_arquivo_fonte(pesos[400])
+    bold = componentes._localizar_arquivo_fonte(pesos[700])
+    assert regular is not None and regular.name.lower().startswith("oscine")
+    assert bold is not None and bold.name.lower().startswith("oscine")
+
+    css = componentes._css_fonte_hero()
+    assert "font-family: 'Oscine'" in css
+    assert ";base64," in css
+    assert "font-weight: 400" in css
+    assert "font-weight: 700" in css
