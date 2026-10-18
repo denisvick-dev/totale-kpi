@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
+from streamlit_gsheets import GSheetsConnection
 
 # ====================================================
 # IMPORTAÇÃO DOS COMPONENTES CORPORATIVOS

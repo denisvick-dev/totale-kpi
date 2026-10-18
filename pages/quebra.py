@@ -663,6 +663,26 @@ def view_criterios(df: pd.DataFrame):
     render_painel_criterios(df)
 
 
+def _filtrar_base_analitica(
+    df: pd.DataFrame, colunas: list[str], busca: str = ""
+) -> pd.DataFrame:
+    """Seleciona colunas e aplica uma busca literal, sem alterar a base original."""
+    resultado = df.loc[:, colunas].copy()
+    termo = busca.strip().upper()
+    if not termo:
+        return resultado
+
+    corresponde = pd.Series(False, index=resultado.index)
+    for coluna in resultado.columns:
+        corresponde |= (
+            resultado[coluna]
+            .astype(str)
+            .str.upper()
+            .str.contains(termo, na=False, regex=False)
+        )
+    return resultado.loc[corresponde]
+
+
 def view_base_completa(df: pd.DataFrame, df_full: pd.DataFrame):
     if df.empty:
         st.info("Nenhum registro disponível na base.")
@@ -739,21 +759,14 @@ def view_base_completa(df: pd.DataFrame, df_full: pd.DataFrame):
         st.info("Selecione ao menos uma coluna para visualizar.")
         return
 
-    df_view = df[cols_sel].copy()
-
-    if busca.strip():
-        termo = busca.strip().upper()
-        mask = pd.Series(False, index=df_view.index)
-        for c in df_view.columns:
-            mask |= (
-                df_view[c]
-                .astype(str)
-                .str.upper()
-                .str.contains(termo, na=False, regex=False)
-            )
-        df_view = df_view[mask]
-
-    render_dataframe(df_view, height=420, icone="")
+    df_view = _filtrar_base_analitica(df, cols_sel, busca)
+    limite_linhas = int(n_linhas)
+    if len(df_view) > limite_linhas:
+        st.caption(
+            f"Exibindo {limite_linhas:,} de {len(df_view):,} registros filtrados. "
+            "A exportação inclui todos os resultados da busca."
+        )
+    render_dataframe(df_view.head(limite_linhas), height=420, icone="")
 
     # ── Exportações ──
     st.markdown("<br>", unsafe_allow_html=True)
@@ -764,7 +777,7 @@ def view_base_completa(df: pd.DataFrame, df_full: pd.DataFrame):
     with e1:
         st.download_button(
             "📥 Base Filtrada (Excel)",
-            Utils.gerar_excel(df[cols_sel], "Filtrada"),
+            Utils.gerar_excel(df_view, "Filtrada"),
             f"base_filtrada_{stamp}.xlsx",
             use_container_width=True,
         )

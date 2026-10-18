@@ -585,7 +585,10 @@ def carregar_lista_ativos(
                 import streamlit as st
                 from streamlit_gsheets import GSheetsConnection
 
-                conexao = lambda: st.connection("gsheets", type=GSheetsConnection)
+                def criar_conexao() -> Any:
+                    return st.connection("gsheets", type=GSheetsConnection)
+
+                conexao = criar_conexao
             conn = conexao()
             raw = conn.read(spreadsheet=url, worksheet=worksheet, ttl=0)
             return validar(pd.DataFrame(raw), "Google Sheets (conexão)")
