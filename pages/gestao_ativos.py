@@ -563,12 +563,12 @@ class DS:
         render_section_header(i, t)
 
     @staticmethod
-    def kpi(col, l, v, s="", tema=""):
+    def kpi(col, label, value, subtitle="", tema=""):
         render_kpi(
             col,
-            l,
-            v,
-            s,
+            label,
+            value,
+            subtitle,
             {"v": "verde", "a": "vermelho", "av": "laranja"}.get(tema, "azul"),
         )
 

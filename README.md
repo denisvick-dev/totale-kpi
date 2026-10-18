@@ -61,9 +61,12 @@ Para scripts independentes, importe `render_seletor_tema_sidebar` de
 `components.sidebar` e chame essa função após
 `st.set_page_config()` e antes de `aplicar_estilo()`.
 
-Teste de regressão (com as dependências do projeto e `pytest` instalados):
+Para executar os testes e a verificação estática, instale as dependências de
+desenvolvimento e rode:
 ```bash
+python -m pip install -r requirements-dev.txt
 python -m pytest -q
+ruff check .
 ```
 
 ### 🤖 Robô de Bases (Volumetria + Quebra de Agenda)
@@ -195,38 +198,11 @@ Regras oficiais implementadas em `components/criterios.py`:
 - 🔦 `FLAG_GPON` é derivada automaticamente: `HABILIDADE` contém `PON` → `Sim`
 - A detecção das colunas aceita variações de nome (`TIPO OS 1`, `tipo_os_1`, `HABILIDADES`, `SKILL`...)
 
-## 🚀 Demonstração
-
-### Screenshots
-
-<details>
-<summary>📊 Dashboard Principal</summary>
-
-![Dashboard](docs/screenshots/dashboard.png)
-
-</details>
-
-<details>
-<summary>🗂️ Hierarquia</summary>
-
-![Hierarquia](docs/screenshots/hierarquia.png)
-
-</details>
-
-<details>
-<summary>✉️ Gerador de Assinatura</summary>
-
-![Assinatura](docs/screenshots/assinatura.png)
-
-</details>
-
----
-
 ## 🛠️ Tecnologias
 
 | Categoria | Tecnologias |
 |-----------|-------------|
-| **Framework** | Streamlit 1.31+ |
+| **Framework** | Streamlit 1.55+ |
 | **Linguagem** | Python 3.11+ |
 | **Backend** | Google Sheets API |
 | **Visualização** | Plotly, Pandas |
@@ -248,13 +224,13 @@ Regras oficiais implementadas em `components/criterios.py`:
 ## ⚙️ Instalação Local
 
 ### 1. Clone o Repositório
-\```bash
+```bash
 git clone https://github.com/denisvick-dev/totale-kpi.git
 cd totale-kpi
-\```
+```
 
 ### 2. Crie o Ambiente Virtual
-\```bash
+```bash
 python -m venv .venv
 
 # Windows
@@ -262,19 +238,19 @@ python -m venv .venv
 
 # Linux/Mac
 source .venv/bin/activate
-\```
+```
 
 ### 3. Instale as Dependências
-\```bash
+```bash
 pip install -r requirements.txt
-\```
+```
 
 ### 4. Configure as Credenciais
 
 Copie o arquivo de exemplo:
-\```bash
+```bash
 cp .streamlit/secrets.example.toml .streamlit/secrets.toml
-\```
+```
 
 Edite o `.streamlit/secrets.toml` com suas credenciais reais do Google Cloud e usuários.
 
@@ -297,9 +273,9 @@ gerada pelo robô (`dados/cache`). O upload manual continua disponível como
 alternativa — veja a seção [🤖 Robô de Bases](#-robô-de-bases-volumetria--quebra-de-agenda).
 
 ### 6. Execute o Aplicativo
-\```bash
+```bash
 streamlit run streamlit_app.py
-\```
+```
 
 Acesse: **http://localhost:8501**
 
@@ -328,34 +304,25 @@ Acesse: **http://localhost:8501**
 
 ```text
 totale-kpi/
-├── streamlit_app.py                # Entrada e navegação
-├── components/
-│   ├── componentes.py             # Design system (heros, cards, tabelas)
-│   ├── paleta.py                  # Cores compartilhadas
-│   ├── sidebar.py                 # Tema da barra lateral
-│   ├── calendario.py              # Dias úteis (Seg–Sáb) e feriados
-│   ├── base_operacional.py        # Pipeline único do robô (volumetria + quebra)
-│   ├── robo_local.py              # Robô de sincronismo da pasta local + painel
-│   └── criterios.py               # Regras de classificação operacional
-├── pages/                         # Painéis e Gestão de Ativos independente
-├── scripts/
-│   └── robot_base.py              # 🤖 Robô de atualização das bases
-├── dados/                         # (não versionado)
-│   ├── entrada/                   # Opcional: pasta alternativa às bases
-│   ├── cache/                     # Bases tratadas + manifesto.json
-│   └── logs/                      # Log das execuções do robô
+├── streamlit_app.py                 # Entrada e navegação
+├── components/                      # Design system e regras de negócio
+├── pages/                           # Painéis da aplicação
+├── scripts/robot_base.py            # Robô de atualização das bases
+├── dados/                           # Entrada, cache e logs locais (não versionados)
 ├── assets/
-│   ├── icons/totale.ico           # Ícone do app
-│   ├── images/novo-logo-totale.png # Logo da navegação
-│   └── fonts/                     # Oscine auto-hospedada (não versionada)
-├── tests/                         # Testes de interface e de dados
-├── .streamlit/                    # Configuração e exemplo de credenciais
-├── requirements.txt
+│   ├── fonts/LEIA-ME.md             # Instruções sobre a fonte Oscine
+│   ├── icons/totale.ico             # Ícone do app
+│   └── images/novo-logo-totale.png  # Logo da navegação
+├── fonts/                           # Arquivos Oscine versionados
+├── tests/                           # Testes de interface e de dados
+├── .github/workflows/ci.yml         # Testes, compilação e lint
+├── .devcontainer/                   # Ambiente Python 3.11
+├── .streamlit/                      # Configuração e exemplo de credenciais
+├── requirements.txt                 # Dependências de execução
+├── requirements-dev.txt             # Ferramentas de teste e lint
+├── pyproject.toml                   # Configuração do pytest e Ruff
 └── README.md
 ```
-
-Foram removidas imagens antigas sem referências no código; as páginas e
-arquivos de configuração utilizados continuam preservados.
 
 ---
 

@@ -109,3 +109,45 @@ def test_quebra_carrega_a_base_do_robo_e_mostra_os_segmentos(monkeypatch, tmp_pa
     assert len(app.get("file_uploader")) == 0
     textos = " ".join(item.value for item in app.markdown)
     assert "Super Relatório de Quebra de Agenda" in textos
+
+
+def test_volumetria_resolve_tipo_da_conexao_gsheets(monkeypatch):
+    from pages import volumetria
+
+    argumentos_conexao = {}
+
+    def conectar(nome, **kwargs):
+        argumentos_conexao.update(nome=nome, **kwargs)
+        return object()
+
+    def carregar_base(**kwargs):
+        kwargs["conexao"]()
+        return pd.DataFrame({"CONTRATO": ["1"]})
+
+    monkeypatch.setattr(volumetria.st, "connection", conectar)
+    monkeypatch.setattr(bo, "carregar_base_volumetria", carregar_base)
+
+    base = volumetria.DataLoader.carregar_base_automatica.__wrapped__()
+
+    assert argumentos_conexao == {
+        "nome": "gsheets",
+        "type": volumetria.GSheetsConnection,
+    }
+    assert base["CONTRATO"].tolist() == ["1"]
+
+
+def test_filtro_base_analitica_e_literal_e_preserva_a_base():
+    from pages.quebra import _filtrar_base_analitica
+
+    base = pd.DataFrame(
+        {
+            "CONTRATO": ["A+B", "AB", "C"],
+            "MONITOR": ["LIA", "LIA", "NINA"],
+        }
+    )
+
+    filtrada = _filtrar_base_analitica(base, ["CONTRATO"], " + ")
+
+    assert filtrada["CONTRATO"].tolist() == ["A+B"]
+    assert list(filtrada.columns) == ["CONTRATO"]
+    assert list(base.columns) == ["CONTRATO", "MONITOR"]
