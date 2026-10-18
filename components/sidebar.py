@@ -179,6 +179,14 @@ def gerar_css_sidebar() -> str:
     section[data-testid="stSidebar"] [data-testid="stExpander"] details {{
         border-color: var(--sidebar-borda);
         border-radius: var(--radius);
+        background: transparent !important;
+    }}
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary {{
+        background: transparent !important;
+        border-radius: var(--radius);
+    }}
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {{
+        background: var(--sidebar-hover) !important;
     }}
 
     /* Navegação: o item ativo não depende apenas da cor. */
@@ -200,9 +208,16 @@ def gerar_css_sidebar() -> str:
         border-left-color: var(--sidebar-destaque);
         font-weight: 700;
     }}
-    section[data-testid="stSidebar"] :is(a, button, summary):focus-visible {{
+    section[data-testid="stSidebar"] :is(a, button, summary, input, textarea):focus-visible,
+    section[data-testid="stSidebar"] [data-baseweb="select"] > div:focus-within,
+    section[data-testid="stSidebar"] [data-baseweb="input"]:focus-within {{
         outline: 2px solid var(--sidebar-destaque) !important;
         outline-offset: 2px;
+    }}
+    @media (prefers-reduced-motion: reduce) {{
+        section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a {{
+            transition: none !important;
+        }}
     }}
 
     /* Controles com superfície clara, inclusive no tema azul. Não usar um
@@ -224,12 +239,6 @@ def gerar_css_sidebar() -> str:
     }}
     section[data-testid="stSidebar"] [data-baseweb="tag"] {{
         background: #E2E8F0 !important;
-    }}
-    section[data-testid="stSidebar"] [data-baseweb="select"] > div:focus-within,
-    section[data-testid="stSidebar"] [data-baseweb="input"]:focus-within,
-    section[data-testid="stSidebar"] textarea:focus {{
-        outline: 2px solid var(--sidebar-destaque);
-        outline-offset: 1px;
     }}
     section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"] {{
         gap: 0.5rem;

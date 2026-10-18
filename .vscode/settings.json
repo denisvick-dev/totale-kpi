@@ -12,6 +12,10 @@
         "/^\\.\\\\\\.venv\\\\Scripts\\\\python\\.exe -m pytest tests\\\\test_componentes_visuais\\.py -q -k \"titulos_dos_heros or oscine_vale or fonte_auto_hospedada\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^git status --short; python \"C:\\\\Users\\\\denis\\\\\\.agents\\\\skills\\\\developing-with-streamlit\\\\scripts\\\\discover\\.py\" --project-dir \"C:\\\\Users\\\\denis\\\\Projects\\\\totale-kpi\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     },
 }

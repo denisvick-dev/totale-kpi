@@ -100,3 +100,15 @@ def test_botao_com_help_no_sidebar_nao_encolhe_por_seletor_de_icone():
     assert '[data-testid="stTooltipIcon"]' in css
     assert "width: 100% !important;" in css
 
+
+def test_sidebar_respeita_acessibilidade_de_foco_e_movimento():
+    app = AppTest.from_string(APP).run()
+    css = css_renderizado(app)
+
+    assert '[data-testid="stExpander"] summary' in css
+    assert "background: transparent !important;" in css
+    assert "summary:hover" in css
+    assert ":is(a, button, summary, input, textarea):focus-visible" in css
+    assert '[data-baseweb="select"] > div:focus-within' in css
+    assert "@media (prefers-reduced-motion: reduce)" in css
+    assert "transition: none !important;" in css
