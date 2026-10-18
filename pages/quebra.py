@@ -202,6 +202,13 @@ class DataLoader:
         return base if base is not None else pd.DataFrame()
 
     @staticmethod
+    def recarregar_base_automatica() -> pd.DataFrame:
+        """Refaz a base do robô com uma leitura nova da lista de ativos."""
+        DataLoader.buscar_gsheets.clear()
+        DataLoader.carregar_base_automatica.clear()
+        return DataLoader.carregar_base_automatica(forcar=True)
+
+    @staticmethod
     def _normalizar_lista_ativos(raw: pd.DataFrame) -> pd.DataFrame:
         """Padroniza a aba ``lista_ativos`` (implementação em base_operacional)."""
         return bo.normalizar_lista_ativos(raw)
@@ -313,18 +320,17 @@ class Analise:
             return pd.DataFrame()
 
         grp = (
-            df_valid.groupby(["MONITOR", "TIPO_SERVICO"])
-            .apply(
-                lambda x: pd.Series(
-                    {
-                        "executados": x.loc[
-                            x["Status Contrato"] == "Executada", "TOTAL DE TAREFAS"
-                        ].sum(),
-                        "nao_executados": x.loc[
-                            x["Status Contrato"] == "Não Executada", "TOTAL DE TAREFAS"
-                        ].sum(),
-                    }
-                )
+            df_valid.groupby(
+                ["MONITOR", "TIPO_SERVICO", "Status Contrato"]
+            )["TOTAL DE TAREFAS"]
+            .sum()
+            .unstack("Status Contrato", fill_value=0)
+            .reindex(columns=["Executada", "Não Executada"], fill_value=0)
+            .rename(
+                columns={
+                    "Executada": "executados",
+                    "Não Executada": "nao_executados",
+                }
             )
             .reset_index()
         )
@@ -494,7 +500,7 @@ def view_executiva(df: pd.DataFrame, meta_pct: float):
             return f"color: {'#B4232E' if val > meta_pct else '#087A55'}; font-weight: 700;"
         return ""
 
-    formatos = {
+    formatos: Dict[str, Any] = {
         **{c: "{:.1%}" for c in Config.ORDEM_TIPOS},
         "Quebra Geral": "{:.1%}",
         "Total Tarefas": "{:,.0f}",
@@ -502,7 +508,7 @@ def view_executiva(df: pd.DataFrame, meta_pct: float):
     sty = estilizar_dataframe(df_matriz, formatos)
     cols_pct = Config.ORDEM_TIPOS + ["Quebra Geral"]
     if hasattr(sty, "map"):
-        sty = sty.map(_cor_celula, subset=cols_pct)
+        sty = sty.map(_cor_celula, subset=pd.Index(cols_pct))
     else:
         sty = sty.applymap(_cor_celula, subset=cols_pct)  # type: ignore[attr-defined]
     st.dataframe(
@@ -893,9 +899,8 @@ def main():
             use_container_width=True,
             help="Roda o robô: relê o arquivo mais recente da pasta monitorada e refaz o cache.",
         ):
-            DataLoader.carregar_base_automatica.clear()
             with st.spinner("🤖 Robô processando a base ..."):
-                base = DataLoader.carregar_base_automatica(forcar=True)
+                base = DataLoader.recarregar_base_automatica()
             if base is not None and not base.empty:
                 st.session_state["df_memoria"] = base
                 st.session_state.pop("quebra_arquivo", None)
@@ -920,9 +925,14 @@ def main():
                 )
                 st.rerun()
             else:
+                with st.spinner("🔗 Atualizando a lista de ativos na base automática..."):
+                    base = DataLoader.recarregar_base_automatica()
+                if base is not None and not base.empty:
+                    st.session_state["df_memoria"] = base
+                    st.rerun()
                 st.warning(
-                    "Reenvie a base (ou rode o robô) para atualizar o vínculo "
-                    "nesta sessão antiga."
+                    "Não foi possível atualizar a lista de ativos. Verifique se a "
+                    "base original do robô ainda está disponível ou envie o arquivo."
                 )
         if st.button("🔄 Trocar Base de Dados", use_container_width=True):
             st.session_state["df_memoria"] = None

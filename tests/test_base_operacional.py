@@ -156,6 +156,34 @@ def test_volumetria_devolve_status_e_regiao(ambiente):
     assert "TEC SHEETS" in set(volumetria["TÉCNICO"])
 
 
+def test_carregar_volumetria_reprocessa_cache_sem_colunas_obrigatorias(ambiente):
+    base_sintetica(ambiente["entrada"] / "base.xlsx")
+    bo.gerar_bases(
+        pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
+    )
+    pd.DataFrame({"CONTRATO": ["1"]}).to_pickle(ambiente["cache"] / "volumetria.pkl")
+
+    volumetria = bo.carregar_base_volumetria(
+        pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
+    )
+
+    assert volumetria is not None
+    assert "STATUS CONTRATO" in volumetria.columns
+
+
+def test_carregar_volumetria_reporta_arquivo_sem_status(ambiente):
+    pd.DataFrame({"CONTRATO": ["1"]}).to_excel(
+        ambiente["entrada"] / "base.xlsx", index=False
+    )
+
+    with pytest.raises(ValueError, match="STATUS CONTRATO"):
+        bo.carregar_base_volumetria(
+            pasta_entrada=ambiente["entrada"],
+            pasta_cache=ambiente["cache"],
+            usar_cache=False,
+        )
+
+
 def test_cache_e_reaproveitado_quando_o_arquivo_nao_muda(ambiente):
     base_sintetica(ambiente["entrada"] / "base.xlsx")
 

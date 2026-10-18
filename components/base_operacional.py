@@ -1165,13 +1165,40 @@ def carregar_base_volumetria(
     **kwargs: Any,
 ) -> Optional[pd.DataFrame]:
     """Base de Volumetria pronta (cache do robô, recalculando quando necessário)."""
+    cache_invalido = False
     if usar_cache and not forcar:
         dados = manifesto(kwargs.get("pasta_cache"))
         if dados.get("status") == "ok" and not _cache_expirado(dados):
             cache = ler_cache(_ARQUIVO_VOLUMETRIA, kwargs.get("pasta_cache"))
-            if cache is not None:
+            if cache is not None and not _colunas_volumetria_ausentes(cache):
                 return cache
-    return gerar_bases(forcar=forcar, usar_cache=usar_cache, somente=("volumetria",), **kwargs).volumetria
+            cache_invalido = True
+
+    base = gerar_bases(
+        forcar=forcar or cache_invalido,
+        usar_cache=usar_cache,
+        somente=("volumetria",),
+        **kwargs,
+    ).volumetria
+    if base is None:
+        return None
+
+    ausentes = _colunas_volumetria_ausentes(base)
+    if ausentes:
+        raise ValueError(
+            "Base de volumetria inválida. Colunas obrigatórias ausentes: "
+            + ", ".join(ausentes)
+        )
+    erros = base.attrs.get("diagnostico", {}).get("erros", [])
+    if erros:
+        raise ValueError("Base de volumetria inválida: " + "; ".join(erros))
+    return base
+
+
+def _colunas_volumetria_ausentes(df: pd.DataFrame) -> List[str]:
+    """Colunas consumidas pela página de Volumetria."""
+    obrigatorias = (COL_STATUS, COL_TOTAL, COL_TECNICO, COL_MONITOR, COL_REGIAO)
+    return [coluna for coluna in obrigatorias if coluna not in df.columns]
 
 
 def carregar_base_quebra(

@@ -46,6 +46,35 @@ def test_fallback_conexao_sem_conta_de_servico(monkeypatch):
     assert ativos.attrs["fonte_ativos"] == "Google Sheets (conexão)"
 
 
+def test_recarregar_base_automatica_invalida_caches_e_forca_leitura(monkeypatch):
+    chamadas = []
+
+    def buscar_gsheets():
+        return pd.DataFrame()
+
+    buscar_gsheets.clear = lambda: chamadas.append("limpar_lista")
+
+    def carregar_base_automatica(forcar=False):
+        chamadas.append(("carregar_base", forcar))
+        return pd.DataFrame({"MONITOR": ["LIA"]})
+
+    carregar_base_automatica.clear = lambda: chamadas.append("limpar_base")
+
+    monkeypatch.setattr(quebra.DataLoader, "buscar_gsheets", buscar_gsheets)
+    monkeypatch.setattr(
+        quebra.DataLoader, "carregar_base_automatica", carregar_base_automatica
+    )
+
+    base = quebra.DataLoader.recarregar_base_automatica()
+
+    assert chamadas == [
+        "limpar_lista",
+        "limpar_base",
+        ("carregar_base", True),
+    ]
+    assert base["MONITOR"].tolist() == ["LIA"]
+
+
 def test_falha_na_leitura_nao_fica_silenciosa(monkeypatch):
     monkeypatch.setattr(quebra.st, "secrets", {})
     monkeypatch.setattr(quebra.st, "connection", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("indisponível")))
