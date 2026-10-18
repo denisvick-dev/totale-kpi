@@ -357,8 +357,15 @@ def test_css_do_painel_usa_oscine_nos_titulos():
     assert "@media (prefers-reduced-motion: reduce)" in css
 
 
-def test_central_de_atualizacao_hospeda_o_painel_e_publica_a_base(tmp_path):
+def test_central_de_atualizacao_hospeda_o_painel_e_publica_a_base(
+    tmp_path, monkeypatch
+):
+    from pages import quebra
+
     from components.robo_local import _listar_candidatos_com_stat, selecionar_arquivos
+
+    # Sem lista na sessão e sem rede em teste: o ETL deve degradar em silêncio.
+    monkeypatch.setattr(quebra.DataLoader, "buscar_gsheets", lambda: pd.DataFrame())
 
     pasta = tmp_path / "downloads"
     pasta.mkdir()
@@ -397,6 +404,83 @@ def test_central_de_atualizacao_hospeda_o_painel_e_publica_a_base(tmp_path):
     assert isinstance(df, pd.DataFrame)
     assert "TIPO_SERVICO" in df.columns  # ETL da Quebra aplicado
     assert "df_memoria_raw" in app.session_state
+
+
+def _app_central(tmp_path: Path, monkeypatch, ativos: pd.DataFrame) -> AppTest:
+    """Central de Atualização com a pasta monitorada e a lista_ativos injetada."""
+    from pages import quebra
+
+    from components.robo_local import _listar_candidatos_com_stat, selecionar_arquivos
+
+    monkeypatch.setattr(quebra.DataLoader, "buscar_gsheets", lambda: ativos)
+
+    pasta = tmp_path / "downloads"
+    pasta.mkdir()
+    pd.DataFrame(
+        {
+            "CONTRATO": ["1", "2"],
+            "LOGIN DO TÉCNICO": ["z613057", "Z641759"],
+            "TÉCNICO": ["z613057", "Z641759"],
+            "STATUS DA ATIVIDADE": ["ATIVA", "ATIVA"],
+            "STATUS DA O.S 1": ["EXECUTADA", "PENDENTE"],
+            "TIPO O.S 1": ["ADESAO", "ADESAO"],
+            "HABILIDADE DE TRABALHO": ["HFC(1/100)", "PON(1/100)"],
+            "CIDADE": ["SAO PAULO", "GUARULHOS"],
+            "TOTAL DE TAREFAS": [1, 1],
+        }
+    ).to_csv(pasta / "Atividades-SPO-2026.csv", index=False, sep=";")
+
+    assinatura = tuple(selecionar_arquivos(_listar_candidatos_com_stat(str(pasta))))
+    app = AppTest.from_file(
+        str(Path(__file__).resolve().parents[1] / "pages" / "envio_excel.py")
+    )
+    app.session_state["dados_cons"] = {"Consultivo": pd.DataFrame({"a": [1]})}
+    app.session_state["dados_prod"] = {"Prod": pd.DataFrame({"a": [1]})}
+    app.session_state["robo_pasta_alvo"] = str(pasta)
+    app.session_state["robo_candidato_sig"] = assinatura
+    app.session_state["robo_candidato_stable"] = 2
+    app.session_state["robo_processado_sig"] = None
+    app.run()
+    return app
+
+
+def test_central_vincula_lista_ativos_sem_dados_ativos_na_sessao(tmp_path, monkeypatch):
+    """Regressão: o robô publicava df_memoria sem vínculo em sessão nova.
+
+    A lista vinha apenas de ``session_state["dados_ativos"]`` (download da
+    nuvem); sem ele, o merge rodava vazio e tudo virava SEM MONITOR.
+    """
+    ativos = pd.DataFrame(
+        {
+            "Login": ["Z613057", "Z641759"],
+            "Técnico": ["ANA SOUZA", "BETO LIMA"],
+            "Monitor": ["EDSON MARCO PINHEIRO", "EDSON MARCO PINHEIRO"],
+        }
+    )
+    ativos.attrs["fonte_ativos"] = "Google Sheets (autenticado)"
+
+    app = _app_central(tmp_path, monkeypatch, ativos)
+
+    assert not app.exception
+    df = app.session_state["df_memoria"]
+    assert df["MONITOR"].tolist() == ["EDSON MARCO PINHEIRO"] * 2
+    assert df["TÉCNICO"].tolist() == ["ANA SOUZA", "BETO LIMA"]
+    assert df.attrs["diag_vinculados"] == 2
+    assert df.attrs["fonte_ativos"] == "Google Sheets (autenticado)"
+    assert not [w for w in app.warning if "lista_ativos" in w.value]
+
+
+def test_central_avisa_quando_a_lista_ativos_esta_inacessivel(tmp_path, monkeypatch):
+    vazia = pd.DataFrame()
+    vazia.attrs["erro_ativos"] = "Não foi possível ler a aba lista_ativos."
+
+    app = _app_central(tmp_path, monkeypatch, vazia)
+
+    assert not app.exception
+    df = app.session_state["df_memoria"]
+    assert df["MONITOR"].unique().tolist() == ["SEM MONITOR"]
+    assert df.attrs["erro_ativos"] == "Não foi possível ler a aba lista_ativos."
+    assert any("lista_ativos" in w.value for w in app.warning)
 
 
 def test_pasta_vazia_nao_varre_o_diretorio_atual(tmp_path, monkeypatch):

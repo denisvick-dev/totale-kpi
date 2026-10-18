@@ -856,6 +856,15 @@ def preparar_base_quebra(
         df[COL_LOGIN] = "SEM LOGIN"
 
     lista_ativos = lista_ativos if lista_ativos is not None else pd.DataFrame()
+    if not lista_ativos.empty:
+        # A lista pode chegar bruta (download da nuvem, sessão, cache antigo):
+        # login em caixa baixa, espaços, ".0", duplicados e desligados faziam o
+        # merge não encontrar ninguém (ou explodir no validate="many_to_one").
+        # Normalizar aqui torna o vínculo determinístico para qualquer fonte;
+        # os attrs (fonte/erro) precisam sobreviver à normalização.
+        attrs_ativos = dict(lista_ativos.attrs)
+        lista_ativos = normalizar_lista_ativos(lista_ativos)
+        lista_ativos.attrs.update(attrs_ativos)
     if col_login and not lista_ativos.empty and "Login" in lista_ativos.columns:
         df = df.merge(
             lista_ativos,

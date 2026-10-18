@@ -128,6 +128,13 @@ A página **Atualização de Dados** também hospeda o painel do robô local:
 - valida o ZIP do Excel, o encoding/separador do CSV e a estabilidade do arquivo;
 - publica a base tratada em `df_memoria` para os painéis e mantém a versão bruta
   em `df_memoria_raw`;
+- vincula a `lista_ativos` (mesma aba da Gestão de Ativos) **mesmo em sessão
+  nova**: reaproveita o download da sessão (`dados_ativos`) quando existe e,
+  caso contrário, busca a planilha com o mesmo cache de 5 min da Quebra de
+  Agenda; a lista é normalizada antes do merge (caixa, espaços, `.0`,
+  duplicados e desligados), então o vínculo não depende do formato da aba;
+- se a planilha estiver inacessível ou nenhum login coincidir, a prévia da
+  base publicada exibe um aviso — o merge vazio não passa mais despercebido;
 - mostra o status de cada base (SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM), a fila
   da pasta e o diagnóstico do último ciclo.
 
