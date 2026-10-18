@@ -387,7 +387,13 @@ if (
             "até o vínculo ser concluído; use **🔗 Atualizar Lista de Ativos** "
             "na Quebra de Agenda ou refaça a sincronização."
         )
-    render_dataframe(df_local.head(50), height=340)
+    render_dataframe(
+        df_local.head(50),
+        titulo="Amostra da Base Publicada pelo Robô",
+        icone="smart_toy",
+        badge=f"Top {min(50, len(df_local))} de {len(df_local):,}".replace(",", "."),
+        height=340,
+    )
 
 st.divider()
 render_section_header("cloud_sync", "Bases compartilhadas", "Google Sheets")
@@ -480,7 +486,13 @@ with aba1:
     render_kpi(c3, "Última Sincronização", data_sync, hora_sync, tema="verde")
 
     if not df_prod.empty:
-        render_dataframe(df_prod.head(100), height=400)
+        render_dataframe(
+            df_prod.head(100),
+            titulo="Amostra da Base de Produção",
+            icone="precision_manufacturing",
+            badge=f"Top {min(100, len(df_prod))} de {len(df_prod):,}".replace(",", "."),
+            height=400,
+        )
     else:
         st.warning("⚠️ Nenhuma aba chamada 'Prod' encontrada.")
 
@@ -495,6 +507,12 @@ with aba2:
     render_kpi(c6, "Última Sincronização", data_sync, hora_sync, tema="verde")
 
     if not df_cons.empty:
-        render_dataframe(df_cons.head(100), height=400)
+        render_dataframe(
+            df_cons.head(100),
+            titulo="Amostra da Base de Consultivos",
+            icone="shopping_bag",
+            badge=f"Top {min(100, len(df_cons))} de {len(df_cons):,}".replace(",", "."),
+            height=400,
+        )
     else:
         st.warning("⚠️ Nenhuma aba encontrada ou o arquivo CSV está vazio.")

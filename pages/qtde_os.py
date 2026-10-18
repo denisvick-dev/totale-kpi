@@ -16,6 +16,7 @@ import streamlit as st
 from components.calendario import InfoCalendario
 from components.componentes import (
     aplicar_estilo,
+    estilizar_dataframe,
     render_hero,
     render_insight,
     render_kpi,
@@ -168,13 +169,47 @@ class EstiloTabela:
 
     @staticmethod
     def cor_os(valor: Any) -> str:
-        # Fundo azul claro, texto azul escuro
-        return "background-color: #EFF6FF; color: #1E40AF; font-weight: 700;"
+        return (
+            "background-color: #EAF2FC; color: #0A2F6B; font-weight: 700; "
+            "border-left: 3px solid #0A2F6B; text-align: center;"
+        )
 
     @staticmethod
     def cor_projecao(valor: Any) -> str:
-        # Fundo laranja claro, texto laranja escuro
-        return "background-color: #FFF7ED; color: #C2410C; font-weight: 700;"
+        return (
+            "background-color: #FFF7ED; color: #C2410C; font-weight: 700; "
+            "border-left: 3px solid #E8700A; text-align: center;"
+        )
+
+    @staticmethod
+    def cor_meta(valor: Any) -> str:
+        try:
+            v = float(valor)
+        except (ValueError, TypeError):
+            return ""
+        if v >= 0:
+            return (
+                "background-color: #ECFDF5; color: #065F46; font-weight: 700; "
+                "text-align: center;"
+            )
+        return "color: #B4232E; font-weight: 600; text-align: center;"
+
+    @staticmethod
+    def estilizar_resumo(df: pd.DataFrame) -> pd.io.formats.style.Styler:
+        cols_meta = [c for c in df.columns if str(c).startswith("Meta")]
+        fmt: dict[str, Any] = {c: "{:+,}" for c in cols_meta}
+        if "Qtde. de O.S." in df.columns:
+            fmt["Qtde. de O.S."] = "{:,}"
+        if "Projeção" in df.columns:
+            fmt["Projeção"] = "{:,}"
+        styler = estilizar_dataframe(df, fmt)
+        if cols_meta:
+            styler = styler.map(EstiloTabela.cor_meta, subset=cols_meta)  # type: ignore[arg-type]
+        if "Qtde. de O.S." in df.columns:
+            styler = styler.map(EstiloTabela.cor_os, subset=["Qtde. de O.S."])  # type: ignore[arg-type]
+        if "Projeção" in df.columns:
+            styler = styler.map(EstiloTabela.cor_projecao, subset=["Projeção"])  # type: ignore[arg-type]
+        return styler
 
 
 # ====================================================
@@ -262,37 +297,52 @@ def main() -> None:
     col_esq, col_dir = st.columns(2)
 
     with col_esq:
-        render_section_header("groups", "Visão por Supervisor")
         df_sup = proc.tabela_supervisor(cal.dias_passados, cal.dias_faltantes)
+        render_section_header(
+            "groups", "Visão por Supervisor", f"{len(df_sup)} supervisores"
+        )
         if df_sup.empty:
             st.info("Sem dados de Supervisor.")
         else:
-            styled_sup = df_sup.style.map(
-                EstiloTabela.cor_os, subset=["Qtde. de O.S."]
-            ).map(EstiloTabela.cor_projecao, subset=["Projeção"])
-            st.dataframe(styled_sup, use_container_width=True, hide_index=True)
+            st.dataframe(
+                EstiloTabela.estilizar_resumo(df_sup),
+                use_container_width=True,
+                hide_index=True,
+            )
 
     with col_dir:
-        render_section_header("business_center", "Visão por Projeto")
         df_proj = proc.tabela_projeto(cal.dias_passados, cal.dias_faltantes)
+        render_section_header(
+            "business_center", "Visão por Projeto", f"{len(df_proj)} projetos"
+        )
         if df_proj.empty:
             st.info("Sem dados de Projeto.")
         else:
-            styled_proj = df_proj.style.map(
-                EstiloTabela.cor_os, subset=["Qtde. de O.S."]
-            ).map(EstiloTabela.cor_projecao, subset=["Projeção"])
-            st.dataframe(styled_proj, use_container_width=True, hide_index=True)
+            st.dataframe(
+                EstiloTabela.estilizar_resumo(df_proj),
+                use_container_width=True,
+                hide_index=True,
+            )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Técnicos ─────────────────────────────────────────────────────
-    render_section_header("engineering", "Performance de Técnicos")
     df_tec = proc.tabela_tecnico()
+    render_section_header(
+        "engineering", "Performance de Técnicos", f"{len(df_tec)} equipes"
+    )
     if df_tec.empty:
         st.info("Sem dados de Técnicos para exibir.")
     else:
-        styled_tec = df_tec.style.map(EstiloTabela.cor_os, subset=["Qtde. de O.S."])
-        st.dataframe(styled_tec, use_container_width=True, hide_index=True, height=400)
+        df_tec_display = df_tec.copy().reset_index(drop=True)
+        df_tec_display.insert(0, "Posição", range(1, len(df_tec_display) + 1))
+        df_tec_display = df_tec_display.rename(
+            columns={"CódAuxEquipe": "Cód. Equipe", "Nome Equipe": "Equipe"}
+        )
+        styled_tec = estilizar_dataframe(df_tec_display, {"Qtde. de O.S.": "{:,}"}).map(
+            EstiloTabela.cor_os, subset=["Qtde. de O.S."]
+        )  # type: ignore[arg-type]
+        st.dataframe(styled_tec, use_container_width=True, hide_index=True, height=420)
 
     # ── Rodapé no Sidebar ────────────────────────────────────────────
     if proc.ultima_atualizacao is not None and pd.notna(proc.ultima_atualizacao):

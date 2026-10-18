@@ -73,7 +73,10 @@ class EstiloTabela:
         try:
             numero = pd.to_numeric(valor, errors="coerce")
             if pd.notna(numero) and numero > 350:
-                return "background-color: #ECFDF5; color: #065F46; font-weight: bold;"
+                return (
+                    "background-color: #ECFDF5; color: #065F46; font-weight: 700; "
+                    "border-left: 3px solid #0D9668; text-align: center;"
+                )
         except (TypeError, ValueError):
             pass
         return ""
@@ -331,7 +334,13 @@ def main():
 
     if colunas_reais:
         style_df = style_df.set_properties(
-            **{"background-color": "#F8FAFC", "font-weight": "bold"},
+            **{
+                "background-color": "#EAF2FC",
+                "color": "#0A2F6B",
+                "font-weight": "700",
+                "border-left": "3px solid #0A2F6B",
+                "text-align": "center",
+            },
             subset=cast(Any, colunas_reais),
         )
     if colunas_proj:
@@ -339,7 +348,9 @@ def main():
             **{
                 "background-color": "#FFF7ED",
                 "color": "#C2410C",
-                "font-weight": "bold",
+                "font-weight": "700",
+                "border-left": "3px solid #E8700A",
+                "text-align": "center",
             },
             subset=cast(Any, colunas_proj),
         )
@@ -353,12 +364,22 @@ def main():
 
     # ── UI: Alerta de Equipes Zeradas ────────────────────────────────
     st.divider()
-    render_section_header("warning", "Equipes Zeradas (Sem Consultivos)")
+    render_section_header(
+        "warning",
+        "Equipes Zeradas (Sem Consultivos)",
+        f"{len(df_exibir[df_exibir['Total Consultivos'] == 0])} zeradas",
+    )
 
     df_zerados = df_exibir[df_exibir["Total Consultivos"] == 0]
 
     if not df_zerados.empty:
-        render_dataframe(df_zerados)
+        render_dataframe(
+            df_zerados,
+            titulo="Relação de Equipes Sem Consultivos",
+            icone="person_off",
+            fmt={c: "{:,}" for c in todas_num},
+            badge=f"{len(df_zerados)} equipes",
+        )
     else:
         render_insight(
             "✅ Excelente! 100% da operação possui pelo menos um consultivo registrado.",

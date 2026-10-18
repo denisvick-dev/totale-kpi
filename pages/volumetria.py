@@ -420,8 +420,15 @@ def main():
     with t1:
         te = calcular_volumetria(df, [Config.COL_REGIAO, Config.COL_MONITOR])
 
-        # Formatação das colunas para % e decimal via dicionário formatador
+        # Formatação das colunas para inteiros, % e decimais via dicionário formatador
         formato = {
+            "Executada": "{:,}",
+            "Não Executada": "{:,}",
+            "Pendente": "{:,}",
+            "Baixadas": "{:,}",
+            "Total Alocado": "{:,}",
+            "Projeção": "{:,}",
+            "Técnicos": "{:,}",
             "Taxa Execução": "{:.1%}",
             "Taxa Quebra": "{:.1%}",
             "OS/Técnico": "{:.1f}",
@@ -433,6 +440,8 @@ def main():
             titulo="Volumetria por Equipe",
             icone="groups",
             fmt=cast(Any, formato),
+            badge=f"{len(te)} equipes",
+            subtitulo="Consolidado por região e monitor",
             height=500,
         )
 
@@ -448,6 +457,8 @@ def main():
             df.head(500),
             titulo="Visualização da Base (limite 500 linhas)",
             icone="table_rows",
+            fmt={"TOTAL DE TAREFAS": "{:,.0f}"},
+            badge=f"{len(df):,} na base".replace(",", "."),
             height=500,
         )
 

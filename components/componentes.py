@@ -461,24 +461,116 @@ def _injetar_css_global() -> None:
         width: 100%;
     }}
 
-    /* ── Tabelas: moldura consistente inclusive nos st.dataframe das páginas ── */
+    /* ── Tabelas Corporativas: moldura, cabeçalho e tipografia ── */
     [data-testid="stDataFrame"], [data-testid="stTable"] {{
-        border: 1px solid var(--cor-borda);
-        border-radius: 10px;
+        border: 1px solid #DCE5F0;
+        border-top: 3px solid var(--cor-primaria);
+        border-radius: 12px;
         overflow: hidden;
         background: var(--cor-fundo-card, #FFFFFF);
-        box-shadow: 0 4px 16px rgba(10, 47, 107, 0.06);
+        box-shadow: 0 8px 24px rgba(10, 47, 107, 0.065), 0 2px 6px rgba(15, 23, 42, 0.03);
+        transition: border-color 0.18s ease, box-shadow 0.18s ease;
     }}
-    [data-testid="stDataFrame"]:hover {{
-        border-color: #C7D7E8;
-        box-shadow: 0 6px 20px rgba(10, 47, 107, 0.10);
+    [data-testid="stDataFrame"]:hover, [data-testid="stTable"]:hover {{
+        border-color: #B4C8E1;
+        border-top-color: var(--cor-secundaria);
+        box-shadow: 0 12px 28px rgba(10, 47, 107, 0.11), 0 4px 10px rgba(15, 23, 42, 0.05);
+    }}
+    [data-testid="stDataFrame"] [data-testid="stElementToolbar"] {{
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #DCE5F0;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(10, 47, 107, 0.08);
     }}
     .stDataFrame, .stTable,
     table, thead, tbody, tr, th, td {{
         font-family: var(--font-texto) !important;
     }}
+    thead th, [data-testid="stTable"] th {{
+        background: linear-gradient(180deg, #0D387D 0%, var(--cor-primaria) 100%);
+        color: #FFFFFF !important;
+        font-weight: 700;
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 10px 14px;
+        border-bottom: 2px solid var(--cor-secundaria);
+    }}
     th {{ font-weight: 600; color: var(--cor-texto-2); }}
-    td {{ font-variant-numeric: tabular-nums; }}
+    td {{ font-variant-numeric: tabular-nums; color: var(--cor-texto); }}
+
+    /* Barra superior corporativa para DataFrames */
+    .corp-table-bar {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 10px 14px;
+        margin: 8px 0 8px 0;
+        background: linear-gradient(90deg, #F8FAFC 0%, #FFFFFF 100%);
+        border: 1px solid #DCE5F0;
+        border-left: 4px solid var(--cor-primaria);
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(10, 47, 107, 0.04);
+    }}
+    .corp-table-bar-main {{
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }}
+    .corp-table-icon {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        flex: none;
+        border-radius: 8px;
+        background: #EAF2FC;
+        color: var(--cor-primaria);
+        font-size: 17px !important;
+    }}
+    .corp-table-title {{
+        font-family: var(--font-hero) !important;
+        font-size: 14.5px;
+        font-weight: 700;
+        color: var(--cor-texto);
+        letter-spacing: -0.01em;
+        line-height: 1.25;
+        margin: 0;
+    }}
+    .corp-table-sub {{
+        font-size: 11.5px;
+        color: var(--cor-texto-2);
+        margin-top: 1px;
+    }}
+    .corp-table-meta {{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }}
+    .corp-table-badge {{
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: #EAF2FC;
+        border: 1px solid #C8DCF5;
+        color: var(--cor-primaria);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }}
+    .corp-table-badge--muted {{
+        background: #F1F5F9;
+        border-color: #E2E8F0;
+        color: #475569;
+    }}
 
     /* ── Código ── */
     code, pre, kbd, samp {{
@@ -859,30 +951,264 @@ def render_insight(msg: str, tipo: TipoInsight = "info") -> None:
     )
 
 
+_COLUNAS_ID_EXATAS: frozenset[str] = frozenset(
+    {
+        "id",
+        "re",
+        "cod",
+        "cód",
+        "cód. equipe",
+        "códauxequipe",
+        "contrato",
+        "cep",
+        "login",
+        "login netsales",
+        "login_tecnico",
+        "posicao",
+        "posição",
+        "rank",
+        "#",
+        "ano",
+        "os",
+    }
+)
+_TERMOS_COLUNA_ID: tuple[str, ...] = (
+    "cód",
+    "cod",
+    "contrato",
+    "cep",
+    "login",
+)
+_TERMOS_COLUNA_PERCENTUAL: tuple[str, ...] = (
+    "%",
+    "taxa",
+    "quebra",
+    "eficiencia",
+    "eficiência",
+    "conversao",
+    "conversão",
+    "acumulado",
+    "pct",
+)
+
+_STATUS_ESTILOS_CORP: dict[str, str] = {
+    "executada": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "executado": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "ativo": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "ativa": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "concluída": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "concluido": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "sim": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "✅": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "merge (sheets)": "background-color: #ECFDF5; color: #065F46; font-weight: 600; text-align: center;",
+    "não executada": "background-color: #FEF2F2; color: #991B1B; font-weight: 700; text-align: center;",
+    "nao executada": "background-color: #FEF2F2; color: #991B1B; font-weight: 700; text-align: center;",
+    "inoperante": "background-color: #FEF2F2; color: #991B1B; font-weight: 700; text-align: center;",
+    "desligado": "background-color: #FEF2F2; color: #991B1B; font-weight: 700; text-align: center;",
+    "inativo": "background-color: #FEF2F2; color: #991B1B; font-weight: 700; text-align: center;",
+    "cancelada": "background-color: #FEF2F2; color: #991B1B; font-weight: 700; text-align: center;",
+    "❌": "background-color: #FEF2F2; color: #991B1B; font-weight: 700; text-align: center;",
+    "não mapeado": "background-color: #FEF2F2; color: #991B1B; font-weight: 600; text-align: center;",
+    "nao mapeado": "background-color: #FEF2F2; color: #991B1B; font-weight: 600; text-align: center;",
+    "pendente": "background-color: #FFFBEB; color: #92400E; font-weight: 700; text-align: center;",
+    "férias": "background-color: #FFFBEB; color: #92400E; font-weight: 700; text-align: center;",
+    "ferias": "background-color: #FFFBEB; color: #92400E; font-weight: 700; text-align: center;",
+    "em aberto": "background-color: #FFFBEB; color: #92400E; font-weight: 700; text-align: center;",
+    "aberto": "background-color: #FFFBEB; color: #92400E; font-weight: 700; text-align: center;",
+    "⚠️": "background-color: #FFFBEB; color: #92400E; font-weight: 700; text-align: center;",
+    "arquivo origem": "background-color: #FFFBEB; color: #92400E; font-weight: 600; text-align: center;",
+    "etn": "background-color: #F5F3FF; color: #5B21B6; font-weight: 700; text-align: center;",
+    "afastado": "background-color: #F1F5F9; color: #475569; font-weight: 600; text-align: center;",
+    "não": "color: #6B7280; text-align: center;",
+    "nao": "color: #6B7280; text-align: center;",
+}
+
+_REGIAO_ESTILOS_CORP: dict[str, str] = {
+    "leste": "background-color: #EFF6FF; color: #1E40AF; font-weight: 700; text-align: center;",
+    "net-leste": "background-color: #EFF6FF; color: #1E40AF; font-weight: 700; text-align: center;",
+    "gru": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "guarulhos": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "net-guarulhos": "background-color: #ECFDF5; color: #065F46; font-weight: 700; text-align: center;",
+    "abcdm": "background-color: #F5F3FF; color: #5B21B6; font-weight: 700; text-align: center;",
+    "net-abcdm": "background-color: #F5F3FF; color: #5B21B6; font-weight: 700; text-align: center;",
+    "outras": "background-color: #F1F5F9; color: #475569; font-weight: 600; text-align: center;",
+}
+
+_SEGMENTO_ESTILOS_CORP: dict[str, str] = {
+    "novos domicílios": "background-color: #ECFDF5; color: #065F46; font-weight: 700;",
+    "novos domicilios": "background-color: #ECFDF5; color: #065F46; font-weight: 700;",
+    "🏠 novos domicílios": "background-color: #ECFDF5; color: #065F46; font-weight: 700;",
+    "migração": "background-color: #EFF6FF; color: #1E40AF; font-weight: 700;",
+    "migracao": "background-color: #EFF6FF; color: #1E40AF; font-weight: 700;",
+    "🔄 migração": "background-color: #EFF6FF; color: #1E40AF; font-weight: 700;",
+    "pme": "background-color: #F5F3FF; color: #5B21B6; font-weight: 700;",
+    "🏢 pme": "background-color: #F5F3FF; color: #5B21B6; font-weight: 700;",
+    "🔦 flag_gpon": "background-color: #FFFBEB; color: #92400E; font-weight: 700;",
+    "outros": "color: #475569; font-weight: 600;",
+    "⚪ outros": "color: #475569; font-weight: 600;",
+}
+
+
+def _inferir_formatos_corporativos(
+    df: pd.DataFrame, fmt: FmtDict | None = None
+) -> dict[str, BaseFormatter]:
+    """Combina formatos explícitos com inferência corporativa para colunas numéricas."""
+    formatos: dict[str, BaseFormatter] = {
+        c: f for c, f in (fmt or {}).items() if c in df.columns and f is not None
+    }
+    for col in df.columns:
+        if col in formatos:
+            continue
+        col_norm = str(col).strip().casefold()
+        if col_norm in _COLUNAS_ID_EXATAS or any(
+            termo in col_norm for termo in _TERMOS_COLUNA_ID
+        ):
+            continue
+        serie = df[col]
+        if pd.api.types.is_bool_dtype(serie):
+            continue
+        if pd.api.types.is_integer_dtype(serie):
+            formatos[col] = "{:,}"
+        elif pd.api.types.is_float_dtype(serie):
+            if any(termo in col_norm for termo in _TERMOS_COLUNA_PERCENTUAL):
+                formatos[col] = "{:.1%}"
+            else:
+                formatos[col] = "{:,.1f}"
+    return formatos
+
+
+def _estilo_status_corporativo(valor: object) -> str:
+    chave = str(valor or "").strip().casefold()
+    return _STATUS_ESTILOS_CORP.get(chave, "")
+
+
+def _estilo_regiao_corporativo(valor: object) -> str:
+    chave = str(valor or "").strip().casefold()
+    return _REGIAO_ESTILOS_CORP.get(chave, "")
+
+
+def _estilo_segmento_corporativo(valor: object) -> str:
+    chave = str(valor or "").strip().casefold()
+    return _SEGMENTO_ESTILOS_CORP.get(chave, "")
+
+
+def _estilo_posicao_corporativo(valor: object) -> str:
+    texto = str(valor or "").strip()
+    if not texto:
+        return ""
+    if "🥇" in texto or texto in {"1", "1º"}:
+        return "background-color: #FEF9C3; color: #854D0E; font-weight: 800; text-align: center;"
+    if "🥈" in texto or texto in {"2", "2º"}:
+        return "background-color: #F1F5F9; color: #334155; font-weight: 800; text-align: center;"
+    if "🥉" in texto or texto in {"3", "3º"}:
+        return "background-color: #FFEDD5; color: #9A3412; font-weight: 800; text-align: center;"
+    return f"color: {COR_PRIMARIA}; font-weight: 700; text-align: center;"
+
+
 def estilizar_dataframe(
     df: pd.DataFrame, fmt: FmtDict | None = None
 ) -> pd.io.formats.style.Styler:
-    """Faixas leves e totais destacados, sem alterar os valores exportáveis do DataFrame."""
-    styler = df.reset_index(drop=True).style
-    if fmt:
-        formatos = {c: f for c, f in fmt.items() if c in df.columns}
+    """Faixas corporativas, destaques semânticos e totais preservando os dados brutos."""
+    df_clean = df.reset_index(drop=True)
+    styler = df_clean.style
+
+    formatos = _inferir_formatos_corporativos(df_clean, fmt)
+    if formatos:
         styler = styler.format(formatos)  # type: ignore[arg-type]
+
+    styler = styler.set_table_styles(
+        [
+            {
+                "selector": "thead th",
+                "props": [
+                    ("background-color", COR_PRIMARIA),
+                    ("color", "#FFFFFF"),
+                    ("font-weight", "700"),
+                    ("font-size", "11.5px"),
+                    ("text-transform", "uppercase"),
+                    ("letter-spacing", "0.05em"),
+                    ("padding", "10px 14px"),
+                    ("border-bottom", f"2px solid {COR_SECUNDARIA}"),
+                ],
+            },
+            {
+                "selector": "tbody td",
+                "props": [
+                    ("padding", "9px 14px"),
+                    ("border-bottom", f"1px solid {COR_BORDA}"),
+                    ("font-variant-numeric", "tabular-nums"),
+                ],
+            },
+        ]
+    )
+
     # A aplicação célula a célula em bases grandes tornaria a navegação lenta.
-    if len(df) <= 1000:
+    if len(df_clean) <= 1000 and len(df_clean.columns) > 0:
 
         def faixa(linha: pd.Series) -> list[str]:
-            total = str(linha.iloc[0]).strip().casefold().startswith("total geral")
+            primeiro = str(linha.iloc[0]).strip().casefold() if len(linha) else ""
+            total = (
+                primeiro.startswith(
+                    ("total geral", "total ", "consolidado", "média geral")
+                )
+                or primeiro == "total"
+            )
             fundo = (
                 "#EAF2FC"
                 if total
                 else ("#F5F8FC" if int(linha.name) % 2 else "#FFFFFF")
             )
-            estilo = f"background-color: {fundo};"
+            cor_txt = COR_PRIMARIA if total else COR_TEXTO
+            estilo = f"background-color: {fundo}; color: {cor_txt};"
             if total:
-                estilo += "font-weight: 700;"
+                estilo += f"font-weight: 700; border-top: 2px solid {COR_PRIMARIA};"
             return [estilo] * len(linha)
 
         styler = styler.apply(faixa, axis=1)
+
+        cols_pos = [
+            c
+            for c in df_clean.columns
+            if str(c).strip().casefold() in {"posição", "posicao", "rank", "#"}
+        ]
+        if cols_pos:
+            styler = styler.map(_estilo_posicao_corporativo, subset=cols_pos)  # type: ignore[arg-type]
+
+        cols_status = [
+            c
+            for c in df_clean.columns
+            if str(c).strip().casefold()
+            in {
+                "status",
+                "status contrato",
+                "situação",
+                "situacao",
+                "status_atividade",
+                "status da atividade",
+                "flag_gpon",
+                "origem_mapeamento",
+            }
+        ]
+        if cols_status:
+            styler = styler.map(_estilo_status_corporativo, subset=cols_status)  # type: ignore[arg-type]
+
+        cols_regiao = [
+            c
+            for c in df_clean.columns
+            if str(c).strip().casefold() in {"região", "regiao", "base"}
+        ]
+        if cols_regiao:
+            styler = styler.map(_estilo_regiao_corporativo, subset=cols_regiao)  # type: ignore[arg-type]
+
+        cols_seg = [
+            c
+            for c in df_clean.columns
+            if str(c).strip().casefold()
+            in {"tipo_servico", "tipo de serviço", "segmento", "classificação"}
+        ]
+        if cols_seg:
+            styler = styler.map(_estilo_segmento_corporativo, subset=cols_seg)  # type: ignore[arg-type]
+
     return styler
 
 
@@ -892,6 +1218,8 @@ def render_dataframe(
     icone: str = "bar_chart",
     height: int = 400,
     fmt: FmtDict | None = None,
+    badge: str = "",
+    subtitulo: str = "",
     **kwargs: Any,
 ) -> None:
     if not isinstance(df, pd.DataFrame):
@@ -902,15 +1230,45 @@ def render_dataframe(
         return
 
     if titulo:
+        icone_limpo = str(icone or "").strip()
+        if icone_limpo:
+            eh_material = bool(re.fullmatch(r"[a-z0-9_]+", icone_limpo))
+            cls_icone = (
+                "material-symbols-rounded corp-table-icon"
+                if eh_material
+                else "corp-table-icon"
+            )
+            icone_html = (
+                f'<span class="{cls_icone}" aria-hidden="true">'
+                f"{escape(icone_limpo)}</span>"
+            )
+        else:
+            icone_html = ""
+
+        sub_html = (
+            f'<div class="corp-table-sub">{escape(str(subtitulo))}</div>'
+            if subtitulo
+            else ""
+        )
+        n_linhas = f"{len(df):,}".replace(",", ".")
+        rotulo_linhas = "registro" if len(df) == 1 else "registros"
+        badge_principal = badge or f"{n_linhas} {rotulo_linhas}"
+        badge_cols = f"{len(df.columns)} col." if len(df.columns) > 1 else "1 col."
+
         st.markdown(
-            f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">'
-            f'<span class="material-symbols-rounded" style="font-size:18px;color:{COR_SECUNDARIA};">{escape(icone)}</span>'
-            f'<span style="font-size:14px;font-weight:700;color:{COR_TEXTO};">{escape(titulo)}</span>'
-            f"</div>",
+            f'<div class="corp-table-bar">'
+            f'<div class="corp-table-bar-main">'
+            f"{icone_html}"
+            f'<div><div class="corp-table-title">{escape(str(titulo))}</div>{sub_html}</div>'
+            f"</div>"
+            f'<div class="corp-table-meta">'
+            f'<span class="corp-table-badge">{escape(str(badge_principal))}</span>'
+            f'<span class="corp-table-badge corp-table-badge--muted">{escape(badge_cols)}</span>'
+            f"</div></div>",
             unsafe_allow_html=True,
         )
 
-    altura = min(height, 40 + 36 * len(df))
+    altura = min(height, 46 + 36 * len(df)) if isinstance(height, int) else height
     try:
         st.dataframe(
             estilizar_dataframe(df, fmt),
