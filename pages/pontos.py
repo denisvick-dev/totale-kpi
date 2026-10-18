@@ -401,6 +401,14 @@ MEDIA_GERAL_PONTOS = (
 # ====================================================
 st.sidebar.header("🎯 Filtros Avançados")
 
+colunas_filtro = ("Projeto", "Supervisor", "Nome Equipe")
+
+
+def limpar_filtros() -> None:
+    for col_nome in colunas_filtro:
+        st.session_state[f"sel_{col_nome}"] = "Todos"
+
+
 for col_nome, label in [
     ("Projeto", "Projeto:"),
     ("Supervisor", "Supervisor:"),
@@ -412,8 +420,7 @@ for col_nome, label in [
         if sel != "Todos":
             df = df[df[col_nome] == sel]
 
-if st.sidebar.button("🔄 Limpar Filtros"):
-    st.rerun()
+st.sidebar.button("🔄 Limpar Filtros", on_click=limpar_filtros)
 
 
 # ====================================================
