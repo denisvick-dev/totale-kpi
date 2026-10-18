@@ -22,6 +22,7 @@ from google.oauth2.service_account import Credentials
 
 from components.componentes import (
     aplicar_estilo,
+    estilizar_dataframe,
     render_hero,
     render_kpi,
     render_section_header,
@@ -546,9 +547,9 @@ class DS:
         .stApp{{--card-surface:{t["su"]};--card-text:{t["t"]};--card-muted:{t["p"]};--card-border:{t["b"]};}}
         .section-title{{color:{t["t"]}!important;}}
         .section-badge{{background:{t["su"]};border-color:{t["b"]};color:{t["t"]};}}
-        [data-testid="stDataFrame"]{{background:{t["su"]};border:1px solid {t["b"]};border-radius:10px;
-            overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08);}}
-        [data-testid="stDataFrame"]:hover{{border-color:{t["p"]};}}
+        [data-testid="stDataFrame"]{{background:{t["su"]};border:1px solid {t["b"]};border-top:3px solid {t["p"]};border-radius:12px;
+            overflow:hidden;box-shadow:0 8px 24px rgba(10,47,107,.08);}}
+        [data-testid="stDataFrame"]:hover{{border-color:{t["p"]};border-top-color:#E8700A;}}
         ::-webkit-scrollbar{{width:5px;height:5px;}} ::-webkit-scrollbar-thumb{{background:{t["b"]};border-radius:3px;}}
         </style>""",
             unsafe_allow_html=True,
@@ -725,7 +726,12 @@ def view_dashboard(df_raw, usr):
     st.divider()
     DS.sec("📋", "Listagem")
     exportar(df, "ativos")
-    st.dataframe(df, use_container_width=True, hide_index=True, key="dash_tabela")
+    st.dataframe(
+        estilizar_dataframe(df),
+        use_container_width=True,
+        hide_index=True,
+        key="dash_tabela",
+    )
 
 
 def view_hierarquia(svc):
@@ -765,7 +771,12 @@ def view_hierarquia(svc):
         st.plotly_chart(fig, use_container_width=True, key="hier_treemap")
 
     exportar(df, "hierarquia")
-    st.dataframe(df, use_container_width=True, hide_index=True, key="hier_tabela")
+    st.dataframe(
+        estilizar_dataframe(df),
+        use_container_width=True,
+        hide_index=True,
+        key="hier_tabela",
+    )
 
 
 def view_cadastro(svc, usr):
@@ -931,7 +942,12 @@ def view_importacao(svc, usr):
         return
 
     df_imp = Safe.limpar_df(df_imp)
-    st.dataframe(df_imp.head(20), use_container_width=True, key="imp_preview")
+    st.dataframe(
+        estilizar_dataframe(df_imp.head(20)),
+        use_container_width=True,
+        hide_index=True,
+        key="imp_preview",
+    )
     st.caption(f"{len(df_imp)} linhas.")
 
     if st.button("🚀 Importar", type="primary", key="imp_btn"):
@@ -976,7 +992,7 @@ def view_desligados(svc, usr):
 
     exportar(df, "desligados")
     st.dataframe(
-        df.iloc[::-1].reset_index(drop=True),
+        estilizar_dataframe(df.iloc[::-1].reset_index(drop=True)),
         use_container_width=True,
         hide_index=True,
         key="deslig_tabela",
@@ -1117,7 +1133,7 @@ def view_auditoria(repo, usr):
 
     exportar(df.iloc[::-1], "auditoria")
     st.dataframe(
-        df.iloc[::-1].reset_index(drop=True),
+        estilizar_dataframe(df.iloc[::-1].reset_index(drop=True)),
         use_container_width=True,
         hide_index=True,
         key="aud_tabela",

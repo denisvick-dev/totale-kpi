@@ -97,7 +97,7 @@ class ComponenteVisual:
             df_display["Rank"] = df_display["Rank"].apply(Utilitarios.formatar_posicao)
 
         cols_meta = [c for c in df_display.columns if "Meta" in c]
-        formatos: dict[str, Any] = {c: "{:,.1f}" for c in cols_meta}
+        formatos: dict[str, Any] = {c: "{:+,.1f}" for c in cols_meta}
         if "Pontos" in df_display.columns:
             formatos["Pontos"] = "{:,.1f}"
         if "Proj. Fechamento" in df_display.columns:
@@ -105,6 +105,8 @@ class ComponenteVisual:
 
         styler = estilizar_dataframe(df_display, formatos)
 
+        if cols_meta:
+            styler = styler.map(Utilitarios.colorir_delta_meta, subset=cols_meta)  # type: ignore[arg-type]
         if "Pontos" in df_display.columns:
             styler = styler.map(Utilitarios.colorir_metas, subset=["Pontos"])  # type: ignore[arg-type]
         if "Proj. Fechamento" in df_display.columns:
@@ -186,13 +188,29 @@ class Utilitarios:
                 "background-color:#FEF9C3;color:#854D0E;font-weight:700;"
                 "border-left:3px solid #EAB308;text-align:center;"
             )
-        return "font-weight:700;border-left:3px solid #EF4444;text-align:center;"
+        return (
+            "background-color:#FEF2F2;color:#991B1B;font-weight:700;"
+            "border-left:3px solid #EF4444;text-align:center;"
+        )
+
+    @staticmethod
+    def colorir_delta_meta(valor: Any) -> str:
+        try:
+            v = float(valor)
+        except (ValueError, TypeError):
+            return ""
+        if v >= 0:
+            return (
+                "background-color:#ECFDF5;color:#065F46;font-weight:700;"
+                "text-align:center;"
+            )
+        return "color:#B4232E;font-weight:600;text-align:center;"
 
     @staticmethod
     def colorir_projecao(valor: Any) -> str:
         return (
-            "background-color:#0F172A;color:#FFFFFF;font-weight:800;"
-            "text-align:center;border-left:3px solid #64748B;"
+            "background-color:#0A2F6B;color:#FFFFFF;font-weight:800;"
+            "text-align:center;border-left:3px solid #E8700A;"
         )
 
     @staticmethod
@@ -489,17 +507,21 @@ with col_dl:
 st.markdown(
     f"""
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;
-         padding:12px 16px;background:#F8FAFC;border-radius:8px;
-         border:1px solid #E2E8F0;font-size:0.78rem;
-         font-family:{FONTE_TEXTO};">
+         padding:12px 16px;background:#F8FAFC;border-radius:10px;
+         border:1px solid #DCE5F0;font-size:0.78rem;
+         font-family:{FONTE_TEXTO};align-items:center;">
         <span style="font-weight:700;color:{COR_TEXTO_3};
              text-transform:uppercase;letter-spacing:0.05em;">🎨 Legenda:</span>
         <span style="background:#1E3A8A;color:white;padding:3px 10px;
              border-radius:6px;font-weight:700;">🏆 400+ pts — Alta Performance</span>
         <span style="background:#DCFCE7;color:#166534;padding:3px 10px;
-             border-radius:6px;font-weight:700;">✅ 300-399 — Na Meta</span>
+             border-radius:6px;font-weight:700;">✅ 300–399 — Na Meta</span>
         <span style="background:#FEF9C3;color:#854D0E;padding:3px 10px;
-             border-radius:6px;font-weight:700;">⚠️ 275-299 — Próximo da Meta</span>
+             border-radius:6px;font-weight:700;">⚠️ 275–299 — Próximo da Meta</span>
+        <span style="background:#FEF2F2;color:#991B1B;padding:3px 10px;
+             border-radius:6px;font-weight:700;">🚨 &lt; 275 — Abaixo da Meta</span>
+        <span style="background:#0A2F6B;color:white;padding:3px 10px;
+             border-radius:6px;font-weight:700;border-left:3px solid #E8700A;">🎯 Proj. Fechamento</span>
     </div>
     """,
     unsafe_allow_html=True,

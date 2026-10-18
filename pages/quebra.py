@@ -490,7 +490,15 @@ def view_executiva(df: pd.DataFrame, meta_pct: float):
     # Mesmo visual das outras tabelas, com sinalização das quebras acima da meta.
     def _cor_celula(val):
         if pd.notna(val):
-            return f"color: {'#B4232E' if val > meta_pct else '#087A55'}; font-weight: 700;"
+            if val > meta_pct:
+                return (
+                    "background-color: #FEF2F2; color: #B4232E; "
+                    "font-weight: 700; text-align: center;"
+                )
+            return (
+                "background-color: #ECFDF5; color: #087A55; "
+                "font-weight: 700; text-align: center;"
+            )
         return ""
 
     formatos: dict[str, Any] = {
@@ -630,12 +638,14 @@ def view_segmento(df: pd.DataFrame, segmento: str, meta: float):
             df_tec,
             titulo="Ranking de Quebra por Técnico",
             icone="person",
+            badge=f"{len(df_tec)} técnicos",
             height=450,
             fmt={
                 "Quebra Atual": "{:.1%}",
                 "Alocado": "{:,}",
                 "Executadas": "{:,}",
                 "Nao_Executadas": "{:,}",
+                "Considerado": "{:,}",
             },
         )
 
@@ -654,6 +664,7 @@ def view_segmento(df: pd.DataFrame, segmento: str, meta: float):
             df_pend[cols],
             titulo="Fila de Ordens Pendentes",
             icone="list_alt",
+            badge=f"{len(df_pend)} pendentes",
             height=450,
         )
 
@@ -766,7 +777,13 @@ def view_base_completa(df: pd.DataFrame, df_full: pd.DataFrame):
             f"Exibindo {limite_linhas:,} de {len(df_view):,} registros filtrados. "
             "A exportação inclui todos os resultados da busca."
         )
-    render_dataframe(df_view.head(limite_linhas), height=420, icone="")
+    render_dataframe(
+        df_view.head(limite_linhas),
+        titulo="Registros da Base Analítica",
+        icone="table_view",
+        badge=f"{len(df_view):,} filtrados".replace(",", "."),
+        height=420,
+    )
 
     # ── Exportações ──
     st.markdown("<br>", unsafe_allow_html=True)

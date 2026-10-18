@@ -191,3 +191,83 @@ def test_fontes_versionadas_do_kit_alimentam_a_oscine_dos_heros(monkeypatch):
     assert ";base64," in css
     assert "font-weight: 400" in css
     assert "font-weight: 700" in css
+
+
+def test_estilizar_dataframe_aplica_destaques_corporativos_e_preserva_ids():
+    df = pd.DataFrame(
+        {
+            "Posição": ["🥇 1º", "🥈 2º", "Total Geral"],
+            "CONTRATO": [123456, 654321, 999999],
+            "Status Contrato": ["Executada", "Não Executada", "Pendente"],
+            "REGIÃO": ["LESTE", "GRU", "ABCDM"],
+            "TIPO_SERVICO": ["Migração", "Novos Domicílios", "PME"],
+            "Volume": [1200, 850, 2050],
+            "Taxa Execução": [0.85, 0.72, 0.80],
+        }
+    )
+
+    html = componentes.estilizar_dataframe(df).to_html()
+
+    # Cabeçalho institucional e linha de total
+    assert componentes.COR_PRIMARIA in html
+    assert "#EAF2FC" in html
+    # Formatação automática de métricas sem alterar IDs de contrato
+    assert "1,200" in html
+    assert "85.0%" in html
+    assert "123,456" not in html
+    # Destaques semânticos de status, região, segmento e pódio
+    assert "#ECFDF5" in html  # Executada / GRU / Novos Domicílios
+    assert "#FEF2F2" in html  # Não Executada
+    assert "#EFF6FF" in html  # LESTE / Migração
+    assert "#F5F3FF" in html  # ABCDM / PME
+    assert "#FEF9C3" in html  # 1º lugar
+
+
+def test_render_dataframe_exibe_barra_corporativa_e_escapa_html(monkeypatch):
+    blocos = []
+    tabelas = []
+    monkeypatch.setattr(
+        componentes.st, "markdown", lambda html, **kw: blocos.append(html)
+    )
+    monkeypatch.setattr(
+        componentes.st, "dataframe", lambda data, **kw: tabelas.append((data, kw))
+    )
+
+    df = pd.DataFrame({"Monitor": ["ANA", "BIA"], "Volume": [10, 20]})
+    componentes.render_dataframe(
+        df,
+        titulo="Relatório <Executivo>",
+        icone="groups",
+        subtitulo="Consolidado & filtrado",
+        badge="2 monitores",
+    )
+
+    assert len(blocos) == 1
+    assert 'class="corp-table-bar"' in blocos[0]
+    assert "Relatório &lt;Executivo&gt;" in blocos[0]
+    assert "Consolidado &amp; filtrado" in blocos[0]
+    assert "2 monitores" in blocos[0]
+    assert "2 col." in blocos[0]
+    assert len(tabelas) == 1
+
+
+def test_qtde_os_estilizar_resumo_formata_metas_com_sinal():
+    from pages.qtde_os import EstiloTabela
+
+    df = pd.DataFrame(
+        {
+            "Supervisor": ["SUP A", "SUP B"],
+            "Qtde. de O.S.": [2600, 2100],
+            "Meta | 2500": [100, -400],
+            "Projeção": [3100, 2450],
+        }
+    )
+
+    html = EstiloTabela.estilizar_resumo(df).to_html()
+
+    assert "+100" in html
+    assert "-400" in html
+    assert "2,600" in html
+    assert "3,100" in html
+    assert "#ECFDF5" in html
+    assert "#B4232E" in html

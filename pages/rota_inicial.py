@@ -143,73 +143,81 @@ def _injetar_css_local() -> None:
             font-weight:700; position:relative; z-index:2;
         }
 
-        /* ── Tabelas Rota/Turno ── */
+        /* ── Tabelas Rota/Turno (Visual Corporativo TOTALE) ── */
         .rota-wrapper {
-            margin: 24px 0;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-            border-radius: 12px; overflow: hidden; border: 1px solid #E2E8F0;
+            margin: 22px 0;
+            box-shadow: 0 8px 24px rgba(10, 47, 107, 0.08);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #DCE5F0;
+            background: #FFFFFF;
         }
         .rota-titulo {
-            background: #0F172A; color: #F8FAFC;
-            font-weight: 700; font-size: 14px; text-align: left;
-            padding: 14px 20px; letter-spacing: 0.5px;
-            text-transform: uppercase; border-bottom: 3px solid #312E81;
+            background: linear-gradient(115deg, #092452 0%, #0A2F6B 65%, #164583 100%);
+            color: #FFFFFF;
+            font-weight: 800;
+            font-size: 13.5px;
+            text-align: left;
+            padding: 13px 20px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            border-bottom: 3px solid #E8700A;
         }
         table.rota-tab {
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: white; font-size: 13px;
         }
         table.rota-tab th {
-            background: #1E293B; color: #F1F5F9;
-            font-weight: 600; font-size: 11px;
+            background: #0F2547; color: #F8FAFC;
+            font-weight: 700; font-size: 11px;
             text-transform: uppercase; letter-spacing: 0.05em;
-            padding: 12px 14px; text-align: center;
-            border-bottom: 1px solid #334155;
+            padding: 11px 14px; text-align: center;
+            border-bottom: 1px solid #1E3A6D;
         }
-        table.rota-tab th.th-os     { background: #2E2514; color: #FBBF24; }
+        table.rota-tab th.th-os     { background: #3B2106; color: #FDBA74; }
         table.rota-tab th.th-equipe { background: #064E3B; color: #6EE7B7; }
         table.rota-tab th.th-media  { background: #1E3A8A; color: #93C5FD; }
         table.rota-tab td {
             padding: 10px 14px; text-align: center;
-            border-bottom: 1px solid #F1F5F9;
-            color: #334155; font-variant-numeric: tabular-nums;
+            border-bottom: 1px solid #EEF2F6;
+            color: #1E293B; font-variant-numeric: tabular-nums;
         }
         table.rota-tab td.col-monitor {
-            text-align: left; font-weight: 600; padding-left: 20px; color: #0F172A;
+            text-align: left; font-weight: 700; padding-left: 20px; color: #0A2F6B;
         }
         table.rota-tab td.col-os {
-            background: #FFFBEB; font-weight: 700; color: #92400E;
-            border-left: 1px solid #FEF3C7; border-right: 1px solid #FEF3C7;
+            background: #FFF7ED; font-weight: 700; color: #9A3412;
+            border-left: 1px solid #FFEDD5; border-right: 1px solid #FFEDD5;
         }
         table.rota-tab td.col-equipe {
-            background: #F0FDF4; font-weight: 700; color: #166534;
+            background: #ECFDF5; font-weight: 700; color: #065F46;
             border-left: 1px solid #D1FAE5; border-right: 1px solid #D1FAE5;
         }
         table.rota-tab td.col-media {
-            background: #F8FAFC; font-weight: 700; color: #1E293B;
+            background: #F8FAFC; font-weight: 700; color: #0A2F6B;
         }
         table.rota-tab tr.total-escalados td {
-            background: #F1F5F9; color: #0F172A; font-weight: 700; font-size: 13px;
-            border-top: 2px solid #CBD5E1; border-bottom: 1px solid #CBD5E1;
+            background: #EAF2FC; color: #0A2F6B; font-weight: 700; font-size: 13px;
+            border-top: 2px solid #0A2F6B; border-bottom: 1px solid #C8DCF5;
         }
         table.rota-tab tr.total-escalados td.col-os     { background: #FEF3C7; color: #92400E; }
         table.rota-tab tr.total-escalados td.col-equipe { background: #D1FAE5; color: #065F46; }
-        table.rota-tab tr.total-escalados td.col-media  { background: #E2E8F0; color: #0F172A; }
+        table.rota-tab tr.total-escalados td.col-media  { background: #DBEAFE; color: #0A2F6B; }
         table.rota-tab tr.total-montados td {
-            background: #E2E8F0; color: #0F172A; font-weight: 800; font-size: 13px;
+            background: #DCE8F8; color: #092452; font-weight: 800; font-size: 13px;
             border-bottom: none;
         }
         table.rota-tab tr.total-montados td.col-os     { background: #FDE68A; color: #78350F; }
         table.rota-tab tr.total-montados td.col-equipe { background: #A7F3D0; color: #064E3B; }
-        table.rota-tab tr.total-montados td.col-media  { background: #CBD5E1; color: #0F172A; }
+        table.rota-tab tr.total-montados td.col-media  { background: #BFDBFE; color: #092452; }
         table.rota-tab tbody tr:nth-child(even):not(.total-escalados):not(.total-montados) td
-            { background: #FAFAFA; }
+            { background: #F8FAFC; }
         table.rota-tab tbody tr:nth-child(even):not(.total-escalados):not(.total-montados) td.col-os
-            { background: #FFFDF5; }
+            { background: #FFFBEB; }
         table.rota-tab tbody tr:nth-child(even):not(.total-escalados):not(.total-montados) td.col-equipe
-            { background: #F4FDF7; }
+            { background: #F0FDF4; }
         table.rota-tab tbody tr:hover:not(.total-escalados):not(.total-montados) td
-            { background: #F1F5F9; }
+            { background: #EFF6FF; }
 
         </style>
         """,

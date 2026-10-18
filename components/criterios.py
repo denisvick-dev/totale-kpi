@@ -37,6 +37,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from components.componentes import estilizar_dataframe
+
 # ═══════════════════════════════════════════════════════════════════════
 # CONSTANTES
 # ═══════════════════════════════════════════════════════════════════════
@@ -800,7 +802,9 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
                 },
             ]
         )
-        st.dataframe(regras, hide_index=True, use_container_width=True)
+        st.dataframe(
+            estilizar_dataframe(regras), hide_index=True, use_container_width=True
+        )
 
         st.markdown("---")
         st.markdown("### 🔗 Colunas Detectadas")
@@ -828,7 +832,9 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
                 },
             ]
         )
-        st.dataframe(deteccao, hide_index=True, use_container_width=True)
+        st.dataframe(
+            estilizar_dataframe(deteccao), hide_index=True, use_container_width=True
+        )
 
         st.markdown("---")
         st.markdown("### 📊 Distribuição por TIPO_SERVICO")
@@ -853,12 +859,13 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
             0,
         )
         st.dataframe(
-            distribuicao.style.format(
+            estilizar_dataframe(
+                distribuicao,
                 {
                     "Tarefas": "{:,.0f}",
                     "Registros": "{:,.0f}",
                     "% das Tarefas": "{:.1%}",
-                }
+                },
             ),
             hide_index=True,
             use_container_width=True,
@@ -976,7 +983,11 @@ def render_debug_criterios(df_full: pd.DataFrame, expanded: bool = False) -> Non
             st.markdown("**📊 Distribuição:**")
             dist = df_full["TIPO_SERVICO"].value_counts().reset_index()
             dist.columns = ["Segmento", "Registros"]
-            st.dataframe(dist, hide_index=True, use_container_width=True)
+            st.dataframe(
+                estilizar_dataframe(dist, {"Registros": "{:,}"}),
+                hide_index=True,
+                use_container_width=True,
+            )
 
 
 def render_card_destaque_migracao() -> None:
@@ -1024,10 +1035,10 @@ def render_lista_colunas(df: pd.DataFrame, expanded: bool = False) -> None:
             }
         )
         st.dataframe(
-            df_cols,
+            estilizar_dataframe(df_cols),
             hide_index=True,
             use_container_width=True,
-            height=min(600, 40 + len(df_cols) * 35),
+            height=min(600, 46 + len(df_cols) * 36),
         )
         st.caption(
             f"Total: **{len(df.columns)} colunas** · **{len(df):,} registros**".replace(
