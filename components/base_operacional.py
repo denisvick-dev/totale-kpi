@@ -444,7 +444,10 @@ def normalizar_lista_ativos(raw: pd.DataFrame) -> pd.DataFrame:
     rename_map: Dict[str, str] = {}
     for col in raw.columns:
         cu = col.upper().strip().replace(".", "").replace("_", " ")
-        if cu in ("LOGIN", "MATRICULA", "MATRÍCULA", "ID", "USUARIO", "USUÁRIO"):
+        if cu in (
+            "LOGIN", "LOGIN DO TÉCNICO", "LOGIN DO TECNICO",
+            "MATRICULA", "MATRÍCULA", "ID", "USUARIO", "USUÁRIO",
+        ):
             rename_map[col] = "Login"
         elif cu in ("TECNICO", "TÉCNICO", "NOME", "NOME TECNICO", "NOME DO TECNICO"):
             rename_map[col] = "Técnico"
