@@ -136,6 +136,65 @@ def test_volumetria_resolve_tipo_da_conexao_gsheets(monkeypatch):
     assert base["CONTRATO"].tolist() == ["1"]
 
 
+def test_volumetria_recarregar_limpa_caches_e_forca_leitura(monkeypatch):
+    from pages import volumetria
+
+    chamadas = []
+
+    def buscar_hierarquia():
+        return pd.DataFrame()
+
+    buscar_hierarquia.clear = lambda: chamadas.append("limpar_hierarquia")
+
+    def carregar_base(forcar=False):
+        chamadas.append(("carregar_base", forcar))
+        return pd.DataFrame({"TÉCNICO": ["TEC A"]})
+
+    carregar_base.clear = lambda: chamadas.append("limpar_base")
+
+    monkeypatch.setattr(
+        volumetria.DataLoader, "buscar_hierarquia_gsheets", buscar_hierarquia
+    )
+    monkeypatch.setattr(
+        volumetria.DataLoader, "carregar_base_automatica", carregar_base
+    )
+
+    base = volumetria.DataLoader.recarregar_base_automatica()
+
+    assert chamadas == [
+        "limpar_hierarquia",
+        "limpar_base",
+        ("carregar_base", True),
+    ]
+    assert base["TÉCNICO"].tolist() == ["TEC A"]
+
+
+def test_volumetria_botao_atualizar_robo_nao_repete_tentativa(monkeypatch, tmp_path):
+    monkeypatch.setenv("TOTALE_BASE_ENTRADA", str(tmp_path / "entrada"))
+    monkeypatch.setenv("TOTALE_BASE_CACHE", str(tmp_path / "cache"))
+    from pages import volumetria
+
+    chamadas = []
+
+    def carregar_base(forcar=False, **kwargs):
+        chamadas.append(forcar)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(bo, "carregar_base_volumetria", carregar_base)
+    volumetria.st.cache_data.clear()
+
+    app = AppTest.from_file(ROOT / "pages" / "volumetria.py").run()
+    assert not app.exception
+    assert app.session_state["base_data"] is None
+    chamadas.clear()
+    app.button[0].click().run()
+
+    assert not app.exception
+    assert chamadas == [True]
+    assert app.session_state["base_data"] is None
+    assert len(app.get("file_uploader")) == 1
+
+
 def test_filtro_base_analitica_e_literal_e_preserva_a_base():
     from pages.quebra import _filtrar_base_analitica
 

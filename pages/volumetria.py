@@ -100,6 +100,13 @@ class DataLoader:
         return base if base is not None else pd.DataFrame()
 
     @staticmethod
+    def recarregar_base_automatica() -> pd.DataFrame:
+        """Invalida os caches relacionados e força uma nova leitura do robô."""
+        DataLoader.buscar_hierarquia_gsheets.clear()
+        DataLoader.carregar_base_automatica.clear()
+        return DataLoader.carregar_base_automatica(forcar=True)
+
+    @staticmethod
     def preparar_base(df: pd.DataFrame, df_gs: pd.DataFrame) -> pd.DataFrame:
         base = bo.preparar_base_volumetria(df, df_gs)
         diagnostico = base.attrs.get("diagnostico", {})
@@ -231,6 +238,9 @@ def main():
     if "base_data" not in st.session_state:
         st.session_state.base_data = None
 
+    # Não repete a leitura automática se a atualização forçada não encontrar base.
+    tentativa_automatica_realizada = False
+
     # ── SIDEBAR CONFIGURAÇÕES ─────────────────────────────
     with st.sidebar:
         st.header("⚙️ Configurações")
@@ -246,16 +256,21 @@ def main():
             reiniciar = st.button("🧹 Reiniciar", use_container_width=True)
 
         if atualizar:
-            DataLoader.carregar_base_automatica.clear()
+            tentativa_automatica_realizada = True
             with st.spinner("🤖 Robô processando a base ..."):
-                base = DataLoader.carregar_base_automatica(forcar=True)
+                base = DataLoader.recarregar_base_automatica()
             if base is not None and not base.empty:
                 st.session_state.base_data = base
                 st.rerun()
-            st.warning(
-                "O robô não encontrou uma base em "
-                f"`{bo.config().pasta_entrada}` — envie o arquivo abaixo."
-            )
+            if st.session_state.base_data is not None:
+                st.warning(
+                    "Não foi possível atualizar; a base já carregada foi mantida."
+                )
+            else:
+                st.warning(
+                    "Não foi possível carregar uma base válida. Verifique a pasta "
+                    f"monitorada (`{bo.config().pasta_entrada}`) ou envie o arquivo abaixo."
+                )
 
         if reiniciar:
             st.session_state.base_data = None
@@ -273,7 +288,7 @@ def main():
             st.write(f"📈 **Processadas:** {diag.get('Final', 0)}")
 
     # ── BASE AUTOMÁTICA (ROBÔ) ─────────────────────────────
-    if st.session_state.base_data is None:
+    if st.session_state.base_data is None and not tentativa_automatica_realizada:
         with st.spinner("🤖 Buscando a base gerada pelo robô ..."):
             base_auto = DataLoader.carregar_base_automatica()
         if base_auto is not None and not base_auto.empty:
