@@ -261,16 +261,31 @@ class ProcessadorDeDados:
             and "Login" in ativos.columns
             and "LOGIN NETSALES" in cons.columns
         ):
-            ativos_limpo = ativos[["Login", "Monitor", "U.N.", "Base"]].drop_duplicates(
-                subset=["Login"]
+            colunas_ativos = [
+                col
+                for col in ("Login", "Monitor", "U.N.", "Base")
+                if col in ativos.columns
+            ]
+            ativos_limpo = ativos[colunas_ativos].copy()
+            # Chave caixa/espaço-segura dos dois lados: a aba chega com login
+            # maiúsculo, mas o CSV do consultivo não garante o mesmo formato.
+            ativos_limpo["Login"] = (
+                ativos_limpo["Login"].fillna("").astype(str).str.strip().str.upper()
+            )
+            ativos_limpo = ativos_limpo.drop_duplicates(subset=["Login"])
+            cons = cons.copy()
+            cons["__LOGIN_ATIVOS"] = (
+                cons["LOGIN NETSALES"].fillna("").astype(str).str.strip().str.upper()
             )
             cons = pd.merge(
                 cons,
                 ativos_limpo,
-                left_on="LOGIN NETSALES",
+                left_on="__LOGIN_ATIVOS",
                 right_on="Login",
                 how="left",
-            ).drop(columns=["Login"])
+                suffixes=("", "_ativos"),
+            ).drop(columns=["Login", "__LOGIN_ATIVOS"])
+        if "Monitor" in cons.columns:
             cons["Monitor"] = cons["Monitor"].fillna("Não Identificado")
 
         return prod_raw, {"Consultivo": cons}, ativos
@@ -291,10 +306,28 @@ render_hero(
 # ====================================================
 
 
-def _ativos_da_sessao() -> pd.DataFrame:
-    """Lista de ativos já baixada nesta sessão, sem disparar nova conexão."""
+def _lista_ativos_para_etl() -> pd.DataFrame:
+    """Lista de ativos usada pelo ETL do robô — sessão primeiro, Sheets depois.
+
+    O robô publica ``df_memoria`` assim que a pasta monitorada muda, quase
+    sempre antes de qualquer download da nuvem nesta sessão. Quando a lista
+    vinha somente de ``session_state["dados_ativos"]``, o merge rodava vazio e
+    a base era publicada com ``SEM MONITOR``/``NÃO MAPEADO`` — e a Quebra de
+    Agenda reutilizava essa base sem vínculo. Com o fallback, o ETL busca a
+    mesma aba ``lista_ativos`` das demais páginas (cache de 5 min) e só
+    degrada quando a planilha está realmente inacessível.
+    """
     ativos = st.session_state.get("dados_ativos")
-    return ativos if isinstance(ativos, pd.DataFrame) else pd.DataFrame()
+    if isinstance(ativos, pd.DataFrame) and not ativos.empty:
+        return ativos
+    try:
+        from pages.quebra import DataLoader as DataLoaderQuebra
+
+        buscados = DataLoaderQuebra.buscar_gsheets()
+    except Exception:
+        logger.exception("Falha ao buscar a lista_ativos para o ETL local.")
+        return pd.DataFrame()
+    return buscados if isinstance(buscados, pd.DataFrame) else pd.DataFrame()
 
 
 def _etl_base_local(bruto: pd.DataFrame, ativos: pd.DataFrame) -> pd.DataFrame | None:
@@ -308,7 +341,12 @@ def _etl_base_local(bruto: pd.DataFrame, ativos: pd.DataFrame) -> pd.DataFrame |
     try:
         from components import base_operacional as bo
 
-        return bo.preparar_base_quebra(bruto, ativos)
+        return bo.preparar_base_quebra(
+            bruto,
+            ativos,
+            ativos.attrs.get("fonte_ativos", ""),
+            ativos.attrs.get("erro_ativos", ""),
+        )
     except Exception:
         # Nunca derrubar a Central por causa de uma base fora do layout da Quebra.
         logger.exception("ETL local falhou; publicando a base bruta.")
@@ -317,7 +355,7 @@ def _etl_base_local(bruto: pd.DataFrame, ativos: pd.DataFrame) -> pd.DataFrame |
 
 renderizar_robo_local(
     etl_fn=_etl_base_local,
-    gsheets_fn=_ativos_da_sessao,
+    gsheets_fn=_lista_ativos_para_etl,
     ciclos_estabilidade=2,
 )
 
@@ -338,6 +376,17 @@ if (
         f"Última leitura: `{caminho_local.name}` · "
         f"{len(df_local.columns)} coluna(s) · publicada em `df_memoria`."
     )
+    # Vínculo vazio não pode passar despercebido: é exatamente o sintoma de
+    # "tudo SEM MONITOR" que o merge da lista_ativos produzia em silêncio.
+    if not int(df_local.attrs.get("diag_vinculados", 0) or 0):
+        erro_local = str(df_local.attrs.get("erro_ativos", "") or "").strip()
+        st.warning(
+            "⚠️ A base publicada não vinculou nenhum login à `lista_ativos`"
+            + (f" — {erro_local}" if erro_local else ".")
+            + " Monitores e técnicos aparecem como `SEM MONITOR`/`NÃO MAPEADO` "
+            "até o vínculo ser concluído; use **🔗 Atualizar Lista de Ativos** "
+            "na Quebra de Agenda ou refaça a sincronização."
+        )
     render_dataframe(df_local.head(50), height=340)
 
 st.divider()

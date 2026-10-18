@@ -263,3 +263,109 @@ def test_login_oficial_prevalece_sobre_alias_do_tecnico():
         )
     )
     assert ativos["Login"].tolist() == ["CORRETO"]
+
+
+def test_preparar_base_quebra_normaliza_lista_bruta_antes_do_merge():
+    """A lista crua da planilha (caixa baixa, '.0', desligados) precisa vincular.
+
+    Regressão do merge da ``lista_ativos``: o ETL da Central de Atualização
+    chegava a receber a aba crua (ou a sessão vinha vazia) e o merge não
+    encontrava ninguém — a base era publicada toda como SEM MONITOR.
+    """
+    from components import base_operacional as bo
+
+    bruta = pd.DataFrame(
+        {
+            "#": [1, 2, 3],
+            "RE": [8368, 8496, 8654],
+            "Login": [" z613057 ", "Z641759.0", "z999999"],
+            "Técnico": [
+                "ALEX BERNARDES DA SILVA",
+                "ALEX DE JESUS FREIRE",
+                "QUEM SAIU",
+            ],
+            "Monitor": ["EDSON MARCO PINHEIRO"] * 2 + ["OUTRO MONITOR"],
+            "U.N.": ["ABCDM-TOTALE"] * 3,
+            "Base": ["NET-ABCDM"] * 3,
+            "Situação": ["ATIVO", "ATIVO", "DESLIGADO"],
+            "Ultima_Modificacao": ["24/06/2026"] * 3,
+        }
+    )
+    bruta.attrs["fonte_ativos"] = "Google Sheets (CSV público)"
+    raw = pd.DataFrame(
+        {
+            "CONTRATO": ["1", "2", "3"],
+            "LOGIN DO TÉCNICO": ["Z613057", "z641759", "z999999"],
+            "TÉCNICO": ["z613057", "z641759", "z999999"],
+            "STATUS DA O.S 1": ["EXECUTADA", "PENDENTE", "EXECUTADA"],
+        }
+    )
+
+    df = bo.preparar_base_quebra(raw, bruta)
+
+    # Ativos vinculam mesmo com a lista crua; o desligado fica fora da lista
+    # (regra de negócio) e cai no fallback do arquivo.
+    assert df["MONITOR"].tolist() == [
+        "EDSON MARCO PINHEIRO",
+        "EDSON MARCO PINHEIRO",
+        "SEM MONITOR",
+    ]
+    assert df["TÉCNICO"].tolist() == [
+        "ALEX BERNARDES DA SILVA",
+        "ALEX DE JESUS FREIRE",
+        "Z999999",
+    ]
+    assert df["ORIGEM_MAPEAMENTO"].tolist() == [
+        "Merge (Sheets)",
+        "Merge (Sheets)",
+        "Não Mapeado",
+    ]
+    assert df.attrs["diag_vinculados"] == 2
+    assert df.attrs["diag_ativos"] == 2  # desligado fica fora da lista
+    assert df.attrs["fonte_ativos"] == "Google Sheets (CSV público)"
+
+
+def test_preparar_base_quebra_com_lista_duplicada_nao_explode_o_merge():
+    from components import base_operacional as bo
+
+    duplicada = pd.DataFrame(
+        {
+            "Login": ["abc", "abc"],
+            "Técnico": ["Ana", "Ana Souza"],
+            "Monitor": ["LIA", "LIA ATUAL"],
+        }
+    )
+    raw = pd.DataFrame(
+        {
+            "CONTRATO": ["1"],
+            "LOGIN DO TÉCNICO": ["abc"],
+            "STATUS DA O.S 1": ["EXECUTADA"],
+        }
+    )
+
+    df = bo.preparar_base_quebra(raw, duplicada)
+
+    assert len(df) == 1
+    assert df["MONITOR"].tolist() == ["LIA ATUAL"]  # keep="last" na normalização
+    assert df.attrs["diag_vinculados"] == 1
+
+
+def test_preparar_base_quebra_preserva_erro_da_lista_inacessivel():
+    from components import base_operacional as bo
+
+    vazia = pd.DataFrame()
+    vazia.attrs["erro_ativos"] = "Não foi possível ler a aba lista_ativos."
+    raw = pd.DataFrame(
+        {
+            "CONTRATO": ["1"],
+            "LOGIN DO TÉCNICO": ["abc"],
+            "MONITOR": ["DO ARQUIVO"],
+            "STATUS DA O.S 1": ["EXECUTADA"],
+        }
+    )
+
+    df = bo.preparar_base_quebra(raw, vazia)
+
+    assert df["MONITOR"].tolist() == ["DO ARQUIVO"]
+    assert df.attrs["erro_ativos"] == "Não foi possível ler a aba lista_ativos."
+    assert df.attrs["diag_vinculados"] == 0

@@ -998,7 +998,9 @@ def main():
         st.warning(
             "⚠️ Nenhum login da base corresponde à lista_ativos. "
             "Confira a coluna de login no arquivo e na planilha "
-            f"(coluna detectada: {df_full.attrs.get('diag_login') or 'nenhuma'})."
+            f"(coluna detectada: {df_full.attrs.get('diag_login') or 'nenhuma'}). "
+            "Se a planilha foi ajustada há pouco, use **🔗 Atualizar Lista de "
+            "Ativos** na barra lateral para refazer o vínculo."
         )
     elif n_mon == 0:
         st.warning(
