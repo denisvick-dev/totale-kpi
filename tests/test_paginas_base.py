@@ -48,6 +48,27 @@ def test_quebra_mostra_upload_quando_nao_ha_base(monkeypatch, tmp_path):
     assert len(app.get("file_uploader")) == 1
 
 
+def test_quebra_aceita_sessao_antiga_sem_coluna_monitor():
+    app = AppTest.from_file(ROOT / "pages" / "quebra.py")
+    app.session_state["df_memoria"] = pd.DataFrame(
+        {
+            "CONTRATO": ["1"],
+            "TÉCNICO": ["TEC A"],
+            "Status Contrato": ["Executada"],
+            "TOTAL DE TAREFAS": [1],
+            "TIPO_SERVICO": ["Novos Domicílios"],
+            "TIPO O.S 1": ["ADESAO"],
+            "HABILIDADE DE TRABALHO": ["HFC(1/100)"],
+            "ORIGEM_MAPEAMENTO": ["Arquivo Origem"],
+        }
+    )
+
+    app.run()
+
+    assert not app.exception
+    assert app.session_state["df_memoria"]["MONITOR"].tolist() == ["SEM MONITOR"]
+
+
 def test_volumetria_carrega_a_base_do_robo_sem_upload(monkeypatch, tmp_path):
     entrada, cache = tmp_path / "entrada", tmp_path / "cache"
     entrada.mkdir()

@@ -216,6 +216,76 @@ class DataLoader:
         )
 
     @staticmethod
+    def compatibilizar_base(df: pd.DataFrame) -> pd.DataFrame:
+        """Adapta sessões/caches antigos ao esquema esperado pelo relatório."""
+        if df is None:
+            return pd.DataFrame()
+
+        base = df.copy()
+        base.columns = base.columns.astype(str).str.strip()
+
+        # Sessões do Streamlit sobrevivem a mudanças de código e podem conter
+        # versões antigas da base (por exemplo, ``Monitor`` em vez de ``MONITOR``).
+        if "MONITOR" not in base.columns:
+            col_monitor = Utils.buscar_coluna(
+                base, ["MONITOR", "SUPERVISOR", "GESTOR", "COORDENADOR", "NOME MONITOR"]
+            )
+            if col_monitor:
+                base["MONITOR"] = base[col_monitor]
+            else:
+                base["MONITOR"] = "SEM MONITOR"
+                base.attrs["coluna_monitor_ausente"] = True
+        base["MONITOR"] = (
+            base["MONITOR"].fillna("").astype(str).str.strip().str.upper()
+        )
+        base.loc[
+            base["MONITOR"].isin(["", "NAN", "NONE", "NULL", "0", "N/A", "<NA>"]),
+            "MONITOR",
+        ] = "SEM MONITOR"
+
+        if "TÉCNICO" not in base.columns:
+            col_tecnico = Utils.buscar_coluna(
+                base,
+                [
+                    "TÉCNICO",
+                    "TECNICO",
+                    "NOME TÉCNICO",
+                    "NOME TECNICO",
+                    "NOME DO TÉCNICO",
+                    "NOME DO TECNICO",
+                ],
+            )
+            base["TÉCNICO"] = base[col_tecnico] if col_tecnico else "NÃO MAPEADO"
+        base["TÉCNICO"] = (
+            base["TÉCNICO"].fillna("").astype(str).str.strip().str.upper()
+        )
+        base.loc[
+            base["TÉCNICO"].isin(["", "NAN", "NONE", "NULL", "0", "N/A", "<NA>"]),
+            "TÉCNICO",
+        ] = "NÃO MAPEADO"
+
+        col_status = Utils.buscar_coluna(base, ["STATUS CONTRATO"])
+        if col_status is None:
+            col_status = Utils.buscar_coluna(
+                base, ["STATUS DA O.S 1", "STATUS OS 1", "STATUS DA OS 1"]
+            )
+        base["Status Contrato"] = (
+            bo.Utils.classificar_status(base[col_status])
+            if col_status
+            else "Pendente"
+        )
+
+        col_total = Utils.buscar_coluna(
+            base, ["TOTAL DE TAREFAS", "TOTAL TAREFAS", "QTD TAREFAS"]
+        )
+        base["TOTAL DE TAREFAS"] = (
+            pd.to_numeric(base[col_total], errors="coerce").fillna(1).clip(lower=0)
+            if col_total
+            else 1
+        )
+        return base
+
+    @staticmethod
     @st.cache_data(show_spinner=False)
     def preparar_base(
         df: pd.DataFrame, df_gs: pd.DataFrame,
@@ -780,10 +850,16 @@ def main():
         return
 
     df_full = st.session_state["df_memoria"]
+    if not isinstance(df_full, pd.DataFrame):
+        st.error("A base carregada não é válida. Troque ou envie a base novamente.")
+        return
+
+    df_full = DataLoader.compatibilizar_base(df_full)
+    monitor_disponivel = not bool(df_full.attrs.get("coluna_monitor_ausente", False))
     # 🛡️ Garante que TIPO_SERVICO exista mesmo com cache antigo em sessão
     if "TIPO_SERVICO" not in df_full.columns:
         df_full, _ = classificar_tipo_servico(df_full)
-        st.session_state["df_memoria"] = df_full
+    st.session_state["df_memoria"] = df_full
 
     # ── SIDEBAR ──
     with st.sidebar:
@@ -880,7 +956,13 @@ def main():
     # Nunca apresentar "SEM MONITOR" como se fosse um resultado válido do Sheets.
     erro_ativos = df_full.attrs.get("erro_ativos", "")
     vinculados = df_full.attrs.get("diag_vinculados", 0)
-    if erro_ativos:
+    if not monitor_disponivel:
+        st.warning(
+            "⚠️ A base carregada não contém uma coluna de monitor. "
+            "Os registros foram mantidos como SEM MONITOR; atualize ou reenvie "
+            "uma base com essa informação."
+        )
+    elif erro_ativos:
         st.warning(f"⚠️ {erro_ativos} Os dados da matriz podem usar apenas o arquivo enviado.")
     elif not vinculados:
         st.warning(
