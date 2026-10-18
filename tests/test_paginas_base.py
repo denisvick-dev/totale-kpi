@@ -85,8 +85,8 @@ def test_volumetria_carrega_a_base_do_robo_sem_upload(monkeypatch, tmp_path):
     app = AppTest.from_file(ROOT / "pages" / "volumetria.py").run()
 
     assert not app.exception
-    assert len(app.get("file_uploader")) == 0          # base automática carregada
-    assert len(app.get("multiselect")) == 4            # Monitor, Região, Técnico, Status
+    assert len(app.get("file_uploader")) == 0  # base automática carregada
+    assert len(app.get("multiselect")) == 4  # Monitor, Região, Técnico, Status
     assert bo.status_base(cache)["status"] == "ok"
 
 

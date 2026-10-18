@@ -2,17 +2,17 @@
 Gestão de Volumetria
 Arquivo: pages/volumetria.py
 """
+
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Any, Dict, List, cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
+import streamlit as st
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from streamlit_gsheets import GSheetsConnection
-import streamlit as st
 
 # ====================================================
 # IMPORTAÇÃO DOS COMPONENTES CORPORATIVOS
@@ -21,11 +21,11 @@ from components import base_operacional as bo
 from components.calendario import InfoCalendario
 from components.componentes import (
     aplicar_estilo,
+    render_dataframe,
     render_hero,
     render_insight,
     render_kpi,
     render_section_header,
-    render_dataframe,
 )
 
 # ==========================================================
@@ -37,6 +37,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 
 class Config:
     URL_GSHEETS = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
@@ -69,8 +70,6 @@ class DataLoader:
         """Lista de ativos (mesma aba da Gestão de Ativos) via robô/base_operacional."""
         try:
             return bo.carregar_hierarquia(
-                segredos=lambda: dict(st.secrets["gcp_service_account"]),
-                conexao=lambda: st.connection("gsheets", type=GSheetsConnection),
                 read_csv=pd.read_csv,
             )
         except Exception:
@@ -111,15 +110,21 @@ class DataLoader:
             st.stop()
         return base
 
+
 # ==========================================================
 # CÁLCULOS
 # ==========================================================
-def calcular_kpis(df: pd.DataFrame) -> Dict[str, Any]:
+def calcular_kpis(df: pd.DataFrame) -> dict[str, Any]:
     if df.empty:
         return {
-            "total": 0, "executadas": 0, "nao_executadas": 0,
-            "pendentes": 0, "baixadas": 0, "taxa": 0.0,
-            "quebra": 0.0, "projecao": 0,
+            "total": 0,
+            "executadas": 0,
+            "nao_executadas": 0,
+            "pendentes": 0,
+            "baixadas": 0,
+            "taxa": 0.0,
+            "quebra": 0.0,
+            "projecao": 0,
         }
     k_tot = int(round(df[Config.COL_TOTAL].sum()))
     k_exe = int(df[df[Config.COL_STATUS] == "Executada"][Config.COL_TOTAL].sum())
@@ -128,44 +133,63 @@ def calcular_kpis(df: pd.DataFrame) -> Dict[str, Any]:
     k_bai = k_exe + k_nex
     k_tx = k_exe / k_bai if k_bai > 0 else 0.0
     k_proj = int(k_exe + k_tx * k_pen)
-    
+
     return {
-        "total": k_tot, "executadas": k_exe, "nao_executadas": k_nex,
-        "pendentes": k_pen, "baixadas": k_bai, "taxa": k_tx,
-        "quebra": 1.0 - k_tx, "projecao": k_proj,
+        "total": k_tot,
+        "executadas": k_exe,
+        "nao_executadas": k_nex,
+        "pendentes": k_pen,
+        "baixadas": k_bai,
+        "taxa": k_tx,
+        "quebra": 1.0 - k_tx,
+        "projecao": k_proj,
     }
 
 
-def calcular_volumetria(df: pd.DataFrame, grupos: List[str]) -> pd.DataFrame:
+def calcular_volumetria(df: pd.DataFrame, grupos: list[str]) -> pd.DataFrame:
     tabela = (
         df.groupby(grupos + [Config.COL_STATUS], observed=True)[Config.COL_TOTAL]
-        .sum().unstack(Config.COL_STATUS, fill_value=0).reset_index()
+        .sum()
+        .unstack(Config.COL_STATUS, fill_value=0)
+        .reset_index()
     )
     for s in Config.STATUS_ORDEM:
         if s not in tabela.columns:
             tabela[s] = 0
         tabela[s] = tabela[s].astype(int)
-        
+
     tabela["Baixadas"] = tabela["Executada"] + tabela["Não Executada"]
     tabela["Total Alocado"] = tabela["Baixadas"] + tabela["Pendente"]
-    tabela["Taxa Execução"] = np.where(tabela["Baixadas"] > 0, tabela["Executada"] / tabela["Baixadas"], 0.0)
+    tabela["Taxa Execução"] = np.where(
+        tabela["Baixadas"] > 0, tabela["Executada"] / tabela["Baixadas"], 0.0
+    )
     tabela["Taxa Quebra"] = 1.0 - tabela["Taxa Execução"]
-    tabela["Projeção"] = (tabela["Executada"] + tabela["Taxa Execução"] * tabela["Pendente"]).astype(int)
-    
+    tabela["Projeção"] = (
+        tabela["Executada"] + tabela["Taxa Execução"] * tabela["Pendente"]
+    ).astype(int)
+
     if Config.COL_TECNICO in df.columns:
-        n_tec = df.groupby(grupos, observed=True)[Config.COL_TECNICO].nunique().reset_index(name="Técnicos")
+        n_tec = (
+            df.groupby(grupos, observed=True)[Config.COL_TECNICO]
+            .nunique()
+            .reset_index(name="Técnicos")
+        )
         tabela = tabela.merge(n_tec, on=grupos, how="left")
         tabela["Técnicos"] = tabela["Técnicos"].fillna(0).astype(int)
-        tabela["OS/Técnico"] = np.where(tabela["Técnicos"] > 0, tabela["Total Alocado"] / tabela["Técnicos"], 0.0)
-        tabela["Exec/Técnico"] = np.where(tabela["Técnicos"] > 0, tabela["Executada"] / tabela["Técnicos"], 0.0)
-        
+        tabela["OS/Técnico"] = np.where(
+            tabela["Técnicos"] > 0, tabela["Total Alocado"] / tabela["Técnicos"], 0.0
+        )
+        tabela["Exec/Técnico"] = np.where(
+            tabela["Técnicos"] > 0, tabela["Executada"] / tabela["Técnicos"], 0.0
+        )
+
     return tabela.sort_values("Total Alocado", ascending=False)
 
 
 def gerar_excel(df: pd.DataFrame, nome_aba: str) -> bytes:
     output = BytesIO()
     export = df.copy()
-    
+
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         export.to_excel(writer, index=False, sheet_name=nome_aba[:31])
         ws = writer.sheets[nome_aba[:31]]
@@ -181,7 +205,9 @@ def gerar_excel(df: pd.DataFrame, nome_aba: str) -> bytes:
         for i, col in enumerate(export.columns, 1):
             valores = export[col].head(500).astype(str)
             maior = max([len(str(col))] + [len(v) for v in valores], default=10)
-            ws.column_dimensions[get_column_letter(i)].width = min(max(maior + 2, 12), 40)
+            ws.column_dimensions[get_column_letter(i)].width = min(
+                max(maior + 2, 12), 40
+            )
 
     output.seek(0)
     return output.getvalue()
@@ -198,7 +224,7 @@ def main():
     render_hero(
         titulo="Gestão de Volumetria",
         subtitulo="Análise executiva de performance e projeções operacionais",
-        badge="Operações"
+        badge="Operações",
     )
 
     if "base_data" not in st.session_state:
@@ -264,8 +290,10 @@ def main():
             f"`{bo.config().pasta_entrada}`. "
             "Use o upload apenas quando quiser analisar outro arquivo."
         )
-        u = st.file_uploader("Selecione a base (Excel/CSV)", type=["xlsx", "xls", "csv"])
-        
+        u = st.file_uploader(
+            "Selecione a base (Excel/CSV)", type=["xlsx", "xls", "csv"]
+        )
+
         if u:
             try:
                 with st.spinner("Processando..."):
@@ -291,7 +319,7 @@ def main():
         st.header("🎯 Filtros")
         mons = sorted(df_full[Config.COL_MONITOR].dropna().astype(str).unique())
         sel_m = st.multiselect("Monitor", mons, default=mons)
-        
+
         regs = sorted(df_full[Config.COL_REGIAO].dropna().astype(str).unique())
         sel_r = st.multiselect("Região", regs, default=regs)
 
@@ -311,7 +339,7 @@ def main():
         & df_full[Config.COL_TECNICO].isin(sel_t)
         & df_full[Config.COL_STATUS].isin(sel_s)
     ]
-    
+
     if df.empty:
         st.warning("Nenhum dado selecionado.")
         return
@@ -319,19 +347,43 @@ def main():
     # ── RESULTADO DA BASE (INSIGHT) ────────────────────────
     regioes_ativas = ", ".join(sorted(df[Config.COL_REGIAO].unique()))
     render_insight(
-        f"**Resultado da Base:** Foram encontrados **{len(df):,}** registros. <br>Regiões ativas: **{regioes_ativas}**", 
-        tipo="info"
+        f"**Resultado da Base:** Foram encontrados **{len(df):,}** registros. <br>Regiões ativas: **{regioes_ativas}**",
+        tipo="info",
     )
 
     # ── KPIs DE VOLUME ─────────────────────────────────────
     kpis = calcular_kpis(df)
-    
+
     render_section_header("query_stats", "Resumo de Volume")
     c1, c2, c3, c4 = st.columns(4)
-    render_kpi(c1, "Total Alocado", f"{kpis['total']:,}", f"{kpis['pendentes']:,} pendentes", tema="azul")
-    render_kpi(c2, "Executadas", f"{kpis['executadas']:,}", f"Taxa: {kpis['taxa']:.1%}", tema="verde")
-    render_kpi(c3, "Não Executadas", f"{kpis['nao_executadas']:,}", f"Quebra: {kpis['quebra']:.1%}", tema="vermelho")
-    render_kpi(c4, "Projeção Final", f"{kpis['projecao']:,}", "Baseado na taxa atual", tema="laranja")
+    render_kpi(
+        c1,
+        "Total Alocado",
+        f"{kpis['total']:,}",
+        f"{kpis['pendentes']:,} pendentes",
+        tema="azul",
+    )
+    render_kpi(
+        c2,
+        "Executadas",
+        f"{kpis['executadas']:,}",
+        f"Taxa: {kpis['taxa']:.1%}",
+        tema="verde",
+    )
+    render_kpi(
+        c3,
+        "Não Executadas",
+        f"{kpis['nao_executadas']:,}",
+        f"Quebra: {kpis['quebra']:.1%}",
+        tema="vermelho",
+    )
+    render_kpi(
+        c4,
+        "Projeção Final",
+        f"{kpis['projecao']:,}",
+        "Baseado na taxa atual",
+        tema="laranja",
+    )
 
     # ── CALENDÁRIO (SEG–SÁB, SEM DOMINGOS NEM FERIADOS) ────
     cal = InfoCalendario.calcular()
@@ -351,36 +403,36 @@ def main():
 
     with t1:
         te = calcular_volumetria(df, [Config.COL_REGIAO, Config.COL_MONITOR])
-        
+
         # Formatação das colunas para % e decimal via dicionário formatador
         formato = {
             "Taxa Execução": "{:.1%}",
             "Taxa Quebra": "{:.1%}",
             "OS/Técnico": "{:.1f}",
-            "Exec/Técnico": "{:.1f}"
+            "Exec/Técnico": "{:.1f}",
         }
-        
+
         render_dataframe(
-            te, 
-            titulo="Volumetria por Equipe", 
-            icone="groups", 
-            fmt=cast(Any, formato), 
-            height=500
+            te,
+            titulo="Volumetria por Equipe",
+            icone="groups",
+            fmt=cast(Any, formato),
+            height=500,
         )
-        
+
         st.download_button(
-            "📥 Baixar Relatório (Excel)", 
-            gerar_excel(te, "Equipes"), 
+            "📥 Baixar Relatório (Excel)",
+            gerar_excel(te, "Equipes"),
             "volumetria_equipes.xlsx",
-            use_container_width=True
+            use_container_width=True,
         )
 
     with t2:
         render_dataframe(
-            df.head(500), 
-            titulo="Visualização da Base (limite 500 linhas)", 
-            icone="table_rows", 
-            height=500
+            df.head(500),
+            titulo="Visualização da Base (limite 500 linhas)",
+            icone="table_rows",
+            height=500,
         )
 
 

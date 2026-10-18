@@ -12,10 +12,9 @@ from components.componentes import (
     render_hero,
     render_insight,
     render_kpi,
-    render_section_header,
     render_painel_link,
+    render_section_header,
 )
-
 
 VERSAO_SISTEMA = "2.2"
 AMBIENTE = "Produção"
@@ -78,7 +77,9 @@ def _render_card_painel(painel: tuple[str, str, str]) -> None:
     render_painel_link(*painel)
 
 
-def _render_grupo_paineis(titulo: str, icone: str, paineis: list[tuple[str, str, str]]) -> None:
+def _render_grupo_paineis(
+    titulo: str, icone: str, paineis: list[tuple[str, str, str]]
+) -> None:
     render_section_header(icone, titulo, f"{len(paineis)} painéis")
     colunas = st.columns(len(paineis))
     for coluna, painel in zip(colunas, paineis):
@@ -149,7 +150,9 @@ def main() -> None:
             tipo="info",
         )
 
-    render_section_header("space_dashboard", "Explore os painéis", f"{total_paineis} análises")
+    render_section_header(
+        "space_dashboard", "Explore os painéis", f"{total_paineis} análises"
+    )
     _render_grupo_paineis("Performance e metas", "trending_up", PAINEIS_PERFORMANCE)
     _render_grupo_paineis("Operação diária", "engineering", PAINEIS_OPERACAO)
 

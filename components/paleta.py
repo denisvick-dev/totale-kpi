@@ -1,7 +1,7 @@
 """Cores corporativas compartilhadas pelos componentes e pela barra lateral."""
 
-COR_PRIMARIA = "#0A2F6B"       # Azul institucional
-COR_SECUNDARIA = "#E8700A"     # Laranja Totale
+COR_PRIMARIA = "#0A2F6B"  # Azul institucional
+COR_SECUNDARIA = "#E8700A"  # Laranja Totale
 COR_SUCESSO = "#0D9668"
 COR_ALERTA = "#D13438"
 COR_NEUTRO = "#6B7280"

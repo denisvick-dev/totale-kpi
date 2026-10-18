@@ -37,8 +37,8 @@ import argparse
 import logging
 import shutil
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
 
 RAIZ = Path(__file__).resolve().parents[1]
 if str(RAIZ) not in sys.path:
@@ -46,10 +46,10 @@ if str(RAIZ) not in sys.path:
 
 PASTA_PADRAO = RAIZ / "assets" / "fonts"
 
-EXTENSOES_ACEITAS: Tuple[str, ...] = (".woff2", ".woff", ".otf", ".ttf")
+EXTENSOES_ACEITAS: tuple[str, ...] = (".woff2", ".woff", ".otf", ".ttf")
 
 #: Pesos suportados pelo CSS, com as palavras que os identificam no nome.
-MAPA_PESOS: Tuple[Tuple[int, Tuple[str, ...]], ...] = (
+MAPA_PESOS: tuple[tuple[int, tuple[str, ...]], ...] = (
     (800, ("extrabold", "extra bold", "extrabold Demo", "black", "heavy", "ultra")),
     (700, ("semibold", "semi bold", "demi", "bold", "negrito")),
     (500, ("medium", "medio", "médio")),
@@ -75,9 +75,9 @@ def detectar_peso(nome: str) -> int:
     return 400
 
 
-def coletar_arquivos(caminhos: Iterable[str | Path]) -> List[Path]:
+def coletar_arquivos(caminhos: Iterable[str | Path]) -> list[Path]:
     """Aceita arquivos soltos e pastas (varredura não recursiva)."""
-    arquivos: List[Path] = []
+    arquivos: list[Path] = []
     for caminho in caminhos:
         p = Path(caminho)
         if p.is_dir():
@@ -97,9 +97,9 @@ def coletar_arquivos(caminhos: Iterable[str | Path]) -> List[Path]:
 
 def instalar(
     caminhos: Iterable[str | Path],
-    destino: Optional[Path] = None,
+    destino: Path | None = None,
     simular: bool = False,
-) -> List[Tuple[Path, Path]]:
+) -> list[tuple[Path, Path]]:
     """
     Copia as fontes para ``destino`` com os nomes canônicos.
 
@@ -110,7 +110,7 @@ def instalar(
     if not simular:
         pasta.mkdir(parents=True, exist_ok=True)
 
-    instalados: List[Tuple[Path, Path]] = []
+    instalados: list[tuple[Path, Path]] = []
     for origem in coletar_arquivos(caminhos):
         peso = detectar_peso(origem.name)
         nome_final = f"{NOMES_POR_PESO[peso]}{origem.suffix.lower()}"
@@ -122,7 +122,7 @@ def instalar(
     return instalados
 
 
-def limpar(destino: Optional[Path] = None) -> int:
+def limpar(destino: Path | None = None) -> int:
     pasta = Path(destino) if destino else PASTA_PADRAO
     removidos = 0
     if not pasta.is_dir():
@@ -135,14 +135,12 @@ def limpar(destino: Optional[Path] = None) -> int:
     return removidos
 
 
-def main(argv: Optional[list] = None) -> int:
+def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Instala a fonte Oscine usada nos títulos do app."
     )
     parser.add_argument("arquivos", nargs="*", help="Arquivos de fonte ou pastas.")
-    parser.add_argument(
-        "--destino", help=f"Pasta de destino (padrão: {PASTA_PADRAO})."
-    )
+    parser.add_argument("--destino", help=f"Pasta de destino (padrão: {PASTA_PADRAO}).")
     parser.add_argument(
         "--listar",
         action="store_true",

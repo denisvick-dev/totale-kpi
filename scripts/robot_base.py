@@ -61,7 +61,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 # Garante que o robô enxergue o pacote ``components`` quando executado
 # de qualquer pasta.
@@ -69,11 +68,13 @@ RAIZ = Path(__file__).resolve().parents[1]
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
-from components import base_operacional as bo  # noqa: E402
+from components import base_operacional as bo
 
 ARQUIVO_LOG = RAIZ / "dados" / "logs" / "robot_base.log"
 
 logger = logging.getLogger("robot_base")
+
+PADRAO_ARQUIVO_PADRAO = "Atividades-*.csv;Atividades-*.xlsx"
 
 
 # ═══════════════════════════════════════════════════════════
@@ -116,6 +117,7 @@ def executar(args: argparse.Namespace) -> bo.ResultadoBase:
     if args.arquivo:
         log(f"📄 Arquivo fixo: {args.arquivo}")
 
+    padrao = args.padrao or bo.config().arquivo_glob or PADRAO_ARQUIVO_PADRAO
     resultado = bo.gerar_bases(
         caminho=args.arquivo,
         forcar=args.forcar,
@@ -123,6 +125,7 @@ def executar(args: argparse.Namespace) -> bo.ResultadoBase:
         pasta_entrada=args.pasta_entrada,
         pasta_cache=args.pasta_cache,
         registrar_log=log,
+        arquivo_glob=padrao,
     )
 
     status = resultado.manifesto.get("status")
@@ -132,8 +135,7 @@ def executar(args: argparse.Namespace) -> bo.ResultadoBase:
         log(
             f"✅ Concluído em {(datetime.now() - inicio).total_seconds():.1f}s — "
             f"Volumetria: {vol.get('registros', 0):,} registros | "
-            f"Quebra: {que.get('registros', 0):,} registros"
-            .replace(",", ".")
+            f"Quebra: {que.get('registros', 0):,} registros".replace(",", ".")
         )
         log(f"🗂️  Cache: {args.pasta_cache or bo.config().pasta_cache}")
     elif status == "sem_arquivo":
@@ -178,7 +180,7 @@ def limpar_cache(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════
 # CLI
 # ═══════════════════════════════════════════════════════════
-def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
+def parse_args(argv: list | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Robô de atualização das bases de Volumetria e Quebra de Agenda.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -198,7 +200,10 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     parser.add_argument(
         "--glob",
         dest="padrao",
-        help="Filtro de nome dos arquivos monitorados (ex.: 'base_*.xlsx').",
+        help=(
+            "Filtro de nome dos arquivos monitorados (padrão: "
+            "'Atividades-*.csv;Atividades-*.xlsx'; separe múltiplos padrões com ';')."
+        ),
     )
     parser.add_argument(
         "--modo",
@@ -241,13 +246,9 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Optional[list] = None) -> int:
+def main(argv: list | None = None) -> int:
     args = parse_args(argv)
     configurar_log(args.verbose)
-
-    if args.padrao:
-        # lido por components.base_operacional.config() em cada execução
-        os.environ["TOTALE_BASE_ARQUIVO"] = args.padrao
 
     if args.recursivo:
         os.environ["TOTALE_BASE_RECURSIVO"] = "1"

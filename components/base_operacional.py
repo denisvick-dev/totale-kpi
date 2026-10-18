@@ -35,10 +35,11 @@ import json
 import logging
 import os
 import unicodedata
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -63,11 +64,11 @@ COL_STATUS = "STATUS CONTRATO"
 COL_CONTRATO = "CONTRATO"
 COL_LOGIN = "LOGIN"
 
-STATUS_ORDEM: List[str] = ["Executada", "Não Executada", "Pendente"]
+STATUS_ORDEM: list[str] = ["Executada", "Não Executada", "Pendente"]
 
-EXTENSOES_ACEITAS: Tuple[str, ...] = (".xlsx", ".xls", ".csv")
+EXTENSOES_ACEITAS: tuple[str, ...] = (".xlsx", ".xls", ".csv")
 
-CIDADES_POR_REGIAO: Dict[str, Tuple[str, ...]] = {
+CIDADES_POR_REGIAO: dict[str, tuple[str, ...]] = {
     "LESTE": ("SAO PAULO",),
     "GRU": (
         "GUARULHOS",
@@ -91,9 +92,15 @@ CIDADES_POR_REGIAO: Dict[str, Tuple[str, ...]] = {
 }
 
 #: Opções aceitas para a leitura da lista de ativos (repasse às páginas).
-_OPCOES_ATIVOS: Tuple[str, ...] = (
-    "sheet_id", "worksheet", "url", "segredos",
-    "credenciais", "autorizar", "conexao", "read_csv",
+_OPCOES_ATIVOS: tuple[str, ...] = (
+    "sheet_id",
+    "worksheet",
+    "url",
+    "segredos",
+    "credenciais",
+    "autorizar",
+    "conexao",
+    "read_csv",
 )
 
 _ARQUIVO_VOLUMETRIA = "volumetria.pkl"
@@ -104,9 +111,7 @@ _ARQUIVO_MANIFESTO = "manifesto.json"
 # ═══════════════════════════════════════════════════════════════════════
 # CONFIGURAÇÃO
 # ═══════════════════════════════════════════════════════════════════════
-def _caminho_downloads(
-    sistema: Optional[str] = None, home: Optional[Path] = None
-) -> str:
+def _caminho_downloads(sistema: str | None = None, home: Path | None = None) -> str:
     """
     Caminho (string) da pasta Downloads — isolado para facilitar os testes.
 
@@ -160,7 +165,7 @@ class ConfigBase:
     recursivo: bool = False
 
 
-def _secrets_base() -> Dict[str, Any]:
+def _secrets_base() -> dict[str, Any]:
     try:
         import streamlit as st  # import local: o robô roda sem Streamlit
 
@@ -242,7 +247,7 @@ class Utils:
         return Utils.normalizar_chave(serie).str.replace(r"\.0$", "", regex=True)
 
     @staticmethod
-    def buscar_coluna(df: pd.DataFrame, aliases: Sequence[str]) -> Optional[str]:
+    def buscar_coluna(df: pd.DataFrame, aliases: Sequence[str]) -> str | None:
         if df is None or df.empty:
             return None
         cols_map = {Utils.normalizar_chave(pd.Series([c]))[0]: c for c in df.columns}
@@ -253,12 +258,17 @@ class Utils:
         return None
 
     @staticmethod
-    def buscar_coluna_quebra(df: pd.DataFrame, palavras: Sequence[str]) -> Optional[str]:
+    def buscar_coluna_quebra(df: pd.DataFrame, palavras: Sequence[str]) -> str | None:
         """Busca por parte do nome (compatível com o padrão antigo de quebra.py)."""
         if df is None or df.empty:
             return None
         cols = {
-            str(c).strip().upper().replace(".", "").replace("_", "").replace("  ", " "): c
+            str(c)
+            .strip()
+            .upper()
+            .replace(".", "")
+            .replace("_", "")
+            .replace("  ", " "): c
             for c in df.columns
         }
         for palavra in palavras:
@@ -310,7 +320,7 @@ class Utils:
 # LEITURA DE ARQUIVOS
 # ╀═════════════════════════════════════════════════════════════════════
 def ler_arquivo_bytes(
-    conteudo: bytes, nome: str, dtype: Optional[Any] = None
+    conteudo: bytes, nome: str, dtype: Any | None = None
 ) -> pd.DataFrame:
     """Lê Excel/CSV a partir de bytes (usado pelo upload e pelo robô)."""
     if not conteudo:
@@ -330,22 +340,26 @@ def ler_arquivo_bytes(
     if nome.endswith(".csv"):
         return _ler_csv(buffer, dtype=dtype)
 
-    raise ValueError(f"Formato não suportado: {nome or '(sem nome)'}. Use .xlsx, .xls ou .csv.")
+    raise ValueError(
+        f"Formato não suportado: {nome or '(sem nome)'}. Use .xlsx, .xls ou .csv."
+    )
 
 
-def _ler_csv(buffer: io.BytesIO, dtype: Optional[Any] = None) -> pd.DataFrame:
+def _ler_csv(buffer: io.BytesIO, dtype: Any | None = None) -> pd.DataFrame:
     buffer.seek(0)
     amostra = buffer.read(8192)
     buffer.seek(0)
 
-    separadores: List[Optional[str]] = []
+    separadores: list[str | None] = []
     try:
-        separadores.append(csv.Sniffer().sniff(amostra.decode("utf-8", "ignore")).delimiter)
+        separadores.append(
+            csv.Sniffer().sniff(amostra.decode("utf-8", "ignore")).delimiter
+        )
     except Exception:
         pass
     separadores.extend([None, ";", ",", "\t"])
 
-    erros: List[Exception] = []
+    erros: list[Exception] = []
     for sep in separadores:
         for encoding in ("utf-8-sig", "latin1"):
             try:
@@ -360,11 +374,13 @@ def _ler_csv(buffer: io.BytesIO, dtype: Optional[Any] = None) -> pd.DataFrame:
             except Exception as exc:  # tenta a próxima combinação
                 erros.append(exc)
                 continue
-    raise ValueError(f"Não foi possível interpretar o CSV: {erros[-1] if erros else 'erro desconhecido'}")
+    raise ValueError(
+        f"Não foi possível interpretar o CSV: {erros[-1] if erros else 'erro desconhecido'}"
+    )
 
 
 def ler_arquivo_caminho(
-    caminho: os.PathLike | str, dtype: Optional[Any] = None
+    caminho: os.PathLike | str, dtype: Any | None = None
 ) -> pd.DataFrame:
     """Lê a base direto do disco (robô)."""
     caminho = Path(caminho)
@@ -377,11 +393,11 @@ def ler_arquivo_caminho(
 # LOCALIZAÇÃO DA BASE NA PASTA MONITORADA
 # ═══════════════════════════════════════════════════════════════════════
 def localizar_base(
-    pasta: Optional[os.PathLike | str] = None,
+    pasta: os.PathLike | str | None = None,
     arquivo_glob: str = "",
-    recursivo: Optional[bool] = None,
+    recursivo: bool | None = None,
     extensoes: Sequence[str] = EXTENSOES_ACEITAS,
-) -> Optional[Path]:
+) -> Path | None:
     """
     Retorna o arquivo de base **mais recente** da pasta monitorada.
 
@@ -398,9 +414,16 @@ def localizar_base(
     extensoes = tuple(e.lower() for e in extensoes)
 
     if padrao:
-        candidatos = (
-            list(pasta_path.rglob(padrao)) if cfg.recursivo else list(pasta_path.glob(padrao))
-        )
+        candidatos = []
+        for padrao_individual in padrao.split(";"):
+            padrao_individual = padrao_individual.strip()
+            if not padrao_individual:
+                continue
+            candidatos.extend(
+                pasta_path.rglob(padrao_individual)
+                if cfg.recursivo
+                else pasta_path.glob(padrao_individual)
+            )
     else:
         candidatos = [
             p
@@ -441,12 +464,18 @@ def normalizar_lista_ativos(raw: pd.DataFrame) -> pd.DataFrame:
     raw = raw.copy()
     raw.columns = raw.columns.astype(str).str.strip()
 
-    rename_map: Dict[str, str] = {}
+    rename_map: dict[str, str] = {}
     for col in raw.columns:
         cu = col.upper().strip().replace(".", "").replace("_", " ")
         if cu in (
-            "LOGIN", "LOGIN DO TÉCNICO", "LOGIN DO TECNICO",
-            "MATRICULA", "MATRÍCULA", "ID", "USUARIO", "USUÁRIO",
+            "LOGIN",
+            "LOGIN DO TÉCNICO",
+            "LOGIN DO TECNICO",
+            "MATRICULA",
+            "MATRÍCULA",
+            "ID",
+            "USUARIO",
+            "USUÁRIO",
         ):
             rename_map[col] = "Login"
         elif cu in ("TECNICO", "TÉCNICO", "NOME", "NOME TECNICO", "NOME DO TECNICO"):
@@ -476,27 +505,45 @@ def normalizar_lista_ativos(raw: pd.DataFrame) -> pd.DataFrame:
     cols = [c for c in ["Login", "Técnico", "Monitor", "Base"] if c in raw.columns]
     raw = raw[cols].copy()
     raw["Login"] = (
-        raw["Login"].fillna("").astype(str).str.strip().str.replace(r"\.0$", "", regex=True).str.upper()
+        raw["Login"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.replace(r"\.0$", "", regex=True)
+        .str.upper()
     )
     invalidos = ["NAN", "NONE", "NULL", "N/A", "<NA>", "0", "-", ""]
     raw = raw[~raw["Login"].isin(invalidos)]
     return raw.drop_duplicates(subset=["Login"], keep="last").reset_index(drop=True)
 
 
+def _conexao_gsheets_configurada() -> bool:
+    try:
+        import streamlit as st
+        from streamlit.errors import StreamlitSecretNotFoundError
+    except ImportError:
+        return False
+
+    try:
+        return bool(st.secrets.get("connections", {}).get("gsheets"))
+    except StreamlitSecretNotFoundError:
+        return False
+
+
 def carregar_lista_ativos(
-    sheet_id: Optional[str] = None,
+    sheet_id: str | None = None,
     worksheet: str = "lista_ativos",
-    url: Optional[str] = None,
-    segredos: Optional[Callable[[], Dict[str, Any]]] = None,
-    credenciais: Optional[Callable[..., Any]] = None,
-    autorizar: Optional[Callable[[Any], Any]] = None,
-    conexao: Optional[Callable[[], Any]] = None,
-    read_csv: Optional[Callable[..., pd.DataFrame]] = None,
+    url: str | None = None,
+    segredos: Callable[[], dict[str, Any]] | None = None,
+    credenciais: Callable[..., Any] | None = None,
+    autorizar: Callable[[Any], Any] | None = None,
+    conexao: Callable[[], Any] | None = None,
+    read_csv: Callable[..., pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """
     Carrega a ``lista_ativos`` (mesma aba da Gestão de Ativos).
 
-    Ordem: conta de serviço (gspread) → conexão nativa do Streamlit → CSV público.
+    Ordem: conta de serviço (gspread) → conexão nativa configurada → CSV público.
     As dependências podem ser injetadas (páginas passam ``st`` e ``gspread``).
     """
     sheet_id = sheet_id or "1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg"
@@ -514,9 +561,8 @@ def carregar_lista_ativos(
         info = (segredos() if segredos else _segredos_padrao()) or {}
         if info:
             if credenciais is None or autorizar is None:
-                from google.oauth2.service_account import Credentials
-
                 import gspread
+                from google.oauth2.service_account import Credentials
 
                 credenciais = credenciais or Credentials.from_service_account_info
                 autorizar = autorizar or gspread.authorize
@@ -531,19 +577,20 @@ def carregar_lista_ativos(
     except Exception as exc:
         logger.warning("Falha na leitura autenticada da lista_ativos: %s", exc)
 
-    # 2) Conexão nativa do Streamlit
-    try:
-        if conexao is None:
-            import streamlit as st
+    # O modo público do conector exige o GID numérico da aba; sem uma conexão
+    # configurada, use o CSV público, que aceita o nome da aba.
+    if conexao is not None or _conexao_gsheets_configurada():
+        try:
+            if conexao is None:
+                import streamlit as st
+                from streamlit_gsheets import GSheetsConnection
 
-            from streamlit_gsheets import GSheetsConnection
-
-            conexao = lambda: st.connection("gsheets", type=GSheetsConnection)  # noqa: E731
-        conn = conexao()
-        raw = conn.read(spreadsheet=url, worksheet=worksheet, ttl=0)
-        return validar(pd.DataFrame(raw), "Google Sheets (conexão)")
-    except Exception as exc:
-        logger.warning("Falha na conexão da lista_ativos: %s", exc)
+                conexao = lambda: st.connection("gsheets", type=GSheetsConnection)
+            conn = conexao()
+            raw = conn.read(spreadsheet=url, worksheet=worksheet, ttl=0)
+            return validar(pd.DataFrame(raw), "Google Sheets (conexão)")
+        except Exception as exc:
+            logger.warning("Falha na conexão da lista_ativos: %s", exc)
 
     # 3) CSV público
     try:
@@ -564,7 +611,7 @@ def carregar_lista_ativos(
     return vazia
 
 
-def _segredos_padrao() -> Dict[str, Any]:
+def _segredos_padrao() -> dict[str, Any]:
     """Credenciais da conta de serviço (Streamlit secrets ou arquivo local)."""
     try:
         import streamlit as st
@@ -603,7 +650,9 @@ def carregar_hierarquia(**kwargs: Any) -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════════════════
 # PREPARAÇÃO — VOLUMETRIA
 # ═══════════════════════════════════════════════════════════════════════
-def preparar_base_volumetria(raw: pd.DataFrame, hierarquia: pd.DataFrame) -> pd.DataFrame:
+def preparar_base_volumetria(
+    raw: pd.DataFrame, hierarquia: pd.DataFrame
+) -> pd.DataFrame:
     """
     Trata a base bruta para o painel de Volumetria.
 
@@ -612,9 +661,9 @@ def preparar_base_volumetria(raw: pd.DataFrame, hierarquia: pd.DataFrame) -> pd.
     """
     df = raw.copy()
     df.columns = df.columns.astype(str).str.strip()
-    avisos: List[str] = []
-    erros: List[str] = []
-    diag: Dict[str, Any] = {"Inicial": len(df)}
+    avisos: list[str] = []
+    erros: list[str] = []
+    diag: dict[str, Any] = {"Inicial": len(df)}
 
     hierarquia = hierarquia if hierarquia is not None else pd.DataFrame()
 
@@ -631,7 +680,9 @@ def preparar_base_volumetria(raw: pd.DataFrame, hierarquia: pd.DataFrame) -> pd.
         df = df[valida].copy()
         diag["Removidos por contrato vazio"] = removidos
     else:
-        avisos.append("Coluna de contrato não encontrada — nada foi filtrado por contrato.")
+        avisos.append(
+            "Coluna de contrato não encontrada — nada foi filtrado por contrato."
+        )
 
     # 2. Remove suspensos
     col_atv = detectar_col_status_atividade(df)
@@ -641,7 +692,7 @@ def preparar_base_volumetria(raw: pd.DataFrame, hierarquia: pd.DataFrame) -> pd.
         df = df[~susp].copy()
 
     # 3. Status
-    col_os1 = Utils.buscar_coluna(df, ["STATUS DA O.S 1", "STATUS OS 1", "STATUS DA OS 1"])
+    col_os1 = _coluna_status_volumetria(df)
     if col_os1:
         df[COL_STATUS] = Utils.classificar_status(df[col_os1])
     else:
@@ -653,11 +704,15 @@ def preparar_base_volumetria(raw: pd.DataFrame, hierarquia: pd.DataFrame) -> pd.
         df[COL_TOTAL] = pd.to_numeric(df[col_qtd], errors="coerce").fillna(1)
     else:
         df[COL_TOTAL] = 1.0
-        avisos.append("Coluna 'TOTAL DE TAREFAS' não encontrada — considerando 1 por registro.")
+        avisos.append(
+            "Coluna 'TOTAL DE TAREFAS' não encontrada — considerando 1 por registro."
+        )
     df[COL_TOTAL] = df[COL_TOTAL].clip(lower=0)
 
     # 5. Vínculo com a lista de ativos
-    col_log = Utils.buscar_coluna(df, ["LOGIN DO TÉCNICO", "LOGIN", "USUÁRIO", "MATRÍCULA"])
+    col_log = Utils.buscar_coluna(
+        df, ["LOGIN DO TÉCNICO", "LOGIN", "USUÁRIO", "MATRÍCULA"]
+    )
     if col_log and not hierarquia.empty:
         df["__LOGIN_KEY"] = Utils.normalizar_login(df[col_log])
         df = df.merge(hierarquia, on="__LOGIN_KEY", how="left")
@@ -703,6 +758,13 @@ def preparar_base_volumetria(raw: pd.DataFrame, hierarquia: pd.DataFrame) -> pd.
 
     df.attrs["diagnostico"] = diag
     return df
+
+
+def _coluna_status_volumetria(df: pd.DataFrame) -> str | None:
+    return Utils.buscar_coluna(
+        df,
+        ["STATUS DA O.S 1", "STATUS OS 1", "STATUS DA OS 1", COL_STATUS],
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -764,7 +826,9 @@ def preparar_base_quebra(
     )
     if col_tot:
         df[COL_TOTAL] = (
-            pd.to_numeric(df[col_tot].astype(str).str.replace(",", "."), errors="coerce")
+            pd.to_numeric(
+                df[col_tot].astype(str).str.replace(",", "."), errors="coerce"
+            )
             .fillna(1)
             .astype(int)
         )
@@ -804,7 +868,11 @@ def preparar_base_quebra(
     mon_gs = (
         df["Monitor_GS"]
         if "Monitor_GS" in df.columns
-        else (df["Monitor"] if "Monitor" in df.columns else pd.Series(np.nan, index=df.index))
+        else (
+            df["Monitor"]
+            if "Monitor" in df.columns
+            else pd.Series(np.nan, index=df.index)
+        )
     )
     mon_file = (
         df[col_mon_orig]
@@ -836,15 +904,19 @@ def preparar_base_quebra(
         .str.strip()
         .str.upper()
     )
-    df.loc[df[COL_MONITOR].isin(["", "NAN", "NONE", "NULL", "0", "N/A"]), COL_MONITOR] = (
-        "SEM MONITOR"
-    )
+    df.loc[
+        df[COL_MONITOR].isin(["", "NAN", "NONE", "NULL", "0", "N/A"]), COL_MONITOR
+    ] = "SEM MONITOR"
 
     # 6. Técnico (Sheets → arquivo → NÃO MAPEADO)
     tec_gs = (
         df["Técnico_GS"]
         if "Técnico_GS" in df.columns
-        else (df["Técnico"] if "Técnico" in df.columns else pd.Series(np.nan, index=df.index))
+        else (
+            df["Técnico"]
+            if "Técnico" in df.columns
+            else pd.Series(np.nan, index=df.index)
+        )
     )
     tec_file = (
         df[col_tec_orig]
@@ -871,9 +943,9 @@ def preparar_base_quebra(
         .str.strip()
         .str.upper()
     )
-    df.loc[df[COL_TECNICO].isin(["", "NAN", "NONE", "NULL", "0", "N/A"]), COL_TECNICO] = (
-        "NÃO MAPEADO"
-    )
+    df.loc[
+        df[COL_TECNICO].isin(["", "NAN", "NONE", "NULL", "0", "N/A"]), COL_TECNICO
+    ] = "NÃO MAPEADO"
 
     # 7. Contrato normalizado
     if col_con and col_con in df.columns:
@@ -913,7 +985,9 @@ def preparar_base_quebra(
     df.attrs["diag_final"] = len(df)
     df.attrs["diag_vinculados"] = n_vinculados
     df.attrs["diag_ativos"] = len(lista_ativos)
-    df.attrs["fonte_ativos"] = fonte_ativos or lista_ativos.attrs.get("fonte_ativos", "")
+    df.attrs["fonte_ativos"] = fonte_ativos or lista_ativos.attrs.get(
+        "fonte_ativos", ""
+    )
     df.attrs["erro_ativos"] = erro_ativos or lista_ativos.attrs.get("erro_ativos", "")
     df.attrs["diag_login"] = col_login or ""
     return df
@@ -926,11 +1000,11 @@ def preparar_base_quebra(
 class ResultadoBase:
     """Resultado de uma execução do robô."""
 
-    caminho: Optional[Path]
+    caminho: Path | None
     hash_arquivo: str = ""
-    volumetria: Optional[pd.DataFrame] = None
-    quebra: Optional[pd.DataFrame] = None
-    manifesto: Dict[str, Any] = field(default_factory=dict)
+    volumetria: pd.DataFrame | None = None
+    quebra: pd.DataFrame | None = None
+    manifesto: dict[str, Any] = field(default_factory=dict)
     do_cache: bool = False
 
     @property
@@ -938,15 +1012,17 @@ class ResultadoBase:
         return bool(self.manifesto.get("status") == "ok")
 
 
-def caminho_cache(pasta: Optional[os.PathLike | str] = None) -> Path:
+def caminho_cache(pasta: os.PathLike | str | None = None) -> Path:
     return Path(pasta) if pasta else config().pasta_cache
 
 
-def _caminho_manifesto(pasta: Optional[os.PathLike | str] = None) -> Path:
+def _caminho_manifesto(pasta: os.PathLike | str | None = None) -> Path:
     return caminho_cache(pasta) / _ARQUIVO_MANIFESTO
 
 
-def salvar_cache(df: pd.DataFrame, nome: str, pasta: Optional[os.PathLike | str] = None) -> Path:
+def salvar_cache(
+    df: pd.DataFrame, nome: str, pasta: os.PathLike | str | None = None
+) -> Path:
     destino = caminho_cache(pasta)
     destino.mkdir(parents=True, exist_ok=True)
     arquivo = destino / nome
@@ -954,7 +1030,7 @@ def salvar_cache(df: pd.DataFrame, nome: str, pasta: Optional[os.PathLike | str]
     return arquivo
 
 
-def ler_cache(nome: str, pasta: Optional[os.PathLike | str] = None) -> Optional[pd.DataFrame]:
+def ler_cache(nome: str, pasta: os.PathLike | str | None = None) -> pd.DataFrame | None:
     arquivo = caminho_cache(pasta) / nome
     if not arquivo.exists():
         return None
@@ -970,7 +1046,7 @@ def ler_cache(nome: str, pasta: Optional[os.PathLike | str] = None) -> Optional[
     return df
 
 
-def manifesto(pasta: Optional[os.PathLike | str] = None) -> Dict[str, Any]:
+def manifesto(pasta: os.PathLike | str | None = None) -> dict[str, Any]:
     caminho = _caminho_manifesto(pasta)
     if not caminho.exists():
         return {}
@@ -980,15 +1056,19 @@ def manifesto(pasta: Optional[os.PathLike | str] = None) -> Dict[str, Any]:
         return {}
 
 
-def _gravar_manifesto(dados: Dict[str, Any], pasta: Optional[os.PathLike | str] = None) -> Path:
+def _gravar_manifesto(
+    dados: dict[str, Any], pasta: os.PathLike | str | None = None
+) -> Path:
     destino = caminho_cache(pasta)
     destino.mkdir(parents=True, exist_ok=True)
     caminho = destino / _ARQUIVO_MANIFESTO
-    caminho.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
+    caminho.write_text(
+        json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return caminho
 
 
-def _cache_expirado(dados: Dict[str, Any], ttl_minutos: Optional[int] = None) -> bool:
+def _cache_expirado(dados: dict[str, Any], ttl_minutos: int | None = None) -> bool:
     ttl = config().ttl_minutos if ttl_minutos is None else int(ttl_minutos or 0)
     if ttl <= 0:
         return False
@@ -1002,7 +1082,7 @@ def _cache_expirado(dados: Dict[str, Any], ttl_minutos: Optional[int] = None) ->
     return (datetime.now() - momento).total_seconds() > ttl * 60
 
 
-def status_base(pasta: Optional[os.PathLike | str] = None) -> Dict[str, Any]:
+def status_base(pasta: os.PathLike | str | None = None) -> dict[str, Any]:
     """Resumo do estado atual da base (para UI e para o robô)."""
     dados = manifesto(pasta)
     if not dados:
@@ -1019,13 +1099,14 @@ def status_base(pasta: Optional[os.PathLike | str] = None) -> Dict[str, Any]:
 # PIPELINA DO ROBÔ
 # ═══════════════════════════════════════════════════════════════════════
 def gerar_bases(
-    caminho: Optional[os.PathLike | str] = None,
+    caminho: os.PathLike | str | None = None,
     forcar: bool = False,
     usar_cache: bool = True,
     somente: Sequence[str] = ("volumetria", "quebra"),
-    pasta_entrada: Optional[os.PathLike | str] = None,
-    pasta_cache: Optional[os.PathLike | str] = None,
-    registrar_log: Optional[Callable[[str], None]] = None,
+    pasta_entrada: os.PathLike | str | None = None,
+    pasta_cache: os.PathLike | str | None = None,
+    registrar_log: Callable[[str], None] | None = None,
+    arquivo_glob: str | None = None,
     **ativos_opcoes: Any,
 ) -> ResultadoBase:
     """
@@ -1036,9 +1117,17 @@ def gerar_bases(
     ``somente`` permite processar apenas um dos painéis.
     """
     log = registrar_log or (lambda msg: logger.info("%s", msg))
-    cfg = config(pasta_entrada=pasta_entrada, pasta_cache=pasta_cache)
+    cfg = config(
+        pasta_entrada=pasta_entrada,
+        pasta_cache=pasta_cache,
+        arquivo_glob=arquivo_glob,
+    )
 
-    arquivo = Path(caminho) if caminho else localizar_base(cfg.pasta_entrada)
+    arquivo = (
+        Path(caminho)
+        if caminho
+        else localizar_base(cfg.pasta_entrada, arquivo_glob=cfg.arquivo_glob)
+    )
     if arquivo is None or not arquivo.exists():
         return ResultadoBase(
             caminho=None,
@@ -1080,6 +1169,27 @@ def gerar_bases(
             },
         )
 
+    if "volumetria" in somente and _coluna_status_volumetria(bruta_volumetria) is None:
+        mensagem = (
+            f"O arquivo '{arquivo.name}' não é uma base de volumetria: "
+            "coluna de status ausente. Esperado: 'STATUS DA O.S 1', "
+            "'STATUS OS 1', 'STATUS DA OS 1' ou 'STATUS CONTRATO'."
+        )
+        dados = {
+            "status": "base_invalida",
+            "atualizado_em": datetime.now().isoformat(timespec="seconds"),
+            "origem": str(arquivo),
+            "arquivo": arquivo.name,
+            "hash": hash_arquivo,
+            "mensagem": mensagem,
+        }
+        _gravar_manifesto(dados, cfg.pasta_cache)
+        return ResultadoBase(
+            caminho=arquivo,
+            hash_arquivo=hash_arquivo,
+            manifesto=dados,
+        )
+
     # A Quebra lê tudo como texto (como no upload da página).
     bruta_quebra = ler_arquivo_caminho(arquivo, dtype=str)
 
@@ -1096,8 +1206,8 @@ def gerar_bases(
     fonte_ativos = ativos.attrs.get("fonte_ativos", "")
     erro_ativos = ativos.attrs.get("erro_ativos", "")
 
-    volumetria_df: Optional[pd.DataFrame] = None
-    quebra_df: Optional[pd.DataFrame] = None
+    volumetria_df: pd.DataFrame | None = None
+    quebra_df: pd.DataFrame | None = None
 
     if "volumetria" in somente:
         log("Gerando base de Volumetria ...")
@@ -1106,7 +1216,9 @@ def gerar_bases(
 
     if "quebra" in somente:
         log("Gerando base de Quebra de Agenda ...")
-        quebra_df = preparar_base_quebra(bruta_quebra, ativos, fonte_ativos, erro_ativos)
+        quebra_df = preparar_base_quebra(
+            bruta_quebra, ativos, fonte_ativos, erro_ativos
+        )
         salvar_cache(quebra_df, _ARQUIVO_QUEBRA, cfg.pasta_cache)
 
     dados = {
@@ -1120,7 +1232,7 @@ def gerar_bases(
         ),
         "fonte_ativos": fonte_ativos,
         "erro_ativos": erro_ativos,
-        "registros_ativos": int(len(ativos)),
+        "registros_ativos": len(ativos),
         "arquivos": {
             _ARQUIVO_VOLUMETRIA: _meta_cache(volumetria_df, bruta_volumetria),
             _ARQUIVO_QUEBRA: _meta_cache(quebra_df, bruta_quebra),
@@ -1151,14 +1263,16 @@ def _hierarquia_de(ativos: pd.DataFrame) -> pd.DataFrame:
     ).drop_duplicates("__LOGIN_KEY")
 
 
-def _meta_cache(df: Optional[pd.DataFrame], bruta: pd.DataFrame) -> Dict[str, Any]:
+def _meta_cache(df: pd.DataFrame | None, bruta: pd.DataFrame) -> dict[str, Any]:
     if df is None:
         return {}
     return {
-        "registros": int(len(df)),
-        "colunas": int(len(df.columns)),
-        "registros_brutos": int(len(bruta)),
-        "attrs": {k: v for k, v in df.attrs.items() if isinstance(v, (str, int, float, bool))},
+        "registros": len(df),
+        "colunas": len(df.columns),
+        "registros_brutos": len(bruta),
+        "attrs": {
+            k: v for k, v in df.attrs.items() if isinstance(v, (str, int, float, bool))
+        },
     }
 
 
@@ -1166,7 +1280,7 @@ def carregar_base_volumetria(
     forcar: bool = False,
     usar_cache: bool = True,
     **kwargs: Any,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Base de Volumetria pronta (cache do robô, recalculando quando necessário)."""
     cache_invalido = False
     if usar_cache and not forcar:
@@ -1177,12 +1291,16 @@ def carregar_base_volumetria(
                 return cache
             cache_invalido = True
 
-    base = gerar_bases(
+    resultado = gerar_bases(
         forcar=forcar or cache_invalido,
         usar_cache=usar_cache,
         somente=("volumetria",),
         **kwargs,
-    ).volumetria
+    )
+    if resultado.manifesto.get("status") == "base_invalida":
+        raise ValueError(resultado.manifesto["mensagem"])
+
+    base = resultado.volumetria
     if base is None:
         return None
 
@@ -1198,7 +1316,7 @@ def carregar_base_volumetria(
     return base
 
 
-def _colunas_volumetria_ausentes(df: pd.DataFrame) -> List[str]:
+def _colunas_volumetria_ausentes(df: pd.DataFrame) -> list[str]:
     """Colunas consumidas pela página de Volumetria."""
     obrigatorias = (COL_STATUS, COL_TOTAL, COL_TECNICO, COL_MONITOR, COL_REGIAO)
     return [coluna for coluna in obrigatorias if coluna not in df.columns]
@@ -1208,7 +1326,7 @@ def carregar_base_quebra(
     forcar: bool = False,
     usar_cache: bool = True,
     **kwargs: Any,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Base de Quebra de Agenda pronta (cache do robô, recalculando quando necessário)."""
     if usar_cache and not forcar:
         dados = manifesto(kwargs.get("pasta_cache"))
@@ -1216,14 +1334,16 @@ def carregar_base_quebra(
             cache = ler_cache(_ARQUIVO_QUEBRA, kwargs.get("pasta_cache"))
             if cache is not None:
                 return cache
-    return gerar_bases(forcar=forcar, usar_cache=usar_cache, somente=("quebra",), **kwargs).quebra
+    return gerar_bases(
+        forcar=forcar, usar_cache=usar_cache, somente=("quebra",), **kwargs
+    ).quebra
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # APOIO À INTERFACE (opcional — só é chamado pelas páginas)
 # ═══════════════════════════════════════════════════════════════════════
 def render_status_base(
-    dados: Optional[Dict[str, Any]] = None,
+    dados: dict[str, Any] | None = None,
     *,
     titulo: str = "🤖 Base automática (robô)",
 ) -> None:
@@ -1242,12 +1362,13 @@ def render_status_base(
         st.caption(
             f"📄 `{dados.get('arquivo', '—')}`  \n"
             f"🕒 {_formatar_data(dados.get('atualizado_em'))}  \n"
-            f"📦 Volumetria: {dados.get('arquivos', {}).get(_ARQUIVO_VOLUMETRIA, {}).get('registros', 0):,} registros"
-            .replace(",", ".")
+            f"📦 Volumetria: {dados.get('arquivos', {}).get(_ARQUIVO_VOLUMETRIA, {}).get('registros', 0):,} registros".replace(
+                ",", "."
+            )
         )
 
 
-def _formatar_data(valor: Optional[str]) -> str:
+def _formatar_data(valor: str | None) -> str:
     if not valor:
         return "—"
     try:

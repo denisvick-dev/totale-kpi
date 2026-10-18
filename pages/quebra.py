@@ -10,15 +10,14 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict, Optional
+from typing import Any
 
 import gspread
-from google.oauth2.service_account import Credentials
-
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from google.oauth2.service_account import Credentials
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from streamlit_gsheets import GSheetsConnection
@@ -26,22 +25,21 @@ from streamlit_gsheets import GSheetsConnection
 from components import base_operacional as bo
 from components.componentes import (
     aplicar_estilo,
-    render_hero,
-    render_section_header,
-    render_kpi,
-    render_insight,
-    render_dataframe,
     estilizar_dataframe,
+    render_dataframe,
+    render_hero,
+    render_insight,
+    render_kpi,
+    render_section_header,
 )
 from components.criterios import (
     classificar_tipo_servico,
     extrair_metricas_criterios,
-    render_painel_criterios,
-    render_debug_criterios,
     render_card_destaque_migracao,
+    render_debug_criterios,
     render_lista_colunas,
+    render_painel_criterios,
 )
-
 
 # ═══════════════════════════════════════════════════════
 # CONFIGURAÇÕES E CONSTANTES
@@ -86,7 +84,7 @@ def _fmt_int(v: int) -> str:
 # ═══════════════════════════════════════════════════════
 class Utils:
     @staticmethod
-    def buscar_coluna(df: pd.DataFrame, palavras: list) -> Optional[str]:
+    def buscar_coluna(df: pd.DataFrame, palavras: list) -> str | None:
         if df is None or df.empty:
             return None
         cols = {
@@ -169,10 +167,8 @@ class DataLoader:
             sheet_id=Config.SHEET_ID_ATIVOS,
             worksheet=Config.WORKSHEET_ATIVOS,
             url=Config.URL_LISTA_ATIVOS,
-            segredos=lambda: dict(st.secrets["gcp_service_account"]),
             credenciais=Credentials.from_service_account_info,
             autorizar=gspread.authorize,
-            conexao=lambda: st.connection("gsheets", type=GSheetsConnection),
             read_csv=pd.read_csv,
         )
 
@@ -216,7 +212,8 @@ class DataLoader:
     @staticmethod
     def _normalizar_login(serie: pd.Series) -> pd.Series:
         return (
-            serie.fillna("").astype(str)
+            serie.fillna("")
+            .astype(str)
             .str.strip()
             .str.replace(r"\.0$", "", regex=True)
             .str.upper()
@@ -242,9 +239,7 @@ class DataLoader:
             else:
                 base["MONITOR"] = "SEM MONITOR"
                 base.attrs["coluna_monitor_ausente"] = True
-        base["MONITOR"] = (
-            base["MONITOR"].fillna("").astype(str).str.strip().str.upper()
-        )
+        base["MONITOR"] = base["MONITOR"].fillna("").astype(str).str.strip().str.upper()
         base.loc[
             base["MONITOR"].isin(["", "NAN", "NONE", "NULL", "0", "N/A", "<NA>"]),
             "MONITOR",
@@ -263,9 +258,7 @@ class DataLoader:
                 ],
             )
             base["TÉCNICO"] = base[col_tecnico] if col_tecnico else "NÃO MAPEADO"
-        base["TÉCNICO"] = (
-            base["TÉCNICO"].fillna("").astype(str).str.strip().str.upper()
-        )
+        base["TÉCNICO"] = base["TÉCNICO"].fillna("").astype(str).str.strip().str.upper()
         base.loc[
             base["TÉCNICO"].isin(["", "NAN", "NONE", "NULL", "0", "N/A", "<NA>"]),
             "TÉCNICO",
@@ -277,9 +270,7 @@ class DataLoader:
                 base, ["STATUS DA O.S 1", "STATUS OS 1", "STATUS DA OS 1"]
             )
         base["Status Contrato"] = (
-            bo.Utils.classificar_status(base[col_status])
-            if col_status
-            else "Pendente"
+            bo.Utils.classificar_status(base[col_status]) if col_status else "Pendente"
         )
 
         col_total = Utils.buscar_coluna(
@@ -295,8 +286,10 @@ class DataLoader:
     @staticmethod
     @st.cache_data(show_spinner=False)
     def preparar_base(
-        df: pd.DataFrame, df_gs: pd.DataFrame,
-        fonte_ativos: str = "", erro_ativos: str = "",
+        df: pd.DataFrame,
+        df_gs: pd.DataFrame,
+        fonte_ativos: str = "",
+        erro_ativos: str = "",
     ) -> pd.DataFrame:
         """
         Tratamento compartilhado com o robô (``components/base_operacional``).
@@ -320,9 +313,9 @@ class Analise:
             return pd.DataFrame()
 
         grp = (
-            df_valid.groupby(
-                ["MONITOR", "TIPO_SERVICO", "Status Contrato"]
-            )["TOTAL DE TAREFAS"]
+            df_valid.groupby(["MONITOR", "TIPO_SERVICO", "Status Contrato"])[
+                "TOTAL DE TAREFAS"
+            ]
             .sum()
             .unstack("Status Contrato", fill_value=0)
             .reindex(columns=["Executada", "Não Executada"], fill_value=0)
@@ -378,7 +371,7 @@ class Analise:
         )
         pivot = pivot.reset_index().rename(columns={"MONITOR": "Monitor"})
 
-        total_row: Dict[str, Any] = {"Monitor": "Total Geral"}
+        total_row: dict[str, Any] = {"Monitor": "Total Geral"}
         for tipo in Config.ORDEM_TIPOS:
             sub = df_valid[df_valid["TIPO_SERVICO"] == tipo]
             ex = sub.loc[
@@ -401,7 +394,7 @@ class Analise:
         return pd.concat([pivot, pd.DataFrame([total_row])], ignore_index=True)
 
     @staticmethod
-    def metricas_segmento(df_seg: pd.DataFrame) -> Dict[str, Any]:
+    def metricas_segmento(df_seg: pd.DataFrame) -> dict[str, Any]:
         aloc = float(df_seg["TOTAL DE TAREFAS"].sum())
         exe = float(
             df_seg.loc[
@@ -500,7 +493,7 @@ def view_executiva(df: pd.DataFrame, meta_pct: float):
             return f"color: {'#B4232E' if val > meta_pct else '#087A55'}; font-weight: 700;"
         return ""
 
-    formatos: Dict[str, Any] = {
+    formatos: dict[str, Any] = {
         **{c: "{:.1%}" for c in Config.ORDEM_TIPOS},
         "Quebra Geral": "{:.1%}",
         "Total Tarefas": "{:,.0f}",
@@ -512,7 +505,9 @@ def view_executiva(df: pd.DataFrame, meta_pct: float):
     else:
         sty = sty.applymap(_cor_celula, subset=cols_pct)  # type: ignore[attr-defined]
     st.dataframe(
-        sty, use_container_width=True, hide_index=True,
+        sty,
+        use_container_width=True,
+        hide_index=True,
         height=min(520, 40 + 36 * len(df_matriz)),
     )
 
@@ -695,7 +690,7 @@ def view_base_completa(df: pd.DataFrame, df_full: pd.DataFrame):
         c2,
         "Via Merge Sheets",
         _fmt_int(via_merge),
-        f"{(via_merge/total_reg if total_reg else 0):.1%}",
+        f"{(via_merge / total_reg if total_reg else 0):.1%}",
         tema="verde",
     )
     render_kpi(
@@ -834,7 +829,9 @@ def main():
             "Use o upload apenas quando quiser analisar outro arquivo."
         )
         arq = st.file_uploader(
-            "Base operacional", type=["xlsx", "csv"], key="uploader_principal",
+            "Base operacional",
+            type=["xlsx", "csv"],
+            key="uploader_principal",
             label_visibility="collapsed",
         )
 
@@ -848,7 +845,10 @@ def main():
                     return
                 gs = DataLoader.buscar_gsheets()
                 df_proc = DataLoader.preparar_base(
-                    raw, gs, gs.attrs.get("fonte_ativos", ""), gs.attrs.get("erro_ativos", "")
+                    raw,
+                    gs,
+                    gs.attrs.get("fonte_ativos", ""),
+                    gs.attrs.get("erro_ativos", ""),
                 )
                 st.session_state["quebra_arquivo"] = (conteudo, arq.name)
                 st.session_state["df_memoria"] = df_proc
@@ -921,11 +921,16 @@ def main():
                 gs = DataLoader.buscar_gsheets()
                 raw = DataLoader.ler_arquivo(*arquivo)
                 st.session_state["df_memoria"] = DataLoader.preparar_base(
-                    raw, gs, gs.attrs.get("fonte_ativos", ""), gs.attrs.get("erro_ativos", "")
+                    raw,
+                    gs,
+                    gs.attrs.get("fonte_ativos", ""),
+                    gs.attrs.get("erro_ativos", ""),
                 )
                 st.rerun()
             else:
-                with st.spinner("🔗 Atualizando a lista de ativos na base automática..."):
+                with st.spinner(
+                    "🔗 Atualizando a lista de ativos na base automática..."
+                ):
                     base = DataLoader.recarregar_base_automatica()
                 if base is not None and not base.empty:
                     st.session_state["df_memoria"] = base
@@ -973,7 +978,9 @@ def main():
             "uma base com essa informação."
         )
     elif erro_ativos:
-        st.warning(f"⚠️ {erro_ativos} Os dados da matriz podem usar apenas o arquivo enviado.")
+        st.warning(
+            f"⚠️ {erro_ativos} Os dados da matriz podem usar apenas o arquivo enviado."
+        )
     elif not vinculados:
         st.warning(
             "⚠️ Nenhum login da base corresponde à lista_ativos. "

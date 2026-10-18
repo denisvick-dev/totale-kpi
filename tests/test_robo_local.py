@@ -26,14 +26,18 @@ def _xlsx(caminho: Path, df: pd.DataFrame) -> Path:
 # ── Detecção e nomes ────────────────────────────────────────────────
 def test_deteccao_de_base_aceita_minusculas_e_marcador_mais_longo():
     assert robo.detectar_marcador_arquivo("atividades-spo-2026.csv") == "SPO"
-    assert robo.detectar_base_arquivo(Path("/tmp/Atividades-GRS.xlsx")) == "NET-GUARULHOS"
+    assert (
+        robo.detectar_base_arquivo(Path("/tmp/Atividades-GRS.xlsx")) == "NET-GUARULHOS"
+    )
     assert robo.detectar_base_arquivo("ABCDM.csv") == "NET-ABCDM"
     assert robo.detectar_base_arquivo("Atividades-sem-base.csv") is None
     assert robo.detectar_marcador_arquivo(None) is None
 
 
 def test_nomes_de_colunas_unicos_reservam_grafias_existentes():
-    nomes = robo._nomes_colunas_unicos(["A", "A", "A.1", "", "Unnamed: 2", "\ufeffBASE"])
+    nomes = robo._nomes_colunas_unicos(
+        ["A", "A", "A.1", "", "Unnamed: 2", "\ufeffBASE"]
+    )
     assert nomes == ["A", "A.2", "A.1", "col_3", "col_4", "BASE"]
 
 
@@ -57,7 +61,14 @@ def test_padronizacao_de_texto_remove_sufixo_e_mantem_zeros():
     df = robo._padronizar_dataframe(
         pd.DataFrame({"A": valores, "B": ["x", "y", "z", "w", "v", "u"]})
     )
-    assert [None if pd.isna(v) else v for v in df["A"]] == ["001", "1", "-2", None, None, None]
+    assert [None if pd.isna(v) else v for v in df["A"]] == [
+        "001",
+        "1",
+        "-2",
+        None,
+        None,
+        None,
+    ]
 
 
 def test_padronizacao_de_booleanos_mantem_o_texto_anterior():
@@ -82,7 +93,9 @@ def test_padronizacao_do_dataframe_limpa_colunas_e_linhas_vazias():
 # ── Leitura CSV / Excel ─────────────────────────────────────────────
 def test_csv_cp1252_com_ponto_e_virgula_e_acentos(tmp_path):
     caminho = tmp_path / "Atividades-SPO-2026.csv"
-    caminho.write_bytes("NOME;OBSERVAÇÃO\nAna;São Paulo\nBia;Guarulhos\n".encode("cp1252"))
+    caminho.write_bytes(
+        "NOME;OBSERVAÇÃO\nAna;São Paulo\nBia;Guarulhos\n".encode("cp1252")
+    )
 
     leitura = robo.ler_arquivo_detalhado(str(caminho))
 
@@ -365,7 +378,9 @@ def test_central_de_atualizacao_hospeda_o_painel_e_publica_a_base(tmp_path):
     ).to_csv(pasta / "Atividades-SPO-2026.csv", index=False, sep=";")
 
     assinatura = tuple(selecionar_arquivos(_listar_candidatos_com_stat(str(pasta))))
-    app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "pages" / "envio_excel.py"))
+    app = AppTest.from_file(
+        str(Path(__file__).resolve().parents[1] / "pages" / "envio_excel.py")
+    )
     app.session_state["dados_cons"] = {"Consultivo": pd.DataFrame({"a": [1]})}
     app.session_state["dados_prod"] = {"Prod": pd.DataFrame({"a": [1]})}
     app.session_state["robo_pasta_alvo"] = str(pasta)

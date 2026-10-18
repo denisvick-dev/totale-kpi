@@ -10,7 +10,6 @@ import pytest
 from components import base_operacional as bo
 from scripts import robot_base
 
-
 #: Padrão de 6 linhas: 2 ND, 2 Migração, 1 PME e 1 Outros.
 PADRAO_LINHAS = [
     ("EXECUTADA", "ADESAO", "HFC(1/100)", "SAO PAULO"),
@@ -92,6 +91,21 @@ def test_localiza_o_arquivo_mais_recente(ambiente):
     assert bo.localizar_base(ambiente["entrada"]) == novo
 
 
+def test_localiza_base_com_multiplos_globs(ambiente):
+    csv = ambiente["entrada"] / "Atividades-exportacao.csv"
+    xlsx = ambiente["entrada"] / "Atividades-exportacao.xlsx"
+    inesperado = ambiente["entrada"] / "Atividades-exportacao.xls"
+    csv.write_text("dados", encoding="utf-8")
+    xlsx.write_bytes(b"dados")
+    inesperado.write_bytes(b"dados")
+    os.utime(csv, (time.time() - 500, time.time() - 500))
+
+    assert bo.localizar_base(
+        ambiente["entrada"],
+        arquivo_glob="Atividades-*.csv;Atividades-*.xlsx",
+    ) == xlsx
+
+
 def test_sem_base_na_pasta_o_robo_avisa(ambiente):
     resultado = bo.gerar_bases(
         pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
@@ -128,10 +142,10 @@ def test_quebra_aplica_os_criterios_oficiais(ambiente):
     quebra = resultado.quebra
     segmentos = quebra["TIPO_SERVICO"].value_counts().to_dict()
 
-    assert segmentos["Novos Domicílios"] == 2   # ADESAO + HFC
-    assert segmentos["Migração"] == 2           # MUDANCA DE PACOTE + PON
-    assert segmentos["PME"] == 1                # ADESAO + PME
-    assert segmentos["Outros"] == 1             # REPARO
+    assert segmentos["Novos Domicílios"] == 2  # ADESAO + HFC
+    assert segmentos["Migração"] == 2  # MUDANCA DE PACOTE + PON
+    assert segmentos["PME"] == 1  # ADESAO + PME
+    assert segmentos["Outros"] == 1  # REPARO
     assert quebra.attrs["diag_susp"] == 0
     assert quebra.attrs["diag_inv"] == 1
     assert quebra.attrs["diag_vinculados"] == 2
@@ -158,9 +172,7 @@ def test_volumetria_devolve_status_e_regiao(ambiente):
 
 def test_carregar_volumetria_reprocessa_cache_sem_colunas_obrigatorias(ambiente):
     base_sintetica(ambiente["entrada"] / "base.xlsx")
-    bo.gerar_bases(
-        pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"]
-    )
+    bo.gerar_bases(pasta_entrada=ambiente["entrada"], pasta_cache=ambiente["cache"])
     pd.DataFrame({"CONTRATO": ["1"]}).to_pickle(ambiente["cache"] / "volumetria.pkl")
 
     volumetria = bo.carregar_base_volumetria(
@@ -176,12 +188,30 @@ def test_carregar_volumetria_reporta_arquivo_sem_status(ambiente):
         ambiente["entrada"] / "base.xlsx", index=False
     )
 
-    with pytest.raises(ValueError, match="STATUS CONTRATO"):
+    with pytest.raises(ValueError, match="base.xlsx.*STATUS CONTRATO"):
         bo.carregar_base_volumetria(
             pasta_entrada=ambiente["entrada"],
             pasta_cache=ambiente["cache"],
             usar_cache=False,
         )
+
+    assert bo.status_base(ambiente["cache"])["status"] == "base_invalida"
+    assert not (ambiente["cache"] / "volumetria.pkl").exists()
+
+
+def test_volumetria_aceita_status_contrato_na_base_bruta():
+    raw = pd.DataFrame(
+        {
+            "STATUS CONTRATO": ["EXECUTADA", "PENDENTE"],
+            "CONTRATO": ["1", "2"],
+            "CIDADE": ["SAO PAULO", "DIADEMA"],
+        }
+    )
+
+    base = bo.preparar_base_volumetria(raw, pd.DataFrame())
+
+    assert base["STATUS CONTRATO"].tolist() == ["Executada", "Pendente"]
+    assert not base.attrs["diagnostico"]["erros"]
 
 
 def test_cache_e_reaproveitado_quando_o_arquivo_nao_muda(ambiente):
@@ -227,8 +257,11 @@ def test_status_base_reflete_o_cache(ambiente):
 
 
 def test_cli_do_robo_gera_o_cache(ambiente, monkeypatch):
-    base_sintetica(ambiente["entrada"] / "base.xlsx")
-    monkeypatch.setattr(robot_base, "ARQUIVO_LOG", ambiente["cache"] / "logs" / "robo.log")
+    monkeypatch.delenv("TOTALE_BASE_ARQUIVO", raising=False)
+    base_sintetica(ambiente["entrada"] / "Atividades-exportacao.xlsx")
+    monkeypatch.setattr(
+        robot_base, "ARQUIVO_LOG", ambiente["cache"] / "logs" / "robo.log"
+    )
 
     codigo = robot_base.main(
         [
@@ -243,17 +276,48 @@ def test_cli_do_robo_gera_o_cache(ambiente, monkeypatch):
     assert bo.status_base(ambiente["cache"])["status"] == "ok"
 
 
-def test_cli_status_e_limpar_cache(ambiente, monkeypatch, capsys):
+def test_cli_ignora_arquivo_fora_do_padrao(ambiente, monkeypatch):
+    monkeypatch.delenv("TOTALE_BASE_ARQUIVO", raising=False)
     base_sintetica(ambiente["entrada"] / "base.xlsx")
-    monkeypatch.setattr(robot_base, "ARQUIVO_LOG", ambiente["cache"] / "logs" / "robo.log")
+    monkeypatch.setattr(
+        robot_base, "ARQUIVO_LOG", ambiente["cache"] / "logs" / "robo.log"
+    )
+
+    codigo = robot_base.main(
+        [
+            "--pasta-entrada",
+            str(ambiente["entrada"]),
+            "--pasta-cache",
+            str(ambiente["cache"]),
+        ]
+    )
+
+    assert codigo == 1
+    assert bo.status_base(ambiente["cache"])["status"] == "sem_cache"
+
+
+def test_cli_status_e_limpar_cache(ambiente, monkeypatch, capsys):
+    monkeypatch.delenv("TOTALE_BASE_ARQUIVO", raising=False)
+    base_sintetica(ambiente["entrada"] / "Atividades-exportacao.xlsx")
+    monkeypatch.setattr(
+        robot_base, "ARQUIVO_LOG", ambiente["cache"] / "logs" / "robo.log"
+    )
     robot_base.main(
-        ["--pasta-entrada", str(ambiente["entrada"]), "--pasta-cache", str(ambiente["cache"])]
+        [
+            "--pasta-entrada",
+            str(ambiente["entrada"]),
+            "--pasta-cache",
+            str(ambiente["cache"]),
+        ]
     )
 
     assert robot_base.main(["--pasta-cache", str(ambiente["cache"]), "--status"]) == 0
-    assert "base.xlsx" in capsys.readouterr().out
+    assert "Atividades-exportacao.xlsx" in capsys.readouterr().out
 
-    assert robot_base.main(["--pasta-cache", str(ambiente["cache"]), "--limpar-cache"]) == 0
+    assert (
+        robot_base.main(["--pasta-cache", str(ambiente["cache"]), "--limpar-cache"])
+        == 0
+    )
     assert not (ambiente["cache"] / "manifesto.json").exists()
 
 
@@ -303,7 +367,9 @@ def test_por_padrao_nao_varre_subpastas(ambiente):
 
     assert bo.config().recursivo is False
     assert bo.localizar_base(ambiente["entrada"]).name == "base.xlsx"
-    assert bo.localizar_base(ambiente["entrada"], recursivo=True).name == "base_sub.xlsx"
+    assert (
+        bo.localizar_base(ambiente["entrada"], recursivo=True).name == "base_sub.xlsx"
+    )
 
 
 def test_ignora_temporarios_do_excel(ambiente):
@@ -345,9 +411,7 @@ def test_instalador_lista_sem_copiar(tmp_path):
     (origem / "Oscine-Bold.otf").write_bytes(b"fonte")
     destino = tmp_path / "assets" / "fonts"
 
-    planejado = instalar_fonte_hero.instalar(
-        [origem], destino=destino, simular=True
-    )
+    planejado = instalar_fonte_hero.instalar([origem], destino=destino, simular=True)
 
     assert len(planejado) == 1
     assert not destino.exists()

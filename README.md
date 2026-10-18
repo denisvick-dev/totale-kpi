@@ -94,8 +94,14 @@ Configuração (`.streamlit/secrets.toml` ou variáveis de ambiente):
 |-------|----------|--------|
 | `pasta_entrada` | `TOTALE_BASE_ENTRADA` | `Downloads` do usuário |
 | `pasta_cache` | `TOTALE_BASE_CACHE` | `dados/cache` |
-| `arquivo_glob` | `TOTALE_BASE_ARQUIVO` | qualquer `.xlsx/.xls/.csv` |
+| `arquivo_glob` | `TOTALE_BASE_ARQUIVO` | `Atividades-*.csv;Atividades-*.xlsx` |
 | `ttl_minutos` | `TOTALE_BASE_TTL` | `0` (sem expiração) |
+
+O arquivo automático precisa conter uma coluna de status operacional. São
+aceitos `STATUS DA O.S 1`, `STATUS OS 1`, `STATUS DA OS 1` e `STATUS CONTRATO`.
+Arquivos mais recentes de outros tipos são rejeitados sem substituir o cache de
+dados. Para monitorar apenas arquivos de exportação, configure `arquivo_glob`
+(por exemplo, `base_*.xlsx`; para vários padrões, separe-os com `;`).
 
 ```toml
 [base_operacional]

@@ -30,6 +30,7 @@ st.set_page_config(page_title="Atualização de Dados", page_icon="🔁", layout
 # ✅ aplicar_estilo() DEPOIS do set_page_config
 aplicar_estilo()
 
+
 class Configuracoes:
     """Parâmetros e configurações gerais da aplicação."""
 
@@ -50,7 +51,6 @@ class Configuracoes:
 
 
 class ProcessadorDeDados:
-
     @staticmethod
     def _normalizar_serie(serie: pd.Series) -> pd.Series:
         """
@@ -407,8 +407,14 @@ df_cons = (
 )
 
 ultima_data = st.session_state.get("ultima_atualizacao")
-data_sync = ultima_data.strftime("%d/%m/%Y") if isinstance(ultima_data, datetime) else "—"
-hora_sync = ultima_data.strftime("às %H:%M:%S") if isinstance(ultima_data, datetime) else "Ainda não atualizado"
+data_sync = (
+    ultima_data.strftime("%d/%m/%Y") if isinstance(ultima_data, datetime) else "—"
+)
+hora_sync = (
+    ultima_data.strftime("às %H:%M:%S")
+    if isinstance(ultima_data, datetime)
+    else "Ainda não atualizado"
+)
 
 aba1, aba2 = st.tabs(
     ["📊 Pré-visualização: Produção", "📋 Pré-visualização: Consultivos"]
@@ -418,7 +424,9 @@ aba1, aba2 = st.tabs(
 with aba1:
     render_section_header("table_view", "Pré-visualização da Produção")
     c1, c2, c3 = st.columns(3)
-    render_kpi(c1, "Total Registros", f"{len(df_prod):,}".replace(",", "."), tema="azul")
+    render_kpi(
+        c1, "Total Registros", f"{len(df_prod):,}".replace(",", "."), tema="azul"
+    )
     render_kpi(c2, "Total Colunas", str(len(df_prod.columns)), tema="cinza")
     render_kpi(c3, "Última Sincronização", data_sync, hora_sync, tema="verde")
 
@@ -431,7 +439,9 @@ with aba1:
 with aba2:
     render_section_header("table_view", "Pré-visualização de Consultivos")
     c4, c5, c6 = st.columns(3)
-    render_kpi(c4, "Total Registros", f"{len(df_cons):,}".replace(",", "."), tema="azul")
+    render_kpi(
+        c4, "Total Registros", f"{len(df_cons):,}".replace(",", "."), tema="azul"
+    )
     render_kpi(c5, "Total Colunas", str(len(df_cons.columns)), tema="cinza")
     render_kpi(c6, "Última Sincronização", data_sync, hora_sync, tema="verde")
 

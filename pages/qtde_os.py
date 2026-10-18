@@ -2,9 +2,10 @@
 Central de Performance | Qtde. de O.S.
 Arquivo: pages/producao.py
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -37,22 +38,23 @@ st.set_page_config(
 # Regra única do projeto: InfoCalendario vem de components/calendario.py e
 # desconta domingos e feriados (nacionais + estaduais de SP).
 
+
 # ====================================================
 # 3. PROCESSAMENTO DE DADOS
 # ====================================================
 class ProcessadorDados:
     """Carrega, valida e processa o DataFrame de produção."""
 
-    COL_DATA       = "Data Agendamento"
-    COL_OS         = "OS"
+    COL_DATA = "Data Agendamento"
+    COL_OS = "OS"
     COL_SUPERVISOR = "Supervisor"
-    COL_PROJETO    = "Projeto"
-    COL_TECNICO    = "Nome Equipe"
-    COL_COD_TEC    = "CódAuxEquipe"
+    COL_PROJETO = "Projeto"
+    COL_TECNICO = "Nome Equipe"
+    COL_COD_TEC = "CódAuxEquipe"
 
     def __init__(self, df: pd.DataFrame):
         self.df_original = df.copy()
-        self.df          = df.copy()
+        self.df = df.copy()
         self._preparar()
 
     def _preparar(self) -> None:
@@ -82,12 +84,12 @@ class ProcessadorDados:
         return int(self.df[self.COL_SUPERVISOR].nunique())
 
     @property
-    def ultima_atualizacao(self) -> Optional[pd.Timestamp]:
+    def ultima_atualizacao(self) -> pd.Timestamp | None:
         if self.COL_DATA in self.df.columns and not self.df.empty:
             return self.df[self.COL_DATA].max()
         return None
 
-    def filtrar(self, coluna: str, valor: Optional[str]) -> None:
+    def filtrar(self, coluna: str, valor: str | None) -> None:
         if valor != "Todos" and coluna in self.df.columns:
             self.df = self.df[self.df[coluna] == valor]
 
@@ -96,18 +98,26 @@ class ProcessadorDados:
             return ["Todos"]
         return ["Todos"] + sorted(self.df[coluna].dropna().astype(str).unique())
 
-    def tabela_supervisor(self, dias_passados: int, dias_faltantes: int) -> pd.DataFrame:
+    def tabela_supervisor(
+        self, dias_passados: int, dias_faltantes: int
+    ) -> pd.DataFrame:
         if self.COL_SUPERVISOR not in self.df.columns or self.df.empty:
             return pd.DataFrame()
 
-        qtde = self.df.groupby(self.COL_SUPERVISOR)[self.COL_OS].count().reset_index(name="Qtde. de O.S.")
+        qtde = (
+            self.df.groupby(self.COL_SUPERVISOR)[self.COL_OS]
+            .count()
+            .reset_index(name="Qtde. de O.S.")
+        )
         dias_passados_seguro = max(1, dias_passados)
         media_diaria = qtde["Qtde. de O.S."] / dias_passados_seguro
 
         qtde["Meta | 2500"] = qtde["Qtde. de O.S."] - 2500
         qtde["Meta | 3000"] = qtde["Qtde. de O.S."] - 3000
         qtde["Meta | 3500"] = qtde["Qtde. de O.S."] - 3500
-        qtde["Projeção"]    = (qtde["Qtde. de O.S."] + media_diaria * dias_faltantes).round().astype(int)
+        qtde["Projeção"] = (
+            (qtde["Qtde. de O.S."] + media_diaria * dias_faltantes).round().astype(int)
+        )
 
         return qtde.sort_values("Qtde. de O.S.", ascending=False)
 
@@ -115,19 +125,30 @@ class ProcessadorDados:
         if self.COL_PROJETO not in self.df.columns or self.df.empty:
             return pd.DataFrame()
 
-        qtde = self.df.groupby(self.COL_PROJETO)[self.COL_OS].count().reset_index(name="Qtde. de O.S.")
+        qtde = (
+            self.df.groupby(self.COL_PROJETO)[self.COL_OS]
+            .count()
+            .reset_index(name="Qtde. de O.S.")
+        )
         dias_passados_seguro = max(1, dias_passados)
         media_diaria = qtde["Qtde. de O.S."] / dias_passados_seguro
 
-        qtde["Meta | 9000"]  = qtde["Qtde. de O.S."] - 9000
+        qtde["Meta | 9000"] = qtde["Qtde. de O.S."] - 9000
         qtde["Meta | 10000"] = qtde["Qtde. de O.S."] - 10000
         qtde["Meta | 11000"] = qtde["Qtde. de O.S."] - 11000
-        qtde["Projeção"]     = (qtde["Qtde. de O.S."] + media_diaria * dias_faltantes).round().astype(int)
+        qtde["Projeção"] = (
+            (qtde["Qtde. de O.S."] + media_diaria * dias_faltantes).round().astype(int)
+        )
 
         return qtde.sort_values("Qtde. de O.S.", ascending=False)
 
     def tabela_tecnico(self) -> pd.DataFrame:
-        cols_necessarias = [self.COL_COD_TEC, self.COL_TECNICO, self.COL_SUPERVISOR, self.COL_PROJETO]
+        cols_necessarias = [
+            self.COL_COD_TEC,
+            self.COL_TECNICO,
+            self.COL_SUPERVISOR,
+            self.COL_PROJETO,
+        ]
         if not all(c in self.df.columns for c in cols_necessarias) or self.df.empty:
             return pd.DataFrame()
 
@@ -144,7 +165,7 @@ class ProcessadorDados:
 # ====================================================
 class EstiloTabela:
     """Aplica cores de fundo em colunas específicas dos DataFrames para destacar métricas."""
-    
+
     @staticmethod
     def cor_os(valor: Any) -> str:
         # Fundo azul claro, texto azul escuro
@@ -167,7 +188,7 @@ def main() -> None:
     render_hero(
         titulo="Qtde. de O.S.",
         subtitulo="Volumetria operacional, projeções de fechamento e metas por supervisor e projeto.",
-        badge="Operação e Metas"
+        badge="Operação e Metas",
     )
 
     # ── Validação de Dados ───────────────────────────────────────────
@@ -199,9 +220,11 @@ def main() -> None:
     proc.filtrar(ProcessadorDados.COL_SUPERVISOR, sup_sel)
 
     # ── Calendário e Insight ─────────────────────────────────────────
-    data_ref = proc.ultima_atualizacao.date() if proc.ultima_atualizacao is not None else None
+    data_ref = (
+        proc.ultima_atualizacao.date() if proc.ultima_atualizacao is not None else None
+    )
     cal = InfoCalendario.calcular(data_ref)
-    
+
     # Exibe um alerta dinâmico com o status do mês
     feriados_txt = ", ".join(
         f"{d.strftime('%d/%m')} ({nome})" for d, nome in cal.feriados_restantes[:4]
@@ -211,15 +234,25 @@ def main() -> None:
         f"e restam **{cal.dias_faltantes} dias úteis** para o fechamento "
         f"(segunda a sábado, sem domingos nem feriados)."
         + (f" Feriados restantes: {feriados_txt}." if feriados_txt else ""),
-        tipo="info"
+        tipo="info",
     )
 
     # ── KPIs ─────────────────────────────────────────────────────────
     render_section_header("analytics", "Resumo Operacional")
     c1, c2, c3, c4 = st.columns(4)
-    
-    render_kpi(c1, "Total O.S. (Geral)", f"{proc.total_geral:,}".replace(",", "."), tema="cinza")
-    render_kpi(c2, "Total O.S. (Filtrado)", f"{proc.total_filtrado:,}".replace(",", "."), tema="azul")
+
+    render_kpi(
+        c1,
+        "Total O.S. (Geral)",
+        f"{proc.total_geral:,}".replace(",", "."),
+        tema="cinza",
+    )
+    render_kpi(
+        c2,
+        "Total O.S. (Filtrado)",
+        f"{proc.total_filtrado:,}".replace(",", "."),
+        tema="azul",
+    )
     render_kpi(c3, "Projetos Ativos", str(proc.qtd_projetos), tema="laranja")
     render_kpi(c4, "Supervisores", str(proc.qtd_supervisores), tema="verde")
 
@@ -234,11 +267,9 @@ def main() -> None:
         if df_sup.empty:
             st.info("Sem dados de Supervisor.")
         else:
-            styled_sup = (
-                df_sup.style
-                .map(EstiloTabela.cor_os, subset=["Qtde. de O.S."])
-                .map(EstiloTabela.cor_projecao, subset=["Projeção"])
-            )
+            styled_sup = df_sup.style.map(
+                EstiloTabela.cor_os, subset=["Qtde. de O.S."]
+            ).map(EstiloTabela.cor_projecao, subset=["Projeção"])
             st.dataframe(styled_sup, use_container_width=True, hide_index=True)
 
     with col_dir:
@@ -247,11 +278,9 @@ def main() -> None:
         if df_proj.empty:
             st.info("Sem dados de Projeto.")
         else:
-            styled_proj = (
-                df_proj.style
-                .map(EstiloTabela.cor_os, subset=["Qtde. de O.S."])
-                .map(EstiloTabela.cor_projecao, subset=["Projeção"])
-            )
+            styled_proj = df_proj.style.map(
+                EstiloTabela.cor_os, subset=["Qtde. de O.S."]
+            ).map(EstiloTabela.cor_projecao, subset=["Projeção"])
             st.dataframe(styled_proj, use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -270,7 +299,7 @@ def main() -> None:
         st.sidebar.divider()
         st.sidebar.markdown(
             f"**🕒 Última Atualização:**<br>{pd.to_datetime(proc.ultima_atualizacao).strftime('%d/%m/%Y às %H:%M')}",
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
 

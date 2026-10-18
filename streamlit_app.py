@@ -3,7 +3,6 @@ import streamlit as st
 from components.componentes import aplicar_estilo
 from components.sidebar import render_seletor_tema_sidebar
 
-
 # Configuração global da aplicação — deve ser a primeira chamada do Streamlit.
 st.set_page_config(
     page_title="Painéis de Produção TOTALE",

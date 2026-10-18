@@ -15,26 +15,39 @@ import base64
 import logging
 import os
 import re
+from collections.abc import Callable
 from html import escape
 from pathlib import Path
-from typing import Any, Callable, Literal, Union
+from typing import Any, Literal, Union
 
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
-import streamlit.components.v1 as components
 
 from components.paleta import (
-    COR_PRIMARIA, COR_SECUNDARIA, COR_SUCESSO, COR_ALERTA, COR_NEUTRO,
-    COR_TEXTO, COR_TEXTO_2, COR_TEXTO_3, COR_BORDA, COR_FUNDO,
-    COR_FUNDO_CARD, COR_DIVIDER,
+    COR_ALERTA,
+    COR_BORDA,
+    COR_DIVIDER,
+    COR_FUNDO,
+    COR_NEUTRO,
+    COR_PRIMARIA,
+    COR_SECUNDARIA,
+    COR_SUCESSO,
+    COR_TEXTO,
+    COR_TEXTO_2,
+    COR_TEXTO_3,
 )
-from components.sidebar import gerar_css_sidebar
+
 # Compatibilidade com os imports usados antes da extração para sidebar.py.
 from components.sidebar import (
     TEMAS_SIDEBAR as TEMAS_SIDEBAR,
+)
+from components.sidebar import (
     TemaSidebar as TemaSidebar,
+)
+from components.sidebar import gerar_css_sidebar
+from components.sidebar import (
     render_seletor_tema_sidebar as render_seletor_tema_sidebar,
 )
 
@@ -65,7 +78,10 @@ FONTE_HERO = "'Oscine', 'Oscine Trial', " + FONTE_TITULO
 
 #: Pesos procurados em ``assets/fonts`` para auto-hospedar a Oscine.
 _PESOS_FONTE_HERO: tuple = (
-    (400, ("oscine-regular", "oscine_regular", "oscine", "oscine-book", "oscine-roman")),
+    (
+        400,
+        ("oscine-regular", "oscine_regular", "oscine", "oscine-book", "oscine-roman"),
+    ),
     (500, ("oscine-medium", "oscine_medium")),
     (700, ("oscine-bold", "oscine_bold", "oscine-semibold", "oscine-demi")),
     (800, ("oscine-extrabold", "oscine_extrabold", "oscine-heavy", "oscine-black")),
@@ -169,10 +185,10 @@ def _css_fonte_hero_selfhosted(assinatura: str) -> str:
             logger.warning("Não foi possível ler a fonte %s: %s", arquivo, exc)
             continue
         regras.append(
-            "@font-face {{ font-family: 'Oscine'; font-style: normal; "
-            "font-weight: {peso}; font-display: swap; "
-            "src: url(data:font/{formato};base64,{dados}) "
-            "format('{formato}'); }}".format(peso=peso, formato=formato, dados=dados)
+            "@font-face { font-family: 'Oscine'; font-style: normal; "
+            f"font-weight: {peso}; font-display: swap; "
+            f"src: url(data:font/{formato};base64,{dados}) "
+            f"format('{formato}'); }}"
         )
     return "\n".join(regras)
 
@@ -212,11 +228,11 @@ _TEMA_CORES: dict[str, str] = {
 }
 
 _INSIGHT_CONFIG: dict[str, tuple[str, str, str, str]] = {
-    "ok":      ("#ECFDF5", "#065F46", "#6EE7B7", "✓"),
-    "info":    ("#EFF6FF", "#1E40AF", "#93C5FD", "i"),
-    "alerta":  ("#FFFBEB", "#92400E", "#FCD34D", "!"),
+    "ok": ("#ECFDF5", "#065F46", "#6EE7B7", "✓"),
+    "info": ("#EFF6FF", "#1E40AF", "#93C5FD", "i"),
+    "alerta": ("#FFFBEB", "#92400E", "#FCD34D", "!"),
     "critico": ("#FEF2F2", "#991B1B", "#FCA5A5", "✕"),
-    "acao":    ("#F5F3FF", "#5B21B6", "#C4B5FD", "→"),
+    "acao": ("#F5F3FF", "#5B21B6", "#C4B5FD", "→"),
 }
 
 _PLOTLY_COLORWAY = [
@@ -290,7 +306,7 @@ def _configurar_plotly_global() -> None:
 # ====================================================
 def _injetar_fontes_no_head_pai() -> None:
     urls_js = ", ".join(f'"{u}"' for u in _GOOGLE_FONTS_URLS)
-    components.html(
+    st.html(
         f"""
         <script>
         (function () {{
@@ -324,7 +340,7 @@ def _injetar_fontes_no_head_pai() -> None:
         }})();
         </script>
         """,
-        height=0,
+        unsafe_allow_javascript=True,
     )
 
 
@@ -334,8 +350,7 @@ def _build_links_html() -> str:
     )
     return (
         '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
-        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
-        + tags
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' + tags
     )
 
 
@@ -711,12 +726,18 @@ def _markdown_inline_para_html(texto: str) -> str:
 # COMPONENTES REUTILIZÁVEIS
 # ====================================================
 _TEMA_TINTS = {
-    "azul": "#EAF2FC", "verde": "#E5F7EF", "vermelho": "#FDEBED",
-    "laranja": "#FFF0E1", "cinza": "#EFF2F6",
+    "azul": "#EAF2FC",
+    "verde": "#E5F7EF",
+    "vermelho": "#FDEBED",
+    "laranja": "#FFF0E1",
+    "cinza": "#EFF2F6",
 }
 _TEMA_ICONES = {
-    "azul": "analytics", "verde": "trending_up", "vermelho": "warning",
-    "laranja": "bolt", "cinza": "bar_chart",
+    "azul": "analytics",
+    "verde": "trending_up",
+    "vermelho": "warning",
+    "laranja": "bolt",
+    "cinza": "bar_chart",
 }
 
 
@@ -724,16 +745,20 @@ def render_hero(titulo: str, subtitulo: str = "", badge: str = "") -> None:
     if not titulo:
         raise ValueError("render_hero: 'titulo' não pode ser vazio.")
 
-    sub_html = f'<p class="hero-subtitle">{escape(str(subtitulo))}</p>' if subtitulo else ""
-    badge_html = f'<span class="hero-badge">{escape(str(badge))}</span>' if badge else ""
+    sub_html = (
+        f'<p class="hero-subtitle">{escape(str(subtitulo))}</p>' if subtitulo else ""
+    )
+    badge_html = (
+        f'<span class="hero-badge">{escape(str(badge))}</span>' if badge else ""
+    )
 
     st.markdown(
         f'<div class="hero-corp">'
         f'<div class="hero-content">'
-        f'{badge_html}'
+        f"{badge_html}"
         f'<h1 class="hero-title">{escape(str(titulo))}</h1>'
-        f'{sub_html}'
-        f'</div></div>',
+        f"{sub_html}"
+        f"</div></div>",
         unsafe_allow_html=True,
     )
 
@@ -747,7 +772,9 @@ def render_section_header(icon: str, title: str, badge: str = "") -> None:
     if not title:
         raise ValueError("render_section_header: 'title' vazio.")
 
-    badge_html = f'<span class="section-badge">{escape(str(badge))}</span>' if badge else ""
+    badge_html = (
+        f'<span class="section-badge">{escape(str(badge))}</span>' if badge else ""
+    )
     icon_class = "material-symbols-rounded" if re.fullmatch(r"[a-z_]+", icon) else ""
     st.markdown(
         f'<div class="section-header">'
@@ -779,7 +806,9 @@ def render_kpi(
     sub: str = "",
     tema: TemaKPI = "azul",
 ) -> None:
-    col.markdown(_html_kpi(label, valor, sub, tema, pequeno=False), unsafe_allow_html=True)
+    col.markdown(
+        _html_kpi(label, valor, sub, tema, pequeno=False), unsafe_allow_html=True
+    )
 
 
 def render_kpi_sm(
@@ -789,7 +818,9 @@ def render_kpi_sm(
     sub: str = "",
     tema: TemaKPI = "azul",
 ) -> None:
-    container.markdown(_html_kpi(label, valor, sub, tema, pequeno=True), unsafe_allow_html=True)
+    container.markdown(
+        _html_kpi(label, valor, sub, tema, pequeno=True), unsafe_allow_html=True
+    )
 
 
 def render_painel_link(caminho: str, titulo: str, descricao: str) -> None:
@@ -836,9 +867,14 @@ def estilizar_dataframe(
         styler = styler.format(formatos)  # type: ignore[arg-type]
     # A aplicação célula a célula em bases grandes tornaria a navegação lenta.
     if len(df) <= 1000:
+
         def faixa(linha: pd.Series) -> list[str]:
             total = str(linha.iloc[0]).strip().casefold().startswith("total geral")
-            fundo = "#EAF2FC" if total else ("#F5F8FC" if int(linha.name) % 2 else "#FFFFFF")
+            fundo = (
+                "#EAF2FC"
+                if total
+                else ("#F5F8FC" if int(linha.name) % 2 else "#FFFFFF")
+            )
             estilo = f"background-color: {fundo};"
             if total:
                 estilo += "font-weight: 700;"
@@ -868,7 +904,7 @@ def render_dataframe(
             f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">'
             f'<span class="material-symbols-rounded" style="font-size:18px;color:{COR_SECUNDARIA};">{escape(icone)}</span>'
             f'<span style="font-size:14px;font-weight:700;color:{COR_TEXTO};">{escape(titulo)}</span>'
-            f'</div>',
+            f"</div>",
             unsafe_allow_html=True,
         )
 
@@ -883,4 +919,6 @@ def render_dataframe(
         )
     except Exception:
         logger.exception("Falha ao estilizar tabela. Exibindo dados sem formatação.")
-        st.dataframe(df, height=altura, use_container_width=True, hide_index=True, **kwargs)
+        st.dataframe(
+            df, height=altura, use_container_width=True, hide_index=True, **kwargs
+        )

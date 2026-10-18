@@ -9,7 +9,6 @@ from streamlit.testing.v1 import AppTest
 from components.paleta import COR_PRIMARIA
 from components.sidebar import TEMAS_SIDEBAR
 
-
 APP = """
 import streamlit as st
 from components.componentes import aplicar_estilo

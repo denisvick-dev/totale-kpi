@@ -20,14 +20,14 @@ def base_exemplo() -> pd.DataFrame:
         {
             "CONTRATO": ["1", "2", "3", "4", "5", "6", "7", "8"],
             "TIPO O.S 1": [
-                "ADESAO",                       # ND
-                "INSTALACAO",                   # ND (termo novo)
-                "ADESÃO",                       # ND com acento
-                "MUDANCA DE PACOTE",            # Migração (habilidade PON)
-                "MUDANCA DE PACOTE",            # sem PON → Outros
-                "ADESAO",                       # PME (habilidade PME)
-                "REPARO",                       # Outros
-                None,                           # vazio → Outros
+                "ADESAO",  # ND
+                "INSTALACAO",  # ND (termo novo)
+                "ADESÃO",  # ND com acento
+                "MUDANCA DE PACOTE",  # Migração (habilidade PON)
+                "MUDANCA DE PACOTE",  # sem PON → Outros
+                "ADESAO",  # PME (habilidade PME)
+                "REPARO",  # Outros
+                None,  # vazio → Outros
             ],
             "HABILIDADE DE TRABALHO": [
                 "HFC(1/100)",
@@ -74,7 +74,11 @@ def test_classificacao_por_segmento():
 def test_migracao_exige_mudanca_de_pacote_e_habilidade_pon():
     df = pd.DataFrame(
         {
-            "TIPO O.S 1": ["MUDANCA DE PACOTE", "MUDANCA DE PACOTE", "MUDANCA DE PACOTE"],
+            "TIPO O.S 1": [
+                "MUDANCA DE PACOTE",
+                "MUDANCA DE PACOTE",
+                "MUDANCA DE PACOTE",
+            ],
             "HABILIDADE DE TRABALHO": ["PON(1/100)", "GPON(1/100)", "HFC(1/100)"],
         }
     )
@@ -97,7 +101,14 @@ def test_flag_gpon_e_derivada_da_habilidade():
     df, tipo = classificar_tipo_servico(base_exemplo())
     # "GPON(1/100)" e "PON(1/100)" contêm PON; "HFC"/"PME" não.
     assert df["FLAG_GPON"].tolist() == [
-        "Não", "Não", "Não", "Sim", "Não", "Não", "Não", "Não",
+        "Não",
+        "Não",
+        "Não",
+        "Sim",
+        "Não",
+        "Não",
+        "Não",
+        "Não",
     ]
 
 
@@ -106,7 +117,7 @@ def test_metricas_trazem_os_criterios_oficiais_e_os_alias():
     metricas = extrair_metricas_criterios(df)
 
     # Critérios oficiais
-    assert metricas["criterio_adesao"] == 1 + 2 + 3 + 6          # ND (inclui PME)
+    assert metricas["criterio_adesao"] == 1 + 2 + 3 + 6  # ND (inclui PME)
     assert metricas["criterio_mudanca_pacote"] == 4 + 5
     assert metricas["criterio_habilidade_pon"] == 4
     assert metricas["criterio_and_migracao"] == 4

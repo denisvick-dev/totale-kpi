@@ -8,13 +8,14 @@ from streamlit.testing.v1 import AppTest
 
 from components import componentes
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_hero_e_kpi_escapam_conteudo_e_mantem_identidade(monkeypatch):
     blocos = []
-    monkeypatch.setattr(componentes.st, "markdown", lambda html, **kwargs: blocos.append(html))
+    monkeypatch.setattr(
+        componentes.st, "markdown", lambda html, **kwargs: blocos.append(html)
+    )
     componentes.render_hero("Painel <teste>", "Resumo & operação", "Indicadores")
     assert 'class="hero-corp"' in blocos[0]
     assert 'class="hero-badge"' in blocos[0]
@@ -59,9 +60,28 @@ def test_atualizacao_usa_hero_e_cards_sem_acessar_planilhas():
 def _css_global(monkeypatch) -> str:
     """Captura o CSS injetado por aplicar_estilo()."""
     blocos = []
-    monkeypatch.setattr(componentes.st, "markdown", lambda html, **kw: blocos.append(html))
+    monkeypatch.setattr(
+        componentes.st, "markdown", lambda html, **kw: blocos.append(html)
+    )
     componentes._injetar_css_global()
     return blocos[0]
+
+
+def test_injecao_de_fontes_usa_api_html_atual(monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(
+        componentes.st,
+        "html",
+        lambda body, **kwargs: chamadas.append((body, kwargs)),
+    )
+
+    componentes._injetar_fontes_no_head_pai()
+
+    assert len(chamadas) == 1
+    body, kwargs = chamadas[0]
+    assert kwargs == {"unsafe_allow_javascript": True}
+    assert "<script>" in body
+    assert all(url in body for url in componentes._GOOGLE_FONTS_URLS)
 
 
 def test_titulos_dos_heros_usam_a_oscine_com_fallback(monkeypatch):
@@ -72,7 +92,8 @@ def test_titulos_dos_heros_usam_a_oscine_com_fallback(monkeypatch):
     assert f"--font-hero:      {componentes.FONTE_HERO};" in css
 
     bloco_hero = next(
-        bloco for bloco in re.findall(r"\.hero-title\s*\{[^}]*\}", css)
+        bloco
+        for bloco in re.findall(r"\.hero-title\s*\{[^}]*\}", css)
         if "clamp(25px" in bloco
     )
     assert "font-family: var(--font-hero) !important;" in bloco_hero

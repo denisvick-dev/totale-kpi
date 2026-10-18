@@ -27,10 +27,10 @@ def test_pascoa_em_anos_conhecidos():
     "dia, esperado",
     [
         (date(2026, 10, 12), False),  # segunda, feriado de N. S. Aparecida
-        (date(2026, 10, 13), True),   # terça
-        (date(2026, 10, 17), True),   # sábado conta
+        (date(2026, 10, 13), True),  # terça
+        (date(2026, 10, 17), True),  # sábado conta
         (date(2026, 10, 18), False),  # domingo nunca conta
-        (date(2026, 7, 9), False),    # feriado estadual de SP
+        (date(2026, 7, 9), False),  # feriado estadual de SP
         (date(2026, 12, 25), False),  # Natal
     ],
 )
@@ -41,15 +41,15 @@ def test_dia_util_respeita_domingo_e_feriado(dia, esperado):
 def test_feriados_nacionais_e_estaduais_de_sp():
     feriados = carregar_feriados(2026)
 
-    assert date(2026, 1, 1) in feriados          # Confraternização
-    assert date(2026, 4, 21) in feriados         # Tiradentes
-    assert date(2026, 9, 7) in feriados          # Independência
-    assert date(2026, 10, 12) in feriados        # Aparecida
-    assert date(2026, 11, 20) in feriados        # Consciência Negra
-    assert date(2026, 7, 9) in feriados          # Revolução Constitucionalista (SP)
-    assert date(2026, 2, 16) in feriados         # Carnaval
-    assert date(2026, 4, 3) in feriados          # Paixão de Cristo
-    assert date(2026, 6, 4) in feriados          # Corpus Christi
+    assert date(2026, 1, 1) in feriados  # Confraternização
+    assert date(2026, 4, 21) in feriados  # Tiradentes
+    assert date(2026, 9, 7) in feriados  # Independência
+    assert date(2026, 10, 12) in feriados  # Aparecida
+    assert date(2026, 11, 20) in feriados  # Consciência Negra
+    assert date(2026, 7, 9) in feriados  # Revolução Constitucionalista (SP)
+    assert date(2026, 2, 16) in feriados  # Carnaval
+    assert date(2026, 4, 3) in feriados  # Paixão de Cristo
+    assert date(2026, 6, 4) in feriados  # Corpus Christi
 
 
 def test_contagem_semanal_desconta_feriado_e_domingo():
@@ -60,7 +60,7 @@ def test_contagem_semanal_desconta_feriado_e_domingo():
 def test_dias_uteis_do_mes_referencia():
     assert dias_uteis_mes(2026, 10) == 26  # 31 dias − 4 domingos − 1 feriado
     assert dias_uteis_mes(2026, 11) == 23  # 5 domingos + Finados + Consciência Negra
-    assert dias_uteis_mes(2026, 7) == 26   # 4 domingos + 09/07 (SP)
+    assert dias_uteis_mes(2026, 7) == 26  # 4 domingos + 09/07 (SP)
 
 
 def test_info_calendario_faz_o_fechamento_bater():

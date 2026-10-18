@@ -26,11 +26,12 @@ from __future__ import annotations
 import calendar
 import json
 import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional, Tuple, Union
+from typing import Union
 
 TipoData = Union[date, datetime, str]
 
@@ -41,7 +42,7 @@ TipoData = Union[date, datetime, str]
 WEEKMASK_SEG_SAB: str = "1111110"
 
 #: weekday() do Python: 0 = segunda ... 6 = domingo.
-DIAS_UTEIS_SEMANA: Tuple[int, ...] = (0, 1, 2, 3, 4, 5)
+DIAS_UTEIS_SEMANA: tuple[int, ...] = (0, 1, 2, 3, 4, 5)
 
 #: UF usada para os feriados estaduais.
 UF_PADRAO: str = "SP"
@@ -56,7 +57,7 @@ ENV_FERIADOS_EXTRA: str = "TOTALE_FERIADOS_EXTRA"
 # ═══════════════════════════════════════════════════════════════════════
 # FERIADOS FIXOS
 # ═══════════════════════════════════════════════════════════════════════
-FERIADOS_FIXOS_NACIONAIS: Dict[Tuple[int, int], str] = {
+FERIADOS_FIXOS_NACIONAIS: dict[tuple[int, int], str] = {
     (1, 1): "Confraternização Universal",
     (4, 21): "Tiradentes",
     (5, 1): "Dia do Trabalho",
@@ -68,7 +69,7 @@ FERIADOS_FIXOS_NACIONAIS: Dict[Tuple[int, int], str] = {
     (12, 25): "Natal",
 }
 
-FERIADOS_FIXOS_ESTADUAIS: Dict[str, Dict[Tuple[int, int], str]] = {
+FERIADOS_FIXOS_ESTADUAIS: dict[str, dict[tuple[int, int], str]] = {
     "SP": {
         (7, 9): "Revolução Constitucionalista de 1932 (SP)",
     },
@@ -82,7 +83,7 @@ FERIADOS_FIXOS_ESTADUAIS: Dict[str, Dict[Tuple[int, int], str]] = {
 }
 
 #: Pontos facultativos NÃO entram na contagem por padrão (são dias trabalhados).
-PONTOS_FACULTATIVOS_NACIONAIS: Dict[Tuple[int, int], str] = {
+PONTOS_FACULTATIVOS_NACIONAIS: dict[tuple[int, int], str] = {
     (2, 13): "Carnaval (terça-feira)",
     (10, 28): "Dia do Servidor Público",
     (12, 24): "Véspera de Natal",
@@ -117,7 +118,7 @@ def calcular_pascoa(ano: int) -> date:
     return date(ano, mes, dia + 1)
 
 
-def feriados_moveis(ano: int) -> Dict[date, str]:
+def feriados_moveis(ano: int) -> dict[date, str]:
     """Feriados móveis (Carnaval, Paixão de Cristo e Corpus Christi)."""
     pascoa = calcular_pascoa(ano)
     return {
@@ -130,7 +131,7 @@ def feriados_moveis(ano: int) -> Dict[date, str]:
 # ═══════════════════════════════════════════════════════════════════════
 # CARGA DOS FERIADOS
 # ═══════════════════════════════════════════════════════════════════════
-def _ler_arquivo_extras(caminho: Path = ARQUIVO_FERIADOS_EXTRA) -> Dict[date, str]:
+def _ler_arquivo_extras(caminho: Path = ARQUIVO_FERIADOS_EXTRA) -> dict[date, str]:
     try:
         if not caminho.exists():
             return {}
@@ -138,7 +139,7 @@ def _ler_arquivo_extras(caminho: Path = ARQUIVO_FERIADOS_EXTRA) -> Dict[date, st
     except (OSError, ValueError):
         return {}
 
-    extras: Dict[date, str] = {}
+    extras: dict[date, str] = {}
     if isinstance(conteudo, Mapping):
         for chave, nome in conteudo.items():
             if str(chave).startswith("_"):  # chaves de documentação
@@ -150,15 +151,17 @@ def _ler_arquivo_extras(caminho: Path = ARQUIVO_FERIADOS_EXTRA) -> Dict[date, st
     elif isinstance(conteudo, (list, tuple)):
         for item in conteudo:
             if isinstance(item, Mapping):
-                extras[para_data(item.get("data"))] = str(item.get("nome", "Feriado extra"))
+                extras[para_data(item.get("data"))] = str(
+                    item.get("nome", "Feriado extra")
+                )
             else:
                 extras[para_data(item)] = "Feriado extra"
     return extras
 
 
-def _ler_env_extras() -> Dict[date, str]:
+def _ler_env_extras() -> dict[date, str]:
     bruto = os.getenv(ENV_FERIADOS_EXTRA, "")
-    extras: Dict[date, str] = {}
+    extras: dict[date, str] = {}
     for pedaco in bruto.split(","):
         pedaco = pedaco.strip()
         if not pedaco:
@@ -170,7 +173,7 @@ def _ler_env_extras() -> Dict[date, str]:
     return extras
 
 
-def _ler_secrets_extras() -> Dict[date, str]:
+def _ler_secrets_extras() -> dict[date, str]:
     """Feriados extras vindos de ``.streamlit/secrets.toml`` (``[calendario]``)."""
     try:
         import streamlit as st  # import local: o robô roda sem Streamlit
@@ -185,7 +188,7 @@ def _ler_secrets_extras() -> Dict[date, str]:
     except AttributeError:
         return {}
 
-    extras: Dict[date, str] = {}
+    extras: dict[date, str] = {}
     if isinstance(bruto, Mapping):
         for chave, nome in bruto.items():
             try:
@@ -202,9 +205,9 @@ def _ler_secrets_extras() -> Dict[date, str]:
 
 
 @lru_cache(maxsize=64)
-def feriados_do_ano(ano: int, uf: str = UF_PADRAO) -> Dict[date, str]:
+def feriados_do_ano(ano: int, uf: str = UF_PADRAO) -> dict[date, str]:
     """Feriados nacionais + estaduais + móveis de um ano (sem os extras)."""
-    feriados: Dict[date, str] = {
+    feriados: dict[date, str] = {
         date(ano, mes, dia): nome
         for (mes, dia), nome in FERIADOS_FIXOS_NACIONAIS.items()
     }
@@ -214,16 +217,16 @@ def feriados_do_ano(ano: int, uf: str = UF_PADRAO) -> Dict[date, str]:
     return feriados
 
 
-def feriados_extras() -> Dict[date, str]:
+def feriados_extras() -> dict[date, str]:
     """Feriados extras (arquivo JSON, secrets e variável de ambiente)."""
-    extras: Dict[date, str] = {}
+    extras: dict[date, str] = {}
     extras.update(_ler_arquivo_extras())
     extras.update(_ler_secrets_extras())
     extras.update(_ler_env_extras())
     return extras
 
 
-def carregar_feriados(ano: Optional[int] = None, uf: str = UF_PADRAO) -> Dict[date, str]:
+def carregar_feriados(ano: int | None = None, uf: str = UF_PADRAO) -> dict[date, str]:
     """Todos os feriados considerados: fixos, móveis, estaduais e extras."""
     feriados = dict(feriados_do_ano(int(ano) if ano else date.today().year, uf))
     for dia, nome in feriados_extras().items():
@@ -235,7 +238,7 @@ def carregar_feriados(ano: Optional[int] = None, uf: str = UF_PADRAO) -> Dict[da
 # ═══════════════════════════════════════════════════════════════════════
 # CONTAGEM DE DIAS ÚTEIS (SEG–SÁB, SEM FERIADOS)
 # ═══════════════════════════════════════════════════════════════════════
-def eh_dia_util(dia: TipoData, feriados: Optional[Iterable[date]] = None) -> bool:
+def eh_dia_util(dia: TipoData, feriados: Iterable[date] | None = None) -> bool:
     """Segunda a sábado, desde que não seja feriado."""
     data = para_data(dia)
     if data.weekday() not in DIAS_UTEIS_SEMANA:
@@ -246,8 +249,8 @@ def eh_dia_util(dia: TipoData, feriados: Optional[Iterable[date]] = None) -> boo
 
 
 def listar_dias_uteis(
-    inicio: TipoData, fim: TipoData, feriados: Optional[Iterable[date]] = None
-) -> List[date]:
+    inicio: TipoData, fim: TipoData, feriados: Iterable[date] | None = None
+) -> list[date]:
     """Dias úteis no intervalo **[início, fim]** (fim incluído)."""
     di, df_ = para_data(inicio), para_data(fim)
     if di > df_:
@@ -263,15 +266,15 @@ def _intervalo(inicio: date, fim: date) -> Iterable[date]:
 
 
 def contar_dias_uteis(
-    inicio: TipoData, fim: TipoData, feriados: Optional[Iterable[date]] = None
+    inicio: TipoData, fim: TipoData, feriados: Iterable[date] | None = None
 ) -> int:
     """Quantidade de dias úteis (Seg–Sáb, sem feriados) em **[início, fim]**."""
     return len(listar_dias_uteis(inicio, fim, feriados))
 
 
 def feriados_entre(
-    inicio: TipoData, fim: TipoData, feriados: Optional[Mapping[date, str]] = None
-) -> List[date]:
+    inicio: TipoData, fim: TipoData, feriados: Mapping[date, str] | None = None
+) -> list[date]:
     """Feriados (Seg–Sáb) que caem dentro de **[início, fim]**."""
     di, df_ = para_data(inicio), para_data(fim)
     if di > df_:
@@ -280,10 +283,12 @@ def feriados_entre(
         feriados = carregar_feriados(di.year)
         if df_.year != di.year:
             feriados = {**feriados, **carregar_feriados(df_.year)}
-    return sorted(d for d in feriados if di <= d <= df_ and d.weekday() in DIAS_UTEIS_SEMANA)
+    return sorted(
+        d for d in feriados if di <= d <= df_ and d.weekday() in DIAS_UTEIS_SEMANA
+    )
 
 
-def dias_uteis_mes(ano: int, mes: int, feriados: Optional[Iterable[date]] = None) -> int:
+def dias_uteis_mes(ano: int, mes: int, feriados: Iterable[date] | None = None) -> int:
     """Dias úteis totais do mês (Seg–Sáb, sem domingos nem feriados)."""
     _, ultimo = calendar.monthrange(ano, mes)
     return contar_dias_uteis(date(ano, mes, 1), date(ano, mes, ultimo), feriados)
@@ -307,10 +312,10 @@ class InfoCalendario:
     total_dias_uteis: int
     dias_passados: int
     dias_faltantes: int
-    feriados_no_mes: Tuple[Tuple[date, str], ...] = field(default_factory=tuple)
+    feriados_no_mes: tuple[tuple[date, str], ...] = field(default_factory=tuple)
 
     @property
-    def feriados_restantes(self) -> Tuple[Tuple[date, str], ...]:
+    def feriados_restantes(self) -> tuple[tuple[date, str], ...]:
         return tuple(
             (d, n) for d, n in self.feriados_no_mes if d > self.data_referencia
         )
@@ -318,18 +323,28 @@ class InfoCalendario:
     @property
     def nome_mes(self) -> str:
         meses = [
-            "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-            "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+            "Janeiro",
+            "Fevereiro",
+            "Março",
+            "Abril",
+            "Maio",
+            "Junho",
+            "Julho",
+            "Agosto",
+            "Setembro",
+            "Outubro",
+            "Novembro",
+            "Dezembro",
         ]
         return f"{meses[self.mes - 1]}/{self.ano}"
 
     @classmethod
     def calcular(
         cls,
-        data_referencia: Optional[TipoData] = None,
+        data_referencia: TipoData | None = None,
         uf: str = UF_PADRAO,
-        feriados: Optional[Mapping[date, str]] = None,
-    ) -> "InfoCalendario":
+        feriados: Mapping[date, str] | None = None,
+    ) -> InfoCalendario:
         ref = para_data(data_referencia) if data_referencia else date.today()
         ano, mes = ref.year, ref.month
         _, ultimo_dia = calendar.monthrange(ano, mes)
@@ -368,7 +383,7 @@ def projetar_por_ritmo(
     realizado: float,
     dias_passados: int,
     dias_faltantes: int,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """
     Projeção de fim de mês pelo ritmo diário em dias úteis (Seg–Sáb, sem feriados).
 
@@ -392,10 +407,10 @@ __all__ = [
     "ENV_FERIADOS_EXTRA",
     "FERIADOS_FIXOS_ESTADUAIS",
     "FERIADOS_FIXOS_NACIONAIS",
-    "InfoCalendario",
     "PONTOS_FACULTATIVOS_NACIONAIS",
     "UF_PADRAO",
     "WEEKMASK_SEG_SAB",
+    "InfoCalendario",
     "calcular_pascoa",
     "carregar_feriados",
     "contar_dias_uteis",
