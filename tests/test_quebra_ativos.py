@@ -148,3 +148,32 @@ def test_tabela_compartilhada_formata_sem_alterar_valores():
     assert "12.0%" in html
     assert "#EAF2FC" in html
     assert df.loc[1, "Quebra Geral"] == 0.15
+
+
+def test_login_do_tecnico_na_lista_vincula_quebra_e_volumetria(monkeypatch):
+    from components import base_operacional as bo
+    from pages import volumetria
+
+    for coluna in ("Login do Técnico", "Login do Tecnico", "LOGIN_DO_TECNICO"):
+        ativos = quebra.DataLoader._normalizar_lista_ativos(pd.DataFrame({
+            coluna: [" abc.0 "], "Técnico": ["Ana"], "Monitor": ["Lia"],
+        }))
+        assert ativos["Login"].tolist() == ["ABC"]
+        monkeypatch.setattr(bo, "carregar_lista_ativos", lambda **kw: ativos)
+        hierarquia = bo.carregar_hierarquia()
+        raw = pd.DataFrame({
+            "CONTRATO": ["123"], "LOGIN DO TÉCNICO": ["abc"],
+            "STATUS DA O.S 1": ["EXECUTADA"],
+        })
+        quebra_base = quebra.DataLoader.preparar_base.__wrapped__(raw, ativos)
+        volumetria_base = volumetria.DataLoader.preparar_base(raw, hierarquia)
+        assert quebra_base["MONITOR"].tolist() == ["LIA"]
+        assert quebra_base.attrs["diag_vinculados"] == 1
+        assert volumetria_base[bo.COL_MONITOR].str.upper().tolist() == ["LIA"]
+
+
+def test_login_oficial_prevalece_sobre_alias_do_tecnico():
+    ativos = quebra.DataLoader._normalizar_lista_ativos(pd.DataFrame({
+        "Login do Técnico": ["incorreto"], "Login": ["correto"],
+    }))
+    assert ativos["Login"].tolist() == ["CORRETO"]
