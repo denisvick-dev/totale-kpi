@@ -361,13 +361,16 @@ Cores oficiais Totale Tecnologia:
 | 🅰️ **Títulos** (heros, `h1`–`h6`, seções) | **Oscine** (heros em Regular; fallback para Manrope → Segoe UI) |
 | 🔢 Valores de KPI e métricas | Manrope |
 | Textos | Inter |
-| Tabelas e DataFrames | Manrope |
+| Tabelas e DataFrames | **Oscine** (fallback para Manrope → Segoe UI) |
 | Códigos | JetBrains Mono |
 
 A **Oscine** é uma fonte licenciada (Dalton Maag / Adobe Fonts) e vale para
-**heros, `h1`–`h6` e títulos de seção**; valores de KPI seguem em Manrope.
-Os títulos dos heros usam o arquivo `Oscine-Regular.ttf`; tabelas e DataFrames
-também usam Manrope.
+**heros, `h1`–`h6`, títulos de seção, tabelas e DataFrames**; valores de KPI
+seguem em Manrope. Os títulos dos heros usam o arquivo `Oscine-Regular.ttf`;
+tabelas e DataFrames também renderizam em Oscine — a família definida em
+`[theme] font` (`.streamlit/config.toml`) alimenta o canvas dos
+`st.dataframe`, enquanto o `@font-face` auto-hospedado (base64 a partir de
+`fonts/`) disponibiliza os pesos Regular e Bold no documento.
 
 Para instalá-la:
 ```bash

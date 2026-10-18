@@ -5,8 +5,12 @@ backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F8FAFC"
 textColor = "#1F2937"
 
-# Fallback antes do CSS carregar
-font = "sans serif"
+# Fonte corporativa (Oscine): alimenta o bodyFont do tema, que é a fonte
+# desenhada no canvas dos dataframes (o glide-data-grid ignora font-family
+# vindo do Styler). O @font-face Oscine é auto-hospedado pelo próprio app
+# em base64 a partir dos arquivos de fonts/ (ver components/componentes.py),
+# dispensando static serving; sem os arquivos, cai no sans-serif do sistema.
+font = "Oscine, sans-serif"
 
 [server]
 enableStaticServing = false
