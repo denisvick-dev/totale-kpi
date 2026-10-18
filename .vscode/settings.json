@@ -8,4 +8,10 @@
         "editor.defaultFormatter": "ms-python.black-formatter"
     },
     "python-envs.defaultEnvManager": "ms-python.python:system",
+    "chat.tools.terminal.autoApprove": {
+        "/^\\.\\\\\\.venv\\\\Scripts\\\\python\\.exe -m pytest tests\\\\test_componentes_visuais\\.py -q -k \"titulos_dos_heros or oscine_vale or fonte_auto_hospedada\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    },
 }
