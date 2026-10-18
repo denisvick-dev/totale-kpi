@@ -76,6 +76,14 @@ FONTE_CODIGO = "'JetBrains Mono', Consolas, 'Courier New', monospace"
 #: a cadeia anterior (Manrope → Segoe UI) assume automaticamente.
 FONTE_HERO = "'Oscine', 'Oscine Trial', " + FONTE_TITULO
 
+#: Fonte corporativa de todas as tabelas/dataframes: a mesma cadeia Oscine
+#: dos títulos, caindo na cadeia institucional (Manrope → Segoe UI) quando a
+#: Oscine não estiver disponível. O canvas dos ``st.dataframe`` herda a
+#: família via ``font`` em ``.streamlit/config.toml`` (o glide-data-grid não
+#: aplica ``font-family`` vindo do Styler); o ``@font-face`` auto-hospedado
+#: gerado a partir de ``fonts/`` disponibiliza a família no documento.
+FONTE_TABELA = FONTE_HERO
+
 #: Pesos procurados em ``assets/fonts`` para auto-hospedar a Oscine.
 _PESOS_FONTE_HERO: tuple = (
     (
@@ -337,6 +345,14 @@ def _injetar_fontes_no_head_pai() -> None:
                 link.href = href;
                 head.appendChild(link);
             }});
+            // Os dataframes são desenhados em canvas (glide-data-grid) e não
+            // trocam de fonte sozinhos depois do carregamento: pré-carrega a
+            // Oscine (auto-hospedada via @font-face) para a primeira pintura
+            // do grid já sair na fonte corporativa.
+            if (parentDoc.fonts && parentDoc.fonts.load) {{
+                parentDoc.fonts.load("13px Oscine");
+                parentDoc.fonts.load("700 13px Oscine");
+            }}
         }})();
         </script>
         """,
@@ -389,6 +405,7 @@ def _injetar_css_global() -> None:
         --font-texto:     {FONTE_TEXTO};
         --font-codigo:    {FONTE_CODIGO};
         --font-hero:      {FONTE_HERO};
+        --font-tabela:    {FONTE_TABELA};
         --cor-primaria:   {COR_PRIMARIA};
         --cor-secundaria: {COR_SECUNDARIA};
         --cor-sucesso:    {COR_SUCESSO};
@@ -484,7 +501,7 @@ def _injetar_css_global() -> None:
     }}
     .stDataFrame, .stTable,
     table, thead, tbody, tr, th, td {{
-        font-family: var(--font-titulo) !important;
+        font-family: var(--font-tabela) !important;
     }}
     thead th, [data-testid="stTable"] th {{
         background: linear-gradient(180deg, #0D387D 0%, var(--cor-primaria) 100%);
@@ -1123,7 +1140,7 @@ def estilizar_dataframe(
                 "props": [
                     ("background-color", COR_PRIMARIA),
                     ("color", "#FFFFFF"),
-                    ("font-family", FONTE_TITULO),
+                    ("font-family", FONTE_TABELA),
                     ("font-weight", "700"),
                     ("font-size", "11.5px"),
                     ("text-transform", "uppercase"),
@@ -1135,7 +1152,7 @@ def estilizar_dataframe(
             {
                 "selector": "tbody td",
                 "props": [
-                    ("font-family", FONTE_TITULO),
+                    ("font-family", FONTE_TABELA),
                     ("padding", "9px 14px"),
                     ("border-bottom", f"1px solid {COR_BORDA}"),
                     ("font-variant-numeric", "tabular-nums"),

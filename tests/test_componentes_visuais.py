@@ -222,18 +222,50 @@ def test_estilizar_dataframe_aplica_destaques_corporativos_e_preserva_ids():
     assert "#EFF6FF" in html  # LESTE / Migração
     assert "#F5F3FF" in html  # ABCDM / PME
     assert "#FEF9C3" in html  # 1º lugar
-    assert f"font-family: {componentes.FONTE_TITULO};" in html
+    assert f"font-family: {componentes.FONTE_TABELA};" in html
 
 
-def test_dataframes_herdam_manrope_no_css_global(monkeypatch):
+def test_fonte_das_tabelas_e_a_oscine_com_fallback():
+    assert componentes.FONTE_TABELA.startswith("'Oscine'")
+    assert "Manrope" in componentes.FONTE_TABELA  # cadeia de fallback preservada
+
+
+def test_dataframes_usam_a_fonte_corporativa_no_css_global(monkeypatch):
     css = _css_global(monkeypatch)
+
+    assert f"--font-tabela:    {componentes.FONTE_TABELA};" in css
 
     bloco_tabela = re.search(
         r"\.stDataFrame, \.stTable,\s*table, thead, tbody, tr, th, td \{[^}]*\}",
         css,
     )
     assert bloco_tabela is not None
-    assert "font-family: var(--font-titulo) !important;" in bloco_tabela.group(0)
+    assert "font-family: var(--font-tabela) !important;" in bloco_tabela.group(0)
+
+
+def test_config_do_tema_aponta_o_canvas_dos_dataframes_para_a_oscine():
+    """O canvas dos ``st.dataframe`` herda a bodyFont de ``[theme] font``.
+
+    Regressão: o glide-data-grid ignora o ``font-family`` do Styler; sem a
+    Oscine no ``config.toml`` o grid seguiria na fonte padrão do Streamlit.
+    """
+    config = (ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8")
+    assert 'font = "Oscine, sans-serif"' in config
+
+
+def test_oscine_e_pre_carregada_para_a_primeira_pintura_do_grid(monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(
+        componentes.st,
+        "html",
+        lambda body, **kwargs: chamadas.append((body, kwargs)),
+    )
+
+    componentes._injetar_fontes_no_head_pai()
+
+    body, _ = chamadas[0]
+    assert 'fonts.load("13px Oscine")' in body
+    assert 'fonts.load("700 13px Oscine")' in body
 
 
 def test_render_dataframe_exibe_barra_corporativa_e_escapa_html(monkeypatch):
