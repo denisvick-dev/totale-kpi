@@ -83,6 +83,36 @@ def test_login_normalizado_e_monitor_da_lista_prevalece():
     assert df.attrs["fonte_ativos"] == "Google Sheets (autenticado)"
 
 
+def test_compatibiliza_base_legada_com_aliases_e_sem_monitor():
+    legado = pd.DataFrame(
+        {
+            "Monitor": [" Lia ", None],
+            "Tecnico": ["Ana", ""],
+            "STATUS DA O.S 1": ["NÃO EXECUTADA", "EXECUTADA"],
+            "TOTAL TAREFAS": ["2", "1"],
+        }
+    )
+
+    base = quebra.DataLoader.compatibilizar_base(legado)
+
+    assert base["MONITOR"].tolist() == ["LIA", "SEM MONITOR"]
+    assert base["TÉCNICO"].tolist() == ["ANA", "NÃO MAPEADO"]
+    assert base["Status Contrato"].tolist() == ["Não Executada", "Executada"]
+    assert base["TOTAL DE TAREFAS"].tolist() == [2, 1]
+
+
+def test_compatibiliza_base_legada_sem_colunas_de_monitor_e_tecnico():
+    legado = pd.DataFrame({"CONTRATO": ["1"]})
+
+    base = quebra.DataLoader.compatibilizar_base(legado)
+
+    assert base["MONITOR"].tolist() == ["SEM MONITOR"]
+    assert base["TÉCNICO"].tolist() == ["NÃO MAPEADO"]
+    assert base.attrs["coluna_monitor_ausente"] is True
+    assert base["Status Contrato"].tolist() == ["Pendente"]
+    assert base["TOTAL DE TAREFAS"].tolist() == [1]
+
+
 def test_tabela_compartilhada_formata_sem_alterar_valores():
     df = pd.DataFrame({"Monitor": ["LIA", "Total Geral"], "Quebra Geral": [0.12, 0.15]})
     html = estilizar_dataframe(df, {"Quebra Geral": "{:.1%}"}).to_html()
