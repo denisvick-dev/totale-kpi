@@ -415,8 +415,7 @@ def _injetar_css_global() -> None:
     p, label, div, li, a, button, input, select, textarea {{
         font-family: var(--font-texto) !important;
     }}
-    span:not([class*="material"]):not([class*="Icon"]):not([class*="icon"])
-        :not([data-testid*="Icon"]):not([data-testid*="icon"]) {{
+    span:not([class*="material"]):not([data-testid="stIconMaterial"]) {{
         font-family: var(--font-texto) !important;
     }}
 
@@ -456,6 +455,10 @@ def _injetar_css_global() -> None:
         font-family: var(--font-texto) !important;
         font-weight: 600;
         border-radius: 6px !important;
+    }}
+    :is(.stButton, .stDownloadButton, .stFormSubmitButton) [data-testid="stTooltipIcon"],
+    :is(.stButton, .stDownloadButton, .stFormSubmitButton) [data-testid="stTooltipHoverTarget"] {{
+        width: 100%;
     }}
 
     /* ── Tabelas: moldura consistente inclusive nos st.dataframe das páginas ── */
@@ -668,7 +671,6 @@ def _injetar_css_global() -> None:
     .material-icons, .material-icons-outlined, .material-icons-round,
     .material-symbols-outlined, .material-symbols-rounded,
     [data-testid="stIconMaterial"],
-    [data-testid*="Icon"], [data-testid*="icon"],
     span[class*="material"], i[class*="material"] {{
         font-family:
             "Material Symbols Rounded",

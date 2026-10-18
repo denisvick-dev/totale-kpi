@@ -87,3 +87,16 @@ def test_entrypoint_exibe_um_seletor_global():
     assert not app.exception
     assert app.session_state["totale_tema_sidebar"] == "azul"
     assert TEMAS_SIDEBAR["azul"].fundo in css_renderizado(app)
+
+
+def test_botao_com_help_no_sidebar_nao_encolhe_por_seletor_de_icone():
+    """Regressão: st.button(..., help=...) usa data-testid='stTooltipIcon'."""
+    app = AppTest.from_string(APP).run()
+    css = css_renderizado(app)
+
+    assert '[data-testid*="Icon"]' not in css
+    assert '[data-testid*="icon"]' not in css
+    assert '[data-testid="stIconMaterial"]' in css
+    assert '[data-testid="stTooltipIcon"]' in css
+    assert "width: 100% !important;" in css
+
