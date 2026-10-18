@@ -2,7 +2,8 @@
 
 Os **títulos** do app — heros, `h1`–`h6` e títulos de seção — usam a família
 **Oscine** (Dalton Maag / Adobe Fonts). Os valores de KPI/métrica seguem com a
-Manrope, que é melhor para números.
+Manrope, que é melhor para números. Os títulos dos heros usam o peso Regular;
+as tabelas e os DataFrames também usam Manrope.
 
 Como a licença não permite redistribuir os arquivos, a fonte é aplicada nesta ordem:
 

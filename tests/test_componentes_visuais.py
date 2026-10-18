@@ -97,6 +97,7 @@ def test_titulos_dos_heros_usam_a_oscine_com_fallback(monkeypatch):
         if "clamp(25px" in bloco
     )
     assert "font-family: var(--font-hero) !important;" in bloco_hero
+    assert "font-weight: 400;" in bloco_hero
     # os demais títulos (h1 soltos, KPIs...) seguem com a fonte institucional
     assert "font-family: var(--font-titulo) !important;" in css
 
@@ -221,6 +222,18 @@ def test_estilizar_dataframe_aplica_destaques_corporativos_e_preserva_ids():
     assert "#EFF6FF" in html  # LESTE / Migração
     assert "#F5F3FF" in html  # ABCDM / PME
     assert "#FEF9C3" in html  # 1º lugar
+    assert f"font-family: {componentes.FONTE_TITULO};" in html
+
+
+def test_dataframes_herdam_manrope_no_css_global(monkeypatch):
+    css = _css_global(monkeypatch)
+
+    bloco_tabela = re.search(
+        r"\.stDataFrame, \.stTable,\s*table, thead, tbody, tr, th, td \{[^}]*\}",
+        css,
+    )
+    assert bloco_tabela is not None
+    assert "font-family: var(--font-titulo) !important;" in bloco_tabela.group(0)
 
 
 def test_render_dataframe_exibe_barra_corporativa_e_escapa_html(monkeypatch):

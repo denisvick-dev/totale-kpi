@@ -30,8 +30,8 @@ def main() -> None:
     )
     ranking_pontos = st.Page(
         "pages/pontos.py",
-        title="Ranking de Pontos",
-        icon="🏆",
+        title="Produtividade Técnica",
+        icon="📈",
     )
     qtde_os = st.Page(
         "pages/qtde_os.py",

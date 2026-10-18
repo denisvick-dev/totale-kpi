@@ -16,6 +16,14 @@
         "/^git status --short; python \"C:\\\\Users\\\\denis\\\\\\.agents\\\\skills\\\\developing-with-streamlit\\\\scripts\\\\discover\\.py\" --project-dir \"C:\\\\Users\\\\denis\\\\Projects\\\\totale-kpi\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^py -3 C:\\\\Users\\\\denis\\\\\\.agents\\\\skills\\\\developing-with-streamlit\\\\scripts\\\\discover\\.py --project-dir C:\\\\Users\\\\denis\\\\Projects\\\\totale-kpi$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^\\.\\\\\\.venv\\\\Scripts\\\\python\\.exe -c \"import streamlit; print\\(streamlit\\.__version__\\)\"; Get-Content pyproject\\.toml; Get-Content requirements-dev\\.txt$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     },
 }

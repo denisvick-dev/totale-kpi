@@ -484,7 +484,7 @@ def _injetar_css_global() -> None:
     }}
     .stDataFrame, .stTable,
     table, thead, tbody, tr, th, td {{
-        font-family: var(--font-texto) !important;
+        font-family: var(--font-titulo) !important;
     }}
     thead th, [data-testid="stTable"] th {{
         background: linear-gradient(180deg, #0D387D 0%, var(--cor-primaria) 100%);
@@ -630,7 +630,7 @@ def _injetar_css_global() -> None:
     .hero-title {{
         font-family: var(--font-hero) !important;
         font-size: clamp(25px, 2.7vw, 38px);
-        font-weight: 800; letter-spacing: -.035em;
+        font-weight: 400; letter-spacing: -.035em;
         line-height: 1.18; margin: 0; color: #FFFFFF;
     }}
     .hero-subtitle {{
@@ -1123,6 +1123,7 @@ def estilizar_dataframe(
                 "props": [
                     ("background-color", COR_PRIMARIA),
                     ("color", "#FFFFFF"),
+                    ("font-family", FONTE_TITULO),
                     ("font-weight", "700"),
                     ("font-size", "11.5px"),
                     ("text-transform", "uppercase"),
@@ -1134,6 +1135,7 @@ def estilizar_dataframe(
             {
                 "selector": "tbody td",
                 "props": [
+                    ("font-family", FONTE_TITULO),
                     ("padding", "9px 14px"),
                     ("border-bottom", f"1px solid {COR_BORDA}"),
                     ("font-variant-numeric", "tabular-nums"),

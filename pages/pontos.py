@@ -373,7 +373,7 @@ class ProcessamentoDados:
 # BLOCO 5: HERO + DADOS
 # ====================================================
 render_hero(
-    titulo="📈 Central de Performance | Produção por Técnico",
+    titulo="📈 Central de Performance | Produtividade",
     subtitulo="Acompanhamento individual de execução, produtividade e performance em campo",
     badge="Atualização em tempo real",
 )
@@ -476,7 +476,7 @@ if "Nome Equipe" in df.columns:
 
 col_t, col_tg = st.columns([3, 1])
 with col_t:
-    render_section_header("📊", "Ranking Geral · Metas & Projeção")
+    render_section_header("📊", "PRODUTIVIDADE · Metas & Projeção")
 with col_tg:
     st.write("")
     por_dia = st.toggle("📅 **Modo Meta Diária**", key="tg_meta_dia")
