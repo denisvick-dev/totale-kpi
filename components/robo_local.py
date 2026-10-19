@@ -1,22 +1,14 @@
-"""Robô TOTALE: descoberta, leitura de CSV/Excel e sincronismo na Central.
+"""Robô TOTALE: descoberta, leitura de CSV/Excel e sincronismo na Central de Atualização.
 
 O motor, o ciclo headless e a interface Streamlit vivem neste único arquivo.
 A dependência de Streamlit é opcional para a execução via CLI e para os testes
 de leitura; o portal importa somente :func:`renderizar_robo_local`.
-
-Arquivos aceitos na pasta monitorada
------------------------------------
-``Atividades-*.csv``, ``Atividades-*.xlsx``, ``Atividades-*.xlsm`` e
-``Atividades-*.xls`` — somente arquivos cujo nome inicia-se com
-``Atividades-``. Quando há mais de um arquivo, o pipeline usa **somente o mais
-recente** da pasta inteira; os demais aparecem na fila apenas como histórico.
 """
 
 from __future__ import annotations
 
 import csv
 import fnmatch
-import hashlib
 import logging
 import math
 import os
@@ -28,7 +20,6 @@ import zipfile
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from html import escape
 from io import BytesIO
 from pathlib import Path
 from typing import Literal, cast
@@ -178,7 +169,7 @@ def _padronizar_coluna_texto(serie: pd.Series) -> pd.Series:
     Equivalente a aplicar :func:`_celula_para_texto` célula a célula, porém sem
     callback Python por valor. Em bases reais (120 mil linhas × 18 colunas) a
     padronização caiu de ~0,82 s para ~0,13 s (**6× mais rápida**) com saída
-    idêntica — ver ``tests/test_robo_local.py``.
+    idêntica — ver ``tests/test_performance_carga.py``.
     """
     if pd.api.types.is_bool_dtype(serie):
         return serie.map({True: "True", False: "False"}).astype("string")
@@ -251,36 +242,35 @@ def _alinhar_colunas_esperadas(
 ) -> pd.DataFrame:
     if not esperadas:
         return df
-    por_chave = {str(c).strip().casefold(): str(c) for c in df.columns}
+    por_chave = {str(c).casefold(): str(c) for c in df.columns}
     renomear: dict[str, str] = {}
     for esperada in esperadas:
-        limpa = str(esperada).strip()
-        if limpa in df.columns:
+        if esperada in df.columns:
             continue
-        atual = por_chave.get(limpa.casefold())
+        atual = por_chave.get(esperada.casefold())
         if atual and atual not in renomear:
-            renomear[atual] = limpa
+            renomear[atual] = esperada
     if not renomear:
         return df
     return df.rename(columns=renomear)
 
 
 def _chaves_colunas(df: pd.DataFrame) -> set[str]:
-    return {str(c).strip().casefold() for c in df.columns}
+    return {str(c).casefold() for c in df.columns}
 
 
 def _contem_colunas(df: pd.DataFrame, esperadas: Sequence[str] | None) -> bool:
     if not esperadas:
         return True
     chaves = _chaves_colunas(df)
-    return all(str(esperada).strip().casefold() in chaves for esperada in esperadas)
+    return all(esperada.casefold() in chaves for esperada in esperadas)
 
 
 def _faltam_colunas(df: pd.DataFrame, esperadas: Sequence[str] | None) -> list[str]:
     if not esperadas:
         return []
     chaves = _chaves_colunas(df)
-    return [c for c in esperadas if str(c).strip().casefold() not in chaves]
+    return [c for c in esperadas if c.casefold() not in chaves]
 
 
 # ── Detecção de base ────────────────────────────────────────────────
@@ -349,6 +339,7 @@ def _unificar_nomes_colunas(frames: list[pd.DataFrame]) -> list[pd.DataFrame]:
 
 # ── Descoberta e Metadados de Arquivos ──────────────────────────────
 def _obter_pasta_downloads_windows() -> Path | None:
+    """Downloads real do Windows (pode estar em outro drive/OneDrive)."""
     if sys.platform != "win32":
         return None
 
@@ -383,8 +374,8 @@ def _obter_pasta_downloads_windows() -> Path | None:
 
 
 def obter_pasta_robo_padrao() -> str:
-    """Retorna a pasta Downloads configurada para o usuário atual."""
-    robo = _obter_pasta_downloads_windows() or Path.home() / "Downloads"
+    r"""Pasta padrão do robô: ``C:\Users\<usuario>\Downloads``."""
+    robo = _obter_pasta_downloads_windows() or Path.home() / "downloads"
     robo.mkdir(parents=True, exist_ok=True)
     return str(robo.resolve())
 
@@ -458,8 +449,6 @@ def _listar_candidatos_com_stat(
     padroes: tuple[str, ...] = PADROES_TOTALE,
     recursivo: bool = False,
 ) -> list[Candidato]:
-    if not str(pasta).strip():
-        return []
     p = Path(pasta)
     if not p.is_dir():
         return []
@@ -467,12 +456,18 @@ def _listar_candidatos_com_stat(
     arquivos = [
         arq for arq in _listar_arquivos(p, recursivo) if not _arquivo_ignorado(arq.name)
     ]
+    # A preferência pelo padrão não pode esconder um arquivo mais recente com
+    # nome alternativo (p.ex. GRS.csv ao lado de Atividades-SPO.csv).
+    marcadores = tuple(m.lower() for m in MAPA_BASES_ARQUIVO)
     encontrados = [
         arq
         for arq in arquivos
         if arq.suffix.lower() in EXTENSOES_VALIDAS
-        and arq.name.lower().startswith("atividades-")
-        and _casa_padrao(arq.name, padroes)
+        and (
+            _casa_padrao(arq.name, padroes)
+            or "atividades" in arq.stem.lower()
+            or any(m in arq.stem.lower() for m in marcadores)
+        )
     ]
 
     candidatos: list[Candidato] = []
@@ -483,46 +478,6 @@ def _listar_candidatos_com_stat(
         candidatos.append((str(arq), mtime, size))
     candidatos.sort(key=lambda item: item[1], reverse=True)
     return candidatos
-
-
-def _salvar_exportacao_enviada(nome: str, conteudo: bytes, pasta: str) -> str:
-    nome_arquivo = Path(nome.replace("\\", "/")).name
-    extensao = Path(nome_arquivo).suffix.lower()
-    if (
-        not nome_arquivo.lower().startswith("atividades-")
-        or extensao not in EXTENSOES_VALIDAS
-    ):
-        raise ValueError(
-            "O nome deve começar com 'Atividades-' e terminar em CSV ou Excel."
-        )
-    if not conteudo:
-        raise ValueError("O arquivo enviado está vazio.")
-    if len(conteudo) > _TAMANHO_MAXIMO_PADRAO:
-        raise ValueError("O arquivo excede o limite de 80 MB.")
-
-    digest = hashlib.sha256(conteudo).hexdigest()[:16]
-    caminho_pasta = Path(pasta)
-    caminho_pasta.mkdir(parents=True, exist_ok=True)
-    caminho_destino = caminho_pasta / (
-        f"{Path(nome_arquivo).stem[:120]}-{digest}{extensao}"
-    )
-    if caminho_destino.exists():
-        return str(caminho_destino)
-
-    descritor, caminho_temporario = tempfile.mkstemp(
-        prefix=".robo-upload-", suffix=".tmp", dir=caminho_pasta
-    )
-    try:
-        with os.fdopen(descritor, "wb") as arquivo:
-            arquivo.write(conteudo)
-        os.replace(caminho_temporario, caminho_destino)
-    except OSError:
-        try:
-            os.unlink(caminho_temporario)
-        except FileNotFoundError:
-            pass
-        raise
-    return str(caminho_destino)
 
 
 def buscar_arquivo_mais_recente(
@@ -823,7 +778,7 @@ def _ler_csv_de_bytes(raw: bytes, nome: str) -> tuple[pd.DataFrame | None, str |
                     index_col=False,
                     on_bad_lines="error",
                 )
-        except Exception as e:  # noqa: BLE001 - tentamos o próximo encoding/separador
+        except Exception as e:
             ultimo = e
             continue
         if df.shape[1] == 1:
@@ -876,7 +831,7 @@ def ler_arquivo_detalhado(
                         header=1,
                         tamanho_maximo=tamanho_maximo,
                     )
-                except Exception as e:  # noqa: BLE001 - header=0 segue válido
+                except Exception as e:
                     logger.debug("Header alternativo falhou em %s: %s", nome, e)
                 else:
                     alternativo = _padronizar_dataframe(alternativo)
@@ -971,16 +926,7 @@ def processar_candidatos(
             0,
         )
 
-    duplicatas = 0
-    if len(frames) == 1:
-        df = frames[0]
-    else:
-        unificados = _unificar_nomes_colunas(frames)
-        df = pd.concat(unificados, ignore_index=True, sort=False)
-        antes = len(df)
-        df = df.drop_duplicates(ignore_index=True)
-        duplicatas = antes - len(df)
-
+    df = frames[0]
     return ResultadoCiclo(
         df,
         tuple(bases),
@@ -988,7 +934,7 @@ def processar_candidatos(
         tuple(erros),
         bloqueios[0] if bloqueios else None,
         tuple(motores),
-        duplicatas,
+        0,
     )
 
 
@@ -1050,11 +996,11 @@ class TotaleRoboEngine:
 
     @staticmethod
     def arquivos_por_base(pasta: str | Path) -> dict[str, Path]:
-        """Arquivo mais recente de cada base encontrada na pasta."""
-        return {
-            base: Path(item[0])
-            for base, item in mapear_arquivos_por_base(str(pasta)).items()
-        }
+        caminho = TotaleRoboEngine.buscar_mais_recente(pasta)
+        if caminho is None:
+            return {}
+        chave = TotaleRoboEngine.detectar_base(caminho) or "SEM MARCADOR"
+        return {chave: caminho}
 
     @staticmethod
     def assinatura(caminho: str | Path) -> tuple[int, int] | None:
@@ -1138,7 +1084,10 @@ def ler_arquivo_totale(
     sheet_name: str | int | None = 0,
     notificar: bool = True,
 ) -> pd.DataFrame | None:
-    leitura = ler_arquivo_detalhado(caminho_arquivo, colunas_esperadas, sheet_name)
+    try:
+        leitura = ler_arquivo_detalhado(caminho_arquivo, colunas_esperadas, sheet_name)
+    except ArquivoBloqueadoError:
+        raise
     if st is None or not notificar:
         return leitura.df
     nome = Path(caminho_arquivo).name if caminho_arquivo else "—"
@@ -1151,239 +1100,6 @@ def ler_arquivo_totale(
 
 
 # ── UI e Controle de Sessão Streamlit ───────────────────────────────
-_CSS_ROBO = """
-<style>
-/* ═══════════════════════════════════════════════════════════════
-   ROBÔ DE SINCRONISMO — painel local da Central de Atualização
-   Tipografia: títulos em Oscine (--font-hero), dados em Manrope/Inter.
-   ═══════════════════════════════════════════════════════════════ */
-.totale-robo { margin: 2px 0 10px; }
-.totale-robo .robo-panel {
-    position: relative; overflow: hidden;
-    padding: 26px 28px 22px;
-    border: 1px solid #DCE5F0; border-radius: 18px;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F8FBFF 100%);
-    box-shadow: 0 14px 34px rgba(10, 47, 107, .08);
-}
-.totale-robo .robo-panel::before {
-    content: ''; position: absolute; inset: 0 0 auto 0; height: 4px;
-    background: linear-gradient(90deg, #0A2F6B 0%, #2E6DB4 55%, #E8700A 100%);
-}
-.totale-robo .robo-panel::after {
-    content: ''; position: absolute; width: 280px; height: 280px;
-    right: -120px; top: -150px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(232, 112, 10, .10), transparent 70%);
-    pointer-events: none;
-}
-.totale-robo .robo-head {
-    position: relative; z-index: 1;
-    display: flex; align-items: flex-start; justify-content: space-between;
-    gap: 18px; flex-wrap: wrap;
-}
-.totale-robo .robo-head-main { display: flex; align-items: flex-start; gap: 15px; min-width: 0; }
-.totale-robo .robo-icon {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 52px; height: 52px; flex: none; border-radius: 16px;
-    color: #FFFFFF;
-    background: linear-gradient(135deg, #0A2F6B, #1E5FA8 70%, #2E6DB4);
-    box-shadow: 0 10px 22px rgba(10, 47, 107, .22);
-}
-.totale-robo .robo-icon .material-symbols-rounded { font-size: 27px !important; color: #FFFFFF; }
-.totale-robo .robo-eyebrow {
-    font-size: 10px; font-weight: 800; letter-spacing: .14em;
-    text-transform: uppercase; color: #6B7C93; margin-bottom: 4px;
-}
-.totale-robo .robo-title {
-    font-family: var(--font-hero) !important;
-    font-size: clamp(21px, 2.3vw, 27px); font-weight: 800;
-    letter-spacing: -.025em; line-height: 1.18;
-    color: #0A2F6B; margin: 0;
-}
-.totale-robo .robo-sub {
-    font-size: 12.5px; line-height: 1.55; color: #4B5563;
-    margin: 7px 0 0; max-width: 700px;
-}
-.totale-robo .robo-sub code { font-size: 11.5px; color: #0A2F6B; background: #EEF4FB; padding: 1px 5px; border-radius: 4px; }
-.totale-robo .robo-status {
-    display: inline-flex; align-items: center; gap: 7px; flex: none;
-    padding: 7px 12px; border-radius: 999px;
-    font-size: 11px; font-weight: 800; letter-spacing: .02em;
-    border: 1px solid transparent; white-space: nowrap;
-}
-.totale-robo .robo-status--ok   { background: #E5F7EF; color: #087A55; border-color: #B7E7D3; }
-.totale-robo .robo-status--wait { background: #FFF4E6; color: #9A4B00; border-color: #F8D8AF; }
-.totale-robo .robo-status--off  { background: #EFF2F6; color: #56657A; border-color: #DCE2EA; }
-.totale-robo .robo-status--erro { background: #FDEBED; color: #A61B1F; border-color: #F3C3C7; }
-.totale-robo .robo-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: currentColor; box-shadow: 0 0 0 3px rgba(255, 255, 255, .55);
-}
-.totale-robo .robo-status--ok .robo-dot { animation: robo-pulse 2.4s ease-out infinite; }
-@keyframes robo-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(13, 150, 104, .35); }
-    50%      { box-shadow: 0 0 0 5px rgba(13, 150, 104, 0); }
-}
-.totale-robo .robo-stats {
-    position: relative; z-index: 1;
-    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px; margin-top: 20px;
-}
-.totale-robo .robo-stat {
-    background: #FFFFFF; border: 1px solid #E6EDF5;
-    border-radius: 12px; padding: 11px 13px; min-width: 0;
-}
-.totale-robo .robo-stat span {
-    display: block; font-size: 9.5px; font-weight: 800;
-    letter-spacing: .075em; text-transform: uppercase; color: #6B7C93;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.totale-robo .robo-stat strong {
-    display: block; margin-top: 3px;
-    font-family: var(--font-titulo) !important;
-    font-size: 21px; font-weight: 800; letter-spacing: -.03em;
-    color: #0F172A; font-variant-numeric: tabular-nums;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.totale-robo .robo-stat small { display: block; margin-top: 1px; font-size: 10px; color: #7C8CA2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* Controles logo abaixo do painel. */
-[class*="st-key-robo_controles_totale"] {
-    padding: 11px 15px; margin: 12px 0 6px;
-    border: 1px solid #E2EAF4; border-radius: 14px;
-    background: #F8FAFC;
-}
-[class*="st-key-robo_controles_totale"] [data-testid="stWidgetLabel"] p { font-weight: 700; }
-[class*="st-key-robo_controles_totale"] .stButton button { min-height: 38px; }
-
-/* Cabeçalhos internos. */
-.totale-robo .robo-subhead {
-    display: flex; align-items: center; gap: 8px;
-    margin: 22px 0 10px;
-    font-size: 10.5px; font-weight: 800; letter-spacing: .09em;
-    text-transform: uppercase; color: #64748B;
-}
-.totale-robo .robo-subhead::after { content: ''; flex: 1; height: 1px; background: #E5E7EB; }
-.totale-robo .robo-subhead .material-symbols-rounded { font-size: 16px !important; color: #0A2F6B; }
-.totale-robo .robo-subhead .robo-count {
-    display: inline-flex; align-items: center; justify-content: center;
-    min-width: 22px; height: 18px; padding: 0 6px; border-radius: 999px;
-    background: #EAF2FC; color: #0A2F6B; font-size: 9.5px; font-weight: 800;
-    letter-spacing: 0; text-transform: none;
-}
-
-/* Cards das bases. */
-.totale-robo .robo-base-card {
-    height: 100%; min-height: 158px; box-sizing: border-box;
-    display: flex; flex-direction: column;
-    padding: 15px 16px 14px;
-    background: #FFFFFF; border: 1px solid #E5EAF2;
-    border-top: 3px solid #CBD5E1; border-radius: 13px;
-    box-shadow: 0 4px 12px rgba(10, 47, 107, .045);
-    transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
-}
-.totale-robo .robo-base-card:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(10, 47, 107, .10); }
-.totale-robo .robo-base-card--ok   { border-top-color: #0D9668; }
-.totale-robo .robo-base-card--wait { border-top-color: #E8700A; }
-.totale-robo .robo-base-card--off  { border-top-color: #CBD5E1; background: #FBFCFE; }
-.totale-robo .robo-base-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.totale-robo .robo-base-marker {
-    display: inline-flex; align-items: center; justify-content: center;
-    height: 20px; padding: 0 7px; border-radius: 5px;
-    background: #0A2F6B; color: #FFFFFF;
-    font-size: 9px; font-weight: 800; letter-spacing: .07em;
-}
-.totale-robo .robo-base-name {
-    font-family: var(--font-hero) !important;
-    font-size: 16.5px; font-weight: 800; letter-spacing: -.02em;
-    color: #0F172A; margin: 9px 0 0;
-}
-.totale-robo .robo-base-file {
-    margin-top: 5px; font-size: 11.5px; font-weight: 600; color: #334155;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.totale-robo .robo-base-meta {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    margin-top: auto; padding-top: 10px; border-top: 1px dashed #EDF1F6;
-    font-size: 10px; color: #7C8CA2; font-variant-numeric: tabular-nums;
-}
-.totale-robo .robo-chip {
-    display: inline-flex; align-items: center; gap: 4px; flex: none;
-    padding: 3px 7px; border-radius: 999px;
-    font-size: 9px; font-weight: 800; letter-spacing: .03em;
-    white-space: nowrap;
-}
-.totale-robo .robo-chip--ok   { background: #E5F7EF; color: #087A55; }
-.totale-robo .robo-chip--wait { background: #FFF0E1; color: #9A4B00; }
-.totale-robo .robo-chip--off  { background: #EFF2F6; color: #56657A; }
-
-/* Fila de arquivos. */
-.totale-robo .robo-queue {
-    border: 1px solid #E6EDF5; border-radius: 14px;
-    background: #FFFFFF; overflow: hidden;
-}
-.totale-robo .robo-queue-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 14px; border-bottom: 1px solid #F1F5F9;
-}
-.totale-robo .robo-queue-row:last-child { border-bottom: 0; }
-.totale-robo .robo-queue-icon {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; flex: none; border-radius: 9px;
-    background: #EEF4FB; color: #0A2F6B; font-size: 17px !important;
-}
-.totale-robo .robo-queue-main { flex: 1; min-width: 0; }
-.totale-robo .robo-queue-name {
-    font-size: 12px; font-weight: 650; color: #0F172A;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.totale-robo .robo-queue-meta { margin-top: 1px; font-size: 10px; color: #7C8CA2; }
-
-/* Estado vazio e passos. */
-.totale-robo .robo-empty {
-    display: flex; align-items: center; gap: 14px;
-    padding: 22px 24px; border: 1px dashed #CBD5E1; border-radius: 14px;
-    background: #F8FAFC;
-}
-.totale-robo .robo-empty .material-symbols-rounded { font-size: 30px !important; color: #94A3B8; }
-.totale-robo .robo-empty strong { display: block; font-size: 13px; color: #334155; }
-.totale-robo .robo-empty span { display: block; margin-top: 2px; font-size: 11px; color: #7C8CA2; }
-.totale-robo .robo-steps {
-    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px; margin-top: 16px;
-}
-.totale-robo .robo-step {
-    padding: 10px 12px; border: 1px solid #E9EFF6; border-radius: 11px;
-    background: #FFFFFF;
-}
-.totale-robo .robo-step b {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 11px; color: #0A2F6B;
-}
-.totale-robo .robo-step b span {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 17px; height: 17px; border-radius: 50%;
-    background: #EAF2FC; color: #0A2F6B; font-size: 8.5px; font-weight: 800;
-}
-.totale-robo .robo-step small { display: block; margin-top: 3px; font-size: 10px; line-height: 1.45; color: #7C8CA2; }
-
-@media (max-width: 900px) {
-    .totale-robo .robo-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .totale-robo .robo-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 640px) {
-    .totale-robo .robo-panel { padding: 22px 18px 18px; border-radius: 14px; }
-    .totale-robo .robo-stats { grid-template-columns: 1fr; }
-    .totale-robo .robo-steps { grid-template-columns: 1fr; }
-}
-@media (prefers-reduced-motion: reduce) {
-    .totale-robo .robo-status--ok .robo-dot { animation: none; }
-    .totale-robo .robo-base-card { transition: none; }
-    .totale-robo .robo-base-card:hover { transform: none; }
-}
-</style>
-"""
-
-
 def _exigir_streamlit() -> object:
     if st is None:
         raise RuntimeError(
@@ -1436,8 +1152,7 @@ def _lock_ativo() -> bool:
 
 def _obter_gsheets(gsheets_fn: FonteSheets) -> pd.DataFrame:
     if callable(gsheets_fn):
-        resultado = gsheets_fn()
-        return resultado if isinstance(resultado, pd.DataFrame) else pd.DataFrame()
+        return gsheets_fn()
     if isinstance(gsheets_fn, pd.DataFrame):
         return gsheets_fn
     return pd.DataFrame()
@@ -1451,224 +1166,6 @@ def _rerun_aplicacao() -> None:
         rerun(scope="app")
     except TypeError:
         rerun()
-
-
-def _data_curta(mtime_ns: int) -> str:
-    try:
-        return datetime.fromtimestamp(mtime_ns / 1_000_000_000).strftime("%d/%m %H:%M")
-    except (OverflowError, OSError, ValueError):
-        return "—"
-
-
-def _rotulo_status(
-    ativo: bool,
-    sig_ok: bool,
-    erro: str | None,
-    aguardando: str | None,
-) -> tuple[str, str]:
-    if not ativo:
-        return "Pausado", "off"
-    if erro:
-        return "Atenção", "erro"
-    if sig_ok:
-        return "Sincronizado", "ok"
-    if aguardando:
-        return "Aguardando arquivo", "wait"
-    return "Monitorando", "wait"
-
-
-def _html_painel_robo(
-    *,
-    pasta: str,
-    ativo: bool,
-    sig_ok: bool,
-    erro: str | None,
-    aguardando: str | None,
-    n_candidatos: int,
-    n_fila: int,
-    n_bases: int,
-    hora_sucesso: str,
-    ultimo_nome: str,
-) -> str:
-    status_texto, status_classe = _rotulo_status(ativo, sig_ok, erro, aguardando)
-    pasta_nome = (Path(pasta).name if pasta else "") or "pasta não definida"
-    if not pasta.strip():
-        resumo = (
-            "Defina uma pasta monitorada em <b>⚙️ Pasta monitorada</b> para começar."
-        )
-    elif not ativo:
-        resumo = (
-            "A sincronização automática está pausada. Ative o robô para acompanhar "
-            "novas exportações nesta pasta."
-        )
-    elif n_candidatos == 0:
-        resumo = (
-            "Nenhuma exportação TOTALE encontrada. Envie o arquivo pelo campo acima "
-            "ou salve-o na pasta monitorada do servidor; o caminho abaixo não é o "
-            "Downloads do seu computador."
-        )
-    elif sig_ok:
-        resumo = (
-            "A base mais recente já foi lida, tratada e publicada para os painéis. "
-            "Novos arquivos entram na fila automaticamente."
-        )
-    else:
-        resumo = (
-            f"Acompanhando <code>{escape(pasta)}</code> a cada 5 segundos. "
-            "O arquivo mais recente entra no pipeline assim que ficar estável."
-        )
-    return (
-        '<div class="totale-robo"><div class="robo-panel">'
-        '<div class="robo-head">'
-        '<div class="robo-head-main">'
-        '<div class="robo-icon"><span class="material-symbols-rounded" aria-hidden="true">'
-        "smart_toy</span></div>"
-        '<div><div class="robo-eyebrow">Robô de sincronismo</div>'
-        '<h2 class="robo-title">Bases locais prontas para os painéis</h2>'
-        f'<p class="robo-sub">{resumo}</p></div>'
-        "</div>"
-        f'<div class="robo-status robo-status--{status_classe}">'
-        f'<span class="robo-dot" aria-hidden="true"></span>{escape(status_texto)}</div>'
-        "</div>"
-        '<div class="robo-stats">'
-        f'<div class="robo-stat"><span>Pasta monitorada no servidor</span><strong>{escape(pasta_nome)}</strong>'
-        f"<small>{escape(pasta)} · use o envio acima para carregar do seu computador</small></div>"
-        f'<div class="robo-stat"><span>Arquivos na pasta</span><strong>{n_candidatos}</strong>'
-        f"<small>{n_fila} no pipeline agora</small></div>"
-        f'<div class="robo-stat"><span>Bases detectadas</span><strong>{n_bases}/3</strong>'
-        "<small>SPO · GRS · ABCDM</small></div>"
-        f'<div class="robo-stat"><span>Última sincronização</span><strong>{escape(hora_sucesso)}</strong>'
-        f"<small>{escape(ultimo_nome or 'Aguardando a primeira leitura')}</small></div>"
-        "</div></div></div>"
-    )
-
-
-def _html_card_base(
-    marcador: str,
-    base: str,
-    info: Candidato | None,
-    processados_map: dict[object, object],
-    selecionados: Sequence[Candidato],
-) -> str:
-    if info is None:
-        return (
-            '<div class="totale-robo"><div class="robo-base-card robo-base-card--off">'
-            '<div class="robo-base-top">'
-            f'<span class="robo-base-marker">{escape(marcador)}</span>'
-            '<span class="robo-chip robo-chip--off">Aguardando</span></div>'
-            f'<h3 class="robo-base-name">{escape(base)}</h3>'
-            f'<div class="robo-base-file">Nenhum arquivo com “{escape(marcador)}” no nome</div>'
-            '<div class="robo-base-meta"><span>Sem exportação</span><span>—</span></div>'
-            "</div></div>"
-        )
-
-    caminho, mtime_ns, size = info
-    meta = obter_metadados_arquivo(caminho)
-    sincronizado = processados_map.get(caminho) == mtime_ns
-    na_fila = any(item[0] == caminho for item in selecionados)
-    if sincronizado:
-        classe, chip, rotulo = "ok", "robo-chip--ok", "Sincronizada"
-    elif na_fila:
-        classe, chip, rotulo = "wait", "robo-chip--wait", "Na fila"
-    else:
-        classe, chip, rotulo = "off", "robo-chip--off", "Mais antigo"
-    return (
-        f'<div class="totale-robo"><div class="robo-base-card robo-base-card--{classe}">'
-        '<div class="robo-base-top">'
-        f'<span class="robo-base-marker">{escape(marcador)}</span>'
-        f'<span class="robo-chip {chip}">{rotulo}</span></div>'
-        f'<h3 class="robo-base-name">{escape(base)}</h3>'
-        f'<div class="robo-base-file" title="{escape(caminho, quote=True)}">'
-        f"{escape(meta['nome'])}</div>"
-        '<div class="robo-base-meta">'
-        f"<span>{escape(formatar_tamanho(size))}</span>"
-        f"<span>{escape(_data_curta(mtime_ns))}</span>"
-        "</div></div></div>"
-    )
-
-
-def _html_fila_arquivos(
-    candidatos: Sequence[Candidato],
-    selecionados: Sequence[Candidato],
-    processados_map: dict[object, object],
-    limite: int = 5,
-) -> str:
-    selecionados_paths = {item[0] for item in selecionados}
-    linhas: list[str] = []
-    for caminho, mtime_ns, size in candidatos[:limite]:
-        base = detectar_base_arquivo(caminho) or "sem marcador"
-        sincronizado = processados_map.get(caminho) == mtime_ns
-        if sincronizado:
-            icone, chip, rotulo = "check_circle", "robo-chip--ok", "Sincronizado"
-        elif caminho in selecionados_paths:
-            icone, chip, rotulo = "bolt", "robo-chip--wait", "Na fila"
-        else:
-            icone, chip, rotulo = "history", "robo-chip--off", "Fora do pipeline"
-        linhas.append(
-            '<div class="robo-queue-row">'
-            f'<span class="robo-queue-icon material-symbols-rounded" aria-hidden="true">{icone}</span>'
-            '<div class="robo-queue-main">'
-            f'<div class="robo-queue-name" title="{escape(caminho, quote=True)}">'
-            f"{escape(Path(caminho).name)}</div>"
-            f'<div class="robo-queue-meta">{escape(base)} · {escape(formatar_tamanho(size))} '
-            f"· {escape(_data_curta(mtime_ns))}</div></div>"
-            f'<span class="robo-chip {chip}">{rotulo}</span></div>'
-        )
-    restantes = len(candidatos) - limite
-    if restantes > 0:
-        linhas.append(
-            '<div class="robo-queue-row">'
-            '<span class="robo-queue-icon material-symbols-rounded" aria-hidden="true">more_horiz</span>'
-            f'<div class="robo-queue-main"><div class="robo-queue-name">+{restantes} arquivo(s) '
-            'mais antigo(s)</div><div class="robo-queue-meta">Mantidos apenas como histórico '
-            "da pasta</div></div>"
-            '<span class="robo-chip robo-chip--off">Histórico</span></div>'
-        )
-    return (
-        '<div class="totale-robo"><div class="robo-queue">'
-        + "".join(linhas)
-        + "</div></div>"
-    )
-
-
-def _html_pasta_vazia(pasta: str, ativo: bool) -> str:
-    if ativo:
-        titulo = "Monitorando novas exportações"
-        detalhe = (
-            "Nenhum arquivo TOTALE nesta pasta ainda. Envie a exportação pelo campo "
-            "acima. O caminho mostrado é do servidor, não do Downloads do seu "
-            f"computador: {pasta}."
-        )
-    else:
-        titulo = "Sincronização pausada"
-        detalhe = "Ative o auto-sincronizar para retomar a leitura da pasta."
-    return (
-        '<div class="totale-robo"><div class="robo-empty">'
-        '<span class="material-symbols-rounded" aria-hidden="true">folder_open</span>'
-        f"<div><strong>{escape(titulo)}</strong><span>{escape(detalhe)}</span></div>"
-        "</div></div>"
-    )
-
-
-def _html_passos_robo() -> str:
-    passos = (
-        (
-            "Detecta",
-            "Varre a pasta e ignora temporários, atalhos e downloads incompletos.",
-        ),
-        ("Valida", "Confere estabilidade, tamanho, ZIP do Excel e encoding do CSV."),
-        ("Trata", "Padroniza texto, bases e colunas antes de qualquer publicação."),
-        (
-            "Publica",
-            "Atualiza a base da sessão após detectar ou receber o arquivo.",
-        ),
-    )
-    itens = "".join(
-        f'<div class="robo-step"><b><span>{i:02d}</span>{escape(titulo)}</b>'
-        f"<small>{escape(detalhe)}</small></div>"
-        for i, (titulo, detalhe) in enumerate(passos, start=1)
-    )
-    return f'<div class="totale-robo"><div class="robo-steps">{itens}</div></div>'
 
 
 def _executar_verificacao_robo(
@@ -1700,11 +1197,6 @@ def _executar_verificacao_robo(
         return
     if st.session_state.get("robo_processado_sig") == assinatura:
         return
-    # Um arquivo corrompido ou um ETL quebrado não deve ser reprocessado a cada
-    # 5 s. A falha fica presa à assinatura; um arquivo novo (ou "Tentar
-    # novamente") libera a próxima tentativa.
-    if st.session_state.get("robo_falha_sig") == assinatura:
-        return
 
     st.session_state["robo_processando"] = True
     st.session_state["robo_processando_desde"] = datetime.now()
@@ -1722,13 +1214,12 @@ def _executar_verificacao_robo(
             _toast_dedup("Arquivos mudaram durante a espera. Aguardando...", icon="⚠️")
             return
 
-        with st.spinner("🤖 Lendo a exportação mais recente..."):
-            resultado = processar_candidatos(
-                candidatos,
-                modo=modo,
-                colunas_esperadas=colunas_esperadas,
-                sheet_name=sheet_name,
-            )
+        resultado = processar_candidatos(
+            candidatos,
+            modo=modo,
+            colunas_esperadas=colunas_esperadas,
+            sheet_name=sheet_name,
+        )
         if resultado.bloqueio and resultado.df is None:
             st.session_state["robo_candidato_stable"] = 0
             st.session_state["_robo_aguardando_lock"] = resultado.bloqueio
@@ -1737,7 +1228,6 @@ def _executar_verificacao_robo(
             st.session_state.pop("_robo_aguardando_lock", None)
             if resultado.erros:
                 st.session_state["robo_erro"] = " | ".join(resultado.erros)
-                st.session_state["robo_falha_sig"] = assinatura
             return
 
         def _assinatura_atual() -> tuple[Candidato, ...]:
@@ -1754,8 +1244,7 @@ def _executar_verificacao_robo(
         bruto = resultado.df
         processado = bruto
         if callable(etl_fn):
-            with st.spinner("🧩 Tratando a base para os painéis..."):
-                transformado = etl_fn(bruto.copy(deep=True), _obter_gsheets(gsheets_fn))
+            transformado = etl_fn(bruto.copy(deep=True), _obter_gsheets(gsheets_fn))
             if transformado is not None:
                 if not isinstance(transformado, pd.DataFrame):
                     raise TypeError("O ETL do robô deve retornar DataFrame ou None.")
@@ -1779,7 +1268,6 @@ def _executar_verificacao_robo(
         st.session_state["robo_motores"] = list(resultado.motores)
         st.session_state["robo_duplicatas_removidas"] = resultado.duplicatas_removidas
         st.session_state.pop("_robo_aguardando_lock", None)
-        st.session_state.pop("robo_falha_sig", None)
 
         sufixo = f" · {', '.join(resultado.bases)}" if resultado.bases else ""
         st.session_state["origem_dados"] = (
@@ -1801,11 +1289,9 @@ def _executar_verificacao_robo(
     except Exception as e:
         logger.exception("Falha no ciclo do robô")
         st.session_state["robo_erro"] = f"{type(e).__name__}: {e}"
-        st.session_state["robo_falha_sig"] = assinatura
         _toast_dedup(f"Erro no pipeline: {e}", icon="❌")
     finally:
         st.session_state["robo_processando"] = False
-        st.session_state["robo_processando_desde"] = None
 
 
 if st is not None and hasattr(st, "fragment"):
@@ -1821,264 +1307,149 @@ def renderizar_robo_local(
     ciclos_estabilidade: int = 2,
     mostrar_toggle: bool = True,
     mostrar_config: bool = True,
-    mostrar_diagnostico: bool = True,
 ) -> None:
-    """Renderiza o painel do robô no contêiner atual da Central de Atualização."""
+    """Renderiza os controles no contêiner atual da página de envio de Excel."""
     _exigir_streamlit()
     assert st is not None
-
-    st.markdown(_CSS_ROBO, unsafe_allow_html=True)
 
     if "robo_ativo" not in st.session_state:
         st.session_state["robo_ativo"] = True
     st.session_state["robo_modo_leitura"] = "ultimo"
     if "robo_recursivo" not in st.session_state:
         st.session_state["robo_recursivo"] = False
-
-    pasta_default = pasta_padrao or obter_pasta_robo_padrao()
     if not st.session_state.get("robo_pasta_alvo"):
-        st.session_state["robo_pasta_alvo"] = pasta_default
-    elif (
+        st.session_state["robo_pasta_alvo"] = pasta_padrao or obter_pasta_robo_padrao()
+    if (
         pasta_padrao
         and not st.session_state.get("_robo_pasta_user_set")
-        and st.session_state.get("robo_pasta_alvo") == obter_pasta_robo_padrao()
+        and st.session_state.get("robo_pasta_alvo")
+        in (None, "", obter_pasta_robo_padrao())
     ):
         st.session_state["robo_pasta_alvo"] = pasta_padrao
 
     pasta_alvo = str(st.session_state["robo_pasta_alvo"])
-    upload = st.file_uploader(
-        "Enviar exportação do computador",
-        type=["csv", "xlsx", "xlsm", "xls"],
-        key="robo_upload_exportacao",
-        help=(
-            "Em um app publicado, o robô não acessa o Downloads do seu computador. "
-            "Envie aqui uma exportação cujo nome comece com Atividades-."
-        ),
+    st.markdown(
+        """
+        <div style='font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;
+        letter-spacing:0.8px;margin:14px 0 6px;padding-left:4px;'>
+            Robô de Sincronismo
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-    if upload is not None:
-        try:
-            caminho_enviado = _salvar_exportacao_enviada(
-                upload.name, upload.getvalue(), pasta_alvo
-            )
-            st.success(
-                f"Exportação recebida: {Path(caminho_enviado).name}. "
-                "O robô vai processá-la automaticamente."
-            )
-        except ValueError as exc:
-            st.error(str(exc))
-        except OSError as exc:
-            logger.exception("Não foi possível salvar a exportação enviada.")
-            st.error(f"Não foi possível salvar a exportação: {exc}")
 
-    recursivo = _estado_bool("robo_recursivo", False)
+    if mostrar_toggle:
+        ativo = st.toggle(
+            "⚡ Auto-Sincronizar",
+            value=_estado_bool("robo_ativo", True),
+            key="robo_toggle_ui",
+            help=(
+                "Monitora a pasta a cada 5s enquanto esta sessão estiver aberta. "
+                "SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM."
+            ),
+        )
+        st.session_state["robo_ativo"] = bool(ativo)
+    else:
+        ativo = _estado_bool("robo_ativo", True)
+
+    if mostrar_config:
+        with st.expander("⚙️ Configurar Pasta", expanded=False):
+            pasta_input = st.text_input(
+                "Caminho do Disco:", value=pasta_alvo, key="input_pasta_robo"
+            )
+            if pasta_input != pasta_alvo:
+                st.session_state["_robo_pasta_user_set"] = True
+            st.session_state["robo_pasta_alvo"] = pasta_input
+            pasta_alvo = str(pasta_input)
+            st.caption("Leitura fixa: somente o arquivo mais recente da pasta inteira.")
+            st.session_state["robo_recursivo"] = bool(
+                st.checkbox(
+                    "Incluir subpastas",
+                    value=_estado_bool("robo_recursivo", False),
+                    key="robo_recursivo_ui",
+                )
+            )
+            if os.path.isdir(pasta_alvo):
+                st.success("✅ Pasta válida")
+            else:
+                st.error("❌ Pasta não existe")
+
     modo = _modo_atual()
+    recursivo = _estado_bool("robo_recursivo", False)
     candidatos_ui = _listar_candidatos_com_stat(pasta_alvo, recursivo=recursivo)
     selecionados_ui = selecionar_arquivos(candidatos_ui, modo)
     por_base = mapear_arquivos_por_base(pasta_alvo, recursivo=recursivo)
 
-    processados_bruto = st.session_state.get("robo_arquivos_processados")
-    processados_map: dict[object, object] = (
-        processados_bruto if isinstance(processados_bruto, dict) else {}
-    )
-    erro_bruto = st.session_state.get("robo_erro")
-    erro = erro_bruto if isinstance(erro_bruto, str) and erro_bruto else None
-    aguardando_bruto = st.session_state.get("_robo_aguardando_lock")
-    aguardando = (
-        aguardando_bruto
-        if isinstance(aguardando_bruto, str) and aguardando_bruto
-        else None
-    )
-    assinatura = tuple(selecionados_ui)
-    sig_ok = (
-        bool(assinatura) and st.session_state.get("robo_processado_sig") == assinatura
-    )
-
-    hora_bruta = st.session_state.get("robo_hora_sucesso")
-    hora_sucesso = (
-        hora_bruta.strftime("%H:%M:%S") if isinstance(hora_bruta, datetime) else "—"
-    )
-    ultimo_path = st.session_state.get("robo_ultimo_processado_path")
-    ultimo_nome = Path(str(ultimo_path)).name if ultimo_path else ""
-
-    cabecalho = st.empty()
-
-    with st.container(key="robo_controles_totale"):
-        col_toggle, col_acao, col_info = st.columns([1.35, 0.95, 1.7])
-        with col_toggle:
-            if mostrar_toggle:
-                ativo = st.toggle(
-                    "Auto-sincronizar",
-                    value=_estado_bool("robo_ativo", True),
-                    key="robo_toggle_ui",
-                    help=(
-                        "Monitora a pasta a cada 5 s enquanto esta sessão estiver aberta. "
-                        "SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM."
-                    ),
-                )
-            else:
-                ativo = _estado_bool("robo_ativo", True)
-            st.session_state["robo_ativo"] = bool(ativo)
-        with col_acao:
-            sincronizar = st.button(
-                "Sincronizar agora",
-                key="robo_sincronizar_agora",
-                width="stretch",
-                disabled=not bool(ativo),
-                help=(
-                    "Força uma leitura imediata do arquivo mais recente."
-                    if ativo
-                    else "Ative o auto-sincronizar para liberar a leitura manual."
-                ),
-            )
-        with col_info:
-            if candidatos_ui:
-                st.caption(
-                    f"Leitura automática a cada 5 s · {len(candidatos_ui)} arquivo(s) "
-                    f"na pasta · {len(selecionados_ui)} no pipeline"
-                )
-            else:
-                st.caption(
-                    "Leitura automática a cada 5 s · aguardando a primeira exportação na pasta"
-                )
-
-    if sincronizar:
-        if not selecionados_ui:
-            _toast_dedup(
-                "Nenhum arquivo TOTALE encontrado na pasta monitorada.", icon="⚠️"
-            )
-        else:
-            st.session_state["robo_candidato_sig"] = assinatura
-            st.session_state["robo_candidato_stable"] = max(ciclos_estabilidade, 1)
-            st.session_state.pop("robo_processado_sig", None)
-            st.session_state.pop("robo_falha_sig", None)
-            _rerun_aplicacao()
-
-    if mostrar_config:
-        with st.expander("⚙️ Pasta monitorada", expanded=False):
-            pasta_input = st.text_input(
-                "Pasta monitorada no servidor",
-                value=pasta_alvo,
-                key="input_pasta_robo",
-                help=(
-                    "Este caminho existe no servidor onde o app está rodando, "
-                    "não no seu computador. Use o campo de envio para carregar "
-                    "arquivos do seu Downloads."
-                ),
-            )
-            if pasta_input != pasta_alvo:
-                st.session_state["_robo_pasta_user_set"] = True
-                st.session_state["robo_pasta_alvo"] = pasta_input
-                _rerun_aplicacao()
-
-            novo_recursivo = st.checkbox(
-                "Incluir subpastas",
-                value=_estado_bool("robo_recursivo", False),
-                key="robo_recursivo_ui",
-            )
-            if bool(novo_recursivo) != recursivo:
-                st.session_state["robo_recursivo"] = bool(novo_recursivo)
-                _rerun_aplicacao()
-
-            if os.path.isdir(pasta_alvo):
-                st.success("Pasta válida")
-            else:
-                st.error("Pasta não encontrada — confira o caminho digitado.")
-            st.caption(
-                "Aceita somente arquivos iniciados com Atividades- (*.csv, .xlsx, .xlsm, .xls). "
-                "Temporários (~$, .tmp, .crdownload) são ignorados."
-            )
-
-    cabecalho.markdown(
-        _html_painel_robo(
-            pasta=pasta_alvo,
-            ativo=bool(ativo),
-            sig_ok=sig_ok,
-            erro=erro,
-            aguardando=aguardando,
-            n_candidatos=len(candidatos_ui),
-            n_fila=len(selecionados_ui),
-            n_bases=len(por_base),
-            hora_sucesso=hora_sucesso,
-            ultimo_nome=ultimo_nome,
-        ),
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        '<div class="totale-robo"><div class="robo-subhead">'
-        '<span class="material-symbols-rounded" aria-hidden="true">dns</span>'
-        f'Bases monitoradas<span class="robo-count">{len(por_base)}/3</span></div></div>',
-        unsafe_allow_html=True,
-    )
-    colunas_bases = st.columns(3)
-    for coluna, (marcador, base) in zip(colunas_bases, MAPA_BASES_ARQUIVO.items()):
-        with coluna:
-            st.markdown(
-                _html_card_base(
-                    marcador,
-                    base,
-                    por_base.get(base),
-                    processados_map,
-                    selecionados_ui,
-                ),
-                unsafe_allow_html=True,
-            )
-
     if candidatos_ui:
-        st.markdown(
-            '<div class="totale-robo"><div class="robo-subhead">'
-            '<span class="material-symbols-rounded" aria-hidden="true">list_alt</span>'
-            "Fila de arquivos"
-            f'<span class="robo-count">{len(candidatos_ui)}</span></div></div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            _html_fila_arquivos(candidatos_ui, selecionados_ui, processados_map),
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(_html_pasta_vazia(pasta_alvo, bool(ativo)), unsafe_allow_html=True)
-
-    if mostrar_diagnostico:
-        with st.expander("🔎 Como o robô trabalha", expanded=False):
-            st.markdown(_html_passos_robo(), unsafe_allow_html=True)
-            st.divider()
-            motores = st.session_state.get("robo_motores")
-            if isinstance(motores, list) and motores:
-                st.caption("Motor usado na última leitura:")
-                for motor in motores:
-                    st.caption(f"• {motor}")
-            else:
-                st.caption("Ainda não houve leitura concluída nesta sessão.")
-            contagem = contar_arquivos_por_base(candidatos_ui)
-            if contagem:
-                detalhe = " · ".join(f"{base}: {n}" for base, n in contagem.items())
-                st.caption(f"Arquivos por base na pasta → {detalhe}")
-            removidas = st.session_state.get("robo_duplicatas_removidas")
-            if isinstance(removidas, int) and removidas > 0:
-                st.caption(f"{removidas} linha(s) idêntica(s) removida(s) na junção.")
-            if aguardando:
-                st.info(f"⏳ {aguardando}")
-            st.caption(
-                "O pipeline usa somente o arquivo de maior mtime da pasta; os demais "
-                "ficam disponíveis como histórico. A base tratada é publicada em "
-                "df_memoria para os painéis."
+        hora = st.session_state.get("robo_hora_sucesso")
+        hs = hora.strftime("%H:%M:%S") if isinstance(hora, datetime) else "—"
+        sig_ok = st.session_state.get("robo_processado_sig") == tuple(selecionados_ui)
+        stable = int(st.session_state.get("robo_candidato_stable", 0) or 0)
+        aguardando_lock = st.session_state.get("_robo_aguardando_lock")
+        if sig_ok:
+            st.success(
+                f"✅ Sincronizado às {hs}\n{len(selecionados_ui)} arquivo(s) no pipeline"
+            )
+        elif isinstance(aguardando_lock, str) and aguardando_lock:
+            st.info(f"⏳ {aguardando_lock}")
+        else:
+            st.warning(
+                f"📥 {len(candidatos_ui)} na pasta, {len(selecionados_ui)} na fila\n"
+                f"Estável {stable}/{ciclos_estabilidade}"
             )
 
-    if erro:
+        extras = len(candidatos_ui) - len(selecionados_ui)
+        if extras > 0:
+            st.caption(f"{extras} arquivo(s) mais antigo(s) fora do pipeline.")
+
+        st.markdown(
+            """
+            <div style='font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;
+            letter-spacing:0.6px;margin:10px 0 4px;padding-left:4px;'>
+                Bases Monitoradas
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        processados_bruto = st.session_state.get("robo_arquivos_processados")
+        processados_map: dict[object, object] = (
+            processados_bruto if isinstance(processados_bruto, dict) else {}
+        )
+        for marcador, base in MAPA_BASES_ARQUIVO.items():
+            info = por_base.get(base)
+            if info is None:
+                st.caption(f"⬜ {base} — aguardando arquivo com '{marcador}'")
+                continue
+            caminho_b, mtime_b, _ = info
+            meta = obter_metadados_arquivo(caminho_b)
+            ok = processados_map.get(caminho_b) == mtime_b
+            icone = "✅" if ok else "📥"
+            st.caption(f"{icone} {base} — {meta['nome'][:32]} ({meta['tamanho']})")
+
+        sem_base = [c for c, _, _ in candidatos_ui if detectar_base_arquivo(c) is None]
+        if sem_base:
+            st.caption(f"⚠️ {len(sem_base)} arquivo(s) sem SPO, GRS ou ABCDM no nome.")
+        removidas = st.session_state.get("robo_duplicatas_removidas")
+        if isinstance(removidas, int) and removidas > 0:
+            st.caption(f"{removidas} linha(s) idêntica(s) removida(s) na junção.")
+    else:
+        estado = "🟢 Monitorando" if ativo else "⏸ Pausado"
+        st.info(f"{estado}: `{Path(pasta_alvo).name}`")
+
+    erro = st.session_state.get("robo_erro")
+    if isinstance(erro, str) and erro:
         st.error(f"❌ {erro}")
-        col_limpar, col_retry = st.columns(2)
-        with col_limpar:
-            if st.button("🧹 Limpar", key="robo_limpar_erro", width="stretch"):
+        c_a, c_b = st.columns(2)
+        with c_a:
+            if st.button("🧹 Limpar", key="limpar_erro_robo", width="stretch"):
                 st.session_state.pop("robo_erro", None)
                 _rerun_aplicacao()
-        with col_retry:
-            if st.button("🔄 Tentar novamente", key="robo_retry_erro", width="stretch"):
+        with c_b:
+            if st.button("🔄 Retentar", key="retry_erro_robo", width="stretch"):
                 st.session_state.pop("robo_erro", None)
-                st.session_state.pop("robo_falha_sig", None)
-                st.session_state["robo_candidato_sig"] = assinatura
+                st.session_state["robo_candidato_sig"] = None
                 st.session_state["robo_processado_sig"] = None
-                st.session_state["robo_candidato_stable"] = max(ciclos_estabilidade, 1)
+                st.session_state["robo_candidato_stable"] = 0
                 _rerun_aplicacao()
 
     _executar_verificacao_robo(
@@ -2098,11 +1469,10 @@ def executar_ciclo_headless(
     destino_csv: str | None = None,
     modo: ModoLeitura = "ultimo",
     colunas_esperadas: list[str] | None = None,
-    recursivo: bool = False,
 ) -> ResultadoCiclo:
     """Um ciclo sem Streamlit. Processa apenas o arquivo mais recente da pasta."""
     resultado = processar_candidatos(
-        _listar_candidatos_com_stat(pasta, recursivo=recursivo),
+        _listar_candidatos_com_stat(pasta),
         modo=modo,
         colunas_esperadas=colunas_esperadas,
     )
@@ -2122,20 +1492,20 @@ _obter_pasta_robo_padrao = obter_pasta_robo_padrao
 _obter_metadados_arquivo = obter_metadados_arquivo
 
 __all__ = [
+    "ArquivoBloqueadoError",
+    "Candidato",
     "EXTENSOES_TEMP",
     "EXTENSOES_VALIDAS",
+    "EngineExcel",
+    "LeituraArquivo",
     "MAPA_BASES_ARQUIVO",
+    "ModoLeitura",
     "PADROES_TOTALE",
+    "ResultadoCiclo",
+    "TotaleRoboEngine",
     "_TAMANHO_MAXIMO_PADRAO",
     "_TAMANHO_MINIMO_XLSX",
     "_VALORES_AUSENTES",
-    "ArquivoBloqueadoError",
-    "Candidato",
-    "EngineExcel",
-    "LeituraArquivo",
-    "ModoLeitura",
-    "ResultadoCiclo",
-    "TotaleRoboEngine",
     "_aplicar_base_no_dataframe",
     "_cabecalho_fraco",
     "_celula_para_texto",
