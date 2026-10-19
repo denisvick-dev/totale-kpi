@@ -1385,6 +1385,7 @@ def renderizar_robo_local(
     ciclos_estabilidade: int = 2,
     mostrar_toggle: bool = True,
     mostrar_config: bool = True,
+    mostrar_toggle_sidebar: bool = False,
 ) -> None:
     """Função Wrapper que decide se exibe a interface Local (Robô) ou Nuvem (Upload)."""
     _exigir_streamlit()
@@ -1429,7 +1430,8 @@ def renderizar_robo_local(
     )
 
     if mostrar_toggle:
-        ativo = st.toggle(
+        toggle = st.sidebar.toggle if mostrar_toggle_sidebar else st.toggle
+        ativo = toggle(
             "⚡ Auto-Sincronizar",
             value=_estado_bool("robo_ativo", True),
             key="robo_toggle_ui",

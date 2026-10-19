@@ -1073,6 +1073,16 @@ class _ColunaStub:
         return False
 
 
+class _SidebarStub:
+    def __init__(self, streamlit: StreamlitStub) -> None:
+        self.streamlit = streamlit
+        self.toggles: list[str] = []
+
+    def toggle(self, rotulo: str, value: bool = False, key: str = "", **_kw) -> bool:
+        self.toggles.append(rotulo)
+        return bool(self.streamlit.session_state.get(key, value))
+
+
 class StreamlitStub:
     """Superfície mínima do ``streamlit`` usada por ``robo_local``.
 
@@ -1091,6 +1101,7 @@ class StreamlitStub:
         self.reruns_com_scope = 0
         self.com_fragment = com_fragment
         self.uploads: list[tuple[str, dict[str, object]]] = []
+        self.sidebar = _SidebarStub(self)
 
     # ── exibição
     def markdown(self, corpo: str, **_kwargs: object) -> None:
@@ -1573,6 +1584,21 @@ def test_renderizar_inicializa_estado_e_lista_bases(
     assert "1 na pasta, 1 na fila" in corpo
     assert "Estável 0/2" in corpo  # o ciclo está anulado; nada foi contabilizado
     assert ("toggle", "⚡ Auto-Sincronizar") in st_stub.mensagens
+
+
+def test_renderizar_toggle_auto_sincronizar_no_sidebar(
+    tmp_path, st_stub, monkeypatch
+) -> None:
+    _ciclo_noop(monkeypatch)
+
+    robo.renderizar_robo_local(
+        pasta_padrao=str(tmp_path),
+        mostrar_toggle_sidebar=True,
+    )
+
+    assert st_stub.sidebar.toggles == ["⚡ Auto-Sincronizar"]
+    assert ("toggle", "⚡ Auto-Sincronizar") not in st_stub.mensagens
+    assert st_stub.session_state["robo_ativo"] is True
 
 
 def test_renderizar_pasta_vazia_mostra_monitorando(

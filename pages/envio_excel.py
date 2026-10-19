@@ -357,6 +357,7 @@ renderizar_robo_local(
     etl_fn=_etl_base_local,
     gsheets_fn=_lista_ativos_para_etl,
     ciclos_estabilidade=2,
+    mostrar_toggle_sidebar=True,
 )
 
 # Prévia imediata do que o robô publicou para os demais painéis.
