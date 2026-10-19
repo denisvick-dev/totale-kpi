@@ -58,17 +58,24 @@ def main() -> None:
         title="Quebra de Agenda",
         icon="📉",
     )
+    gestao_ativos = st.Page(
+        "pages/gestao_ativos.py",
+        title="Gestão de Ativos",
+        icon="👥",
+    )
     atualizacao = st.Page(
         "pages/envio_excel.py",
         title="Atualização de Dados",
         icon="🔄",
     )
 
+    # Navegação agrupada por objetivo de negócio, mantendo os dados de apoio
+    # acessíveis sem misturá-los aos painéis operacionais.
     paginas_agrupadas = {
         "INÍCIO": [home_page],
         "PERFORMANCE E METAS": [ranking_pontos, qtde_os, consultivos],
         "OPERAÇÃO DIÁRIA": [rota_inicial, volumetria, quebra],
-        "DADOS": [atualizacao],
+        "GESTÃO E DADOS": [gestao_ativos, atualizacao],
     }
 
     pagina = st.navigation(paginas_agrupadas)

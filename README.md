@@ -70,7 +70,7 @@ ruff check .
 ```
 
 ### 🤖 Robô de Bases (Volumetria + Quebra de Agenda)
-- **Puxa a base automaticamente**: vigia a pasta **Downloads** do usuário (padrão) e processa sempre o arquivo **mais recente** (`.xlsx`, `.xls` ou `.csv`)
+- **Execução local**: o robô CLI lê a pasta **Downloads** da máquina onde é executado e processa o arquivo mais recente (`.xlsx`, `.xls` ou `.csv`). No Streamlit publicado, use o agente Windows descrito em [Agente local de Downloads](docs/AGENTE_DOWNLOADS.md); o servidor não consegue acessar o computador do usuário.
 - **Atualiza os dois painéis de uma vez**: gera as bases prontas de `volumetria.py` e `quebra.py` com o mesmo pipeline (sem upload manual)
 - **Só reprocessa quando muda**: compara o hash SHA-256 do arquivo; base inalterada reaproveita o cache
 - **Modo contínuo ou agendado**: `--modo loop --intervalo 15`, cron (Linux/macOS) ou Agendador de Tarefas (Windows)
@@ -120,12 +120,15 @@ python scripts/robot_base.py --pasta-entrada "C:/caminho/das/bases"
 
 ### 🤖 Robô de Sincronismo local (Central de Atualização)
 
-A página **Atualização de Dados** também hospeda o painel do robô local:
+A página **Atualização de Dados** hospeda o painel de processamento e upload.
+Em uma execução local do Streamlit, o robô pode monitorar a pasta Downloads
+acessível ao processo. No app publicado, use o agente Windows: ele observa o
+Downloads do computador e envia os arquivos ao app. Veja o [guia do agente](docs/AGENTE_DOWNLOADS.md).
 
-- monitora a pasta **Downloads** (ou o caminho configurado) a cada 5 s;
-- o app publicado não consegue acessar os arquivos locais do Windows. Para
-  enviar automaticamente ao app publicado, use o agente local abaixo;
-- aceita somente arquivos iniciados com `Atividades-` (`*.csv`, `.xlsx`, `.xlsm`, `.xls`);
+- monitora a pasta configurada a cada 5 s quando o caminho é acessível ao processo;
+- o app publicado não acessa arquivos locais diretamente;
+- aceita `*.csv`, `.xlsx`, `.xlsm` e `.xls` cujo nome siga `Atividades-*`, contenha
+  `atividades` ou traga o marcador da base (`SPO`, `GRS`, `ABCDM`);
 - ignora temporários (`~$`, `.tmp`, `.crdownload`) e arquivos em gravação;
 - valida o ZIP do Excel, o encoding/separador do CSV e a estabilidade do arquivo;
 - publica a base tratada em `df_memoria` para os painéis e mantém a versão bruta
@@ -137,8 +140,11 @@ A página **Atualização de Dados** também hospeda o painel do robô local:
   duplicados e desligados), então o vínculo não depende do formato da aba;
 - se a planilha estiver inacessível ou nenhum login coincidir, a prévia da
   base publicada exibe um aviso — o merge vazio não passa mais despercebido;
-- mostra o status de cada base (SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM), a fila
-  da pasta e o diagnóstico do último ciclo.
+- entra no pipeline apenas o arquivo mais recente da pasta; os demais aparecem
+  como "fora do pipeline" no painel;
+- mostra o status de cada base (SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM), a
+  contagem de candidatos/fila, a estabilidade do ciclo e o último erro, com os
+  botões **🧹 Limpar** e **🔄 Retentar**.
 
 Uso via terminal (sem Streamlit):
 
@@ -147,7 +153,7 @@ python components/robo_local.py "C:/Users/<usuario>/Downloads"
 python components/robo_local.py "C:/bases" "dados/cache/robo.csv"
 ```
 
-Para usar uma pasta diferente na interface, abra **⚙️ Pasta monitorada** no painel.
+Para usar uma pasta diferente na interface, abra **⚙️ Configurar Pasta** no painel.
 
 #### Agente Windows para o app publicado
 
@@ -341,9 +347,10 @@ Acesse: **http://localhost:8501**
 ```text
 totale-kpi/
 ├── streamlit_app.py                 # Entrada e navegação
-├── components/                      # Design system e regras de negócio
+├── components/                      # Design system, regras e robô local
 ├── pages/                           # Painéis da aplicação
-├── scripts/robot_base.py            # Robô de atualização das bases
+├── scripts/                          # CLI, agente Downloads e utilitários
+├── docs/                             # Guias operacionais e mapa do projeto
 ├── dados/                           # Entrada, cache e logs locais (não versionados)
 ├── assets/
 │   ├── fonts/LEIA-ME.md             # Instruções sobre a fonte Oscine
