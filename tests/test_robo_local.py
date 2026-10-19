@@ -191,6 +191,15 @@ def test_xlsx_truncado_e_rejeitado_com_mensagem_clara(tmp_path):
 
 
 # ── Descoberta e ciclo ──────────────────────────────────────────────
+def test_pasta_padrao_usa_downloads_configurado_no_windows(tmp_path, monkeypatch):
+    downloads = tmp_path / "OneDrive" / "Downloads"
+    downloads.mkdir(parents=True)
+    monkeypatch.setattr(robo.sys, "platform", "win32")
+    monkeypatch.setattr(robo, "_obter_pasta_downloads_windows", lambda: downloads)
+
+    assert Path(robo.obter_pasta_robo_padrao()) == downloads.resolve()
+
+
 def test_listagem_ignora_temporarios_atalhos_e_arquivos_vazios(tmp_path):
     bom = _csv(tmp_path / "Atividades-SPO-2026.csv", "nome\nAna\n")
     _csv(tmp_path / "Atividades-GRS-2026.csv.tmp", "nome\nBia\n")

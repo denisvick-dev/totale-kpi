@@ -347,9 +347,43 @@ def _unificar_nomes_colunas(frames: list[pd.DataFrame]) -> list[pd.DataFrame]:
 
 
 # ── Descoberta e Metadados de Arquivos ──────────────────────────────
+def _obter_pasta_downloads_windows() -> Path | None:
+    if sys.platform != "win32":
+        return None
+
+    import ctypes
+    from uuid import UUID
+
+    folder_id = (ctypes.c_ubyte * 16).from_buffer_copy(
+        UUID("{374DE290-123F-4565-9164-39C4925E467B}").bytes_le
+    )
+    caminho = ctypes.c_wchar_p()
+    try:
+        resultado = ctypes.windll.shell32.SHGetKnownFolderPath(
+            ctypes.byref(folder_id), 0, None, ctypes.byref(caminho)
+        )
+    except (AttributeError, OSError) as exc:
+        logger.warning(
+            "Não foi possível localizar a pasta Downloads do Windows: %s", exc
+        )
+        return None
+
+    if resultado != 0 or not caminho.value:
+        logger.warning(
+            "Não foi possível localizar a pasta Downloads do Windows (HRESULT %s).",
+            resultado,
+        )
+        return None
+
+    try:
+        return Path(caminho.value)
+    finally:
+        ctypes.windll.ole32.CoTaskMemFree(ctypes.cast(caminho, ctypes.c_void_p))
+
+
 def obter_pasta_robo_padrao() -> str:
-    """Pasta padrão do robô: C:\\Users\\<usuario>\\downloads."""
-    robo = Path.home() / "downloads"
+    """Retorna a pasta Downloads configurada para o usuário atual."""
+    robo = _obter_pasta_downloads_windows() or Path.home() / "Downloads"
     robo.mkdir(parents=True, exist_ok=True)
     return str(robo.resolve())
 
