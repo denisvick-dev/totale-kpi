@@ -110,6 +110,18 @@ Colunas de status aceitas no arquivo: `STATUS DA O.S 1`, `STATUS OS 1`,
 - Gráficos interativos (pizza, barras, heatmap)
 - Exportação em Excel e CSV
 
+### 🎯 Aderência à projeção (Ranking de Pontos)
+- Aba dedicada no painel de Produtividade: projeção de fechamento × meta por **monitor**, **projeto** ou **monitor × projeto**
+- Meta de referência selecionável (300/350/375/400 pts/equipe/mês), com gráfico de aderência, % de equipes aderentes, gap e ritmo necessário por dia útil
+- Detalhe das equipes de cada grupo e exportação em Excel; cálculo em `components/aderencia.py`
+
+Os dashboards seguem um padrão único de leitura — hero, insight de
+status, KPIs e conteúdo em abas (Ranking/Aderência em Pontos;
+Supervisor/Projeto/Técnicos em Qtde. de O.S.; Consolidada/Zeradas em
+Consultivos; visões operacionais em Quebra, Volumetria e Rota). A
+página inicial mostra o status das duas frentes de dados
+(produção em nuvem e base operacional enviada).
+
 ### 👥 Vínculo com a lista de ativos
 - Técnico, monitor e base de cada registro vêm da aba `lista_ativos`
 - Somente leitura: o cadastro é mantido direto na planilha

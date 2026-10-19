@@ -3,16 +3,19 @@ from io import BytesIO
 from typing import Any
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from components.aderencia import calcular_aderencia, classificar_aderencia
 from components.calendario import InfoCalendario
 from components.componentes import (
     COR_TEXTO_3,
     FONTE_TEXTO,
     aplicar_estilo,
     estilizar_dataframe,
+    render_dataframe,
     render_hero,
     render_insight,
     render_kpi,
@@ -28,6 +31,9 @@ st.set_page_config(
 
 # Aplica CSS/tema/fontes ANTES de qualquer outro st.*
 aplicar_estilo()
+
+# Metas mensais por equipe (pts) — ranking e aderência usam a mesma Régua.
+METAS_PONTOS = (300, 350, 375, 400)
 
 
 # ====================================================
@@ -115,6 +121,238 @@ class ComponenteVisual:
             )  # type: ignore[arg-type]
 
         st.dataframe(styler, use_container_width=True, hide_index=True, height=450)
+
+    @staticmethod
+    def render_aba_aderencia(
+        ranking: pd.DataFrame, dias_passados: int, dias_restantes: int
+    ) -> None:
+        """🎯 Aderência à projeção de fechamento, por monitor e projeto."""
+        render_section_header(
+            "🎯",
+            "ADERÊNCIA À PROJEÇÃO · Monitor e Projeto",
+            f"{dias_passados} dias úteis decorridos · {dias_restantes} restantes",
+        )
+        if ranking.empty or "Projeção" not in ranking.columns:
+            render_insight(
+                "Sem dados de projeção para calcular a aderência com os "
+                "filtros atuais.",
+                tipo="info",
+            )
+            return
+
+        visoes = {
+            "Por Monitor": ["Supervisor"],
+            "Por Projeto": ["Projeto"],
+            "Monitor × Projeto": ["Supervisor", "Projeto"],
+        }
+        disponiveis = {
+            k: v for k, v in visoes.items() if set(v).issubset(ranking.columns)
+        }
+        if not disponiveis:
+            render_insight(
+                "A base não traz as colunas de monitor/projeto da aderência.",
+                tipo="info",
+            )
+            return
+
+        col_meta, col_visao = st.columns([1, 2])
+        with col_meta:
+            meta = st.selectbox(
+                "Meta de referência (pts/equipe/mês)",
+                list(METAS_PONTOS),
+                index=0,
+                key="ader_meta",
+                help="A meta do grupo é esta meta × o nº de equipes do grupo.",
+            )
+        with col_visao:
+            visao = st.radio(
+                "Agrupar aderência por",
+                list(disponiveis),
+                horizontal=True,
+                key="ader_visao",
+            )
+
+        grupos = disponiveis[visao]
+        ader = calcular_aderencia(
+            ranking,
+            grupos,
+            float(meta),
+            dias_passados=dias_passados,
+            dias_restantes=dias_restantes,
+        )
+        if ader.empty:
+            render_insight(
+                "Não foi possível calcular a aderência para esta visão.",
+                tipo="info",
+            )
+            return
+
+        # Na base de produção, o monitor é a coluna Supervisor.
+        ader_view = ader.rename(columns={"Supervisor": "Monitor"})
+        cols_grupo = ["Monitor" if g == "Supervisor" else g for g in grupos]
+
+        # ── KPIs da visão ──
+        total_meta = float(ader["Meta Grupo"].sum())
+        total_proj = float(ader["Projeção"].sum())
+        ader_geral = total_proj / total_meta if total_meta > 0 else 0.0
+        grupos_meta = int((ader["Aderência Projetada"] >= 1).sum())
+        eq_total = int(ader["Equipes"].sum())
+        eq_ader = int(ader["Equipes Aderentes"].sum())
+        gap = total_meta - total_proj
+
+        k1, k2, k3, k4 = st.columns(4)
+        render_kpi(
+            k1,
+            "Aderência Projetada",
+            f"{ader_geral:.1%}",
+            sub=f"Meta: {meta} pts/equipe",
+            tema="verde" if ader_geral >= 1 else "laranja" if ader_geral >= 0.9 else "vermelho",
+        )
+        render_kpi(
+            k2,
+            "Grupos na Meta",
+            f"{grupos_meta}/{len(ader)}",
+            sub=visao,
+            tema="azul",
+        )
+        render_kpi(
+            k3,
+            "Equipes Aderentes",
+            f"{eq_ader / eq_total:.0%}" if eq_total else "—",
+            sub=f"{eq_ader} de {eq_total} equipes",
+            tema="verde",
+        )
+        render_kpi(
+            k4,
+            "Gap p/ Meta (Projeção)",
+            Utilitarios.formatar_numero(abs(gap)),
+            sub="pts de folga projetada" if gap < 0 else "pts faltando na projeção",
+            tema="verde" if gap < 0 else "laranja",
+        )
+
+        # ── Gráfico: aderência por grupo ──
+        grafico = ader_view.copy()
+        grafico["Grupo"] = grafico[cols_grupo].astype(str).agg(" · ".join, axis=1)
+        grafico = grafico.sort_values("Aderência Projetada")
+        cores = {
+            "Alta performance": "#1E3A8A",
+            "Na meta": "#16A34A",
+            "Próximo da meta": "#EAB308",
+            "Abaixo da meta": "#EF4444",
+        }
+        fig = go.Figure(
+            go.Bar(
+                x=grafico["Aderência Projetada"] * 100,
+                y=grafico["Grupo"],
+                orientation="h",
+                marker_color=[
+                    cores.get(s, "#94A3B8") for s in grafico["Situação"]
+                ],
+                text=[f"{v:.0%}" for v in grafico["Aderência Projetada"]],
+                textposition="outside",
+                hovertemplate=(
+                    "<b>%{y}</b><br>Aderência: %{x:.1f}%<br>"
+                    "Projeção: %{customdata[0]:,.0f} pts · "
+                    "Meta: %{customdata[1]:,.0f} pts<extra></extra>"
+                ),
+                customdata=grafico[["Projeção", "Meta Grupo"]].to_numpy(),
+            )
+        )
+        fig.add_vline(
+            x=100,
+            line_dash="dash",
+            line_color="#0A2F6B",
+            annotation_text="Meta (100%)",
+        )
+        fig.update_layout(
+            height=max(280, 38 * len(grafico) + 90),
+            margin={"l": 10, "r": 50, "t": 30, "b": 10},
+            xaxis_title="Aderência projetada (%)",
+            yaxis_title="",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # ── Tabela completa ──
+        formatos = {
+            "Equipes": "{:,}",
+            "Equipes Aderentes": "{:,}",
+            "Pontos": "{:,.1f}",
+            "Projeção": "{:,.1f}",
+            "Meta Grupo": "{:,.0f}",
+            "Aderência Projetada": "{:.1%}",
+            "% Equipes Aderentes": "{:.0%}",
+            "Gap p/ Meta": "{:+,.1f}",
+            "Ritmo Atual": "{:,.1f}",
+            "Ritmo Necessário": "{:,.1f}",
+        }
+        styler = estilizar_dataframe(
+            ader_view,
+            {k: v for k, v in formatos.items() if k in ader_view.columns},
+        )
+        styler = styler.map(
+            Utilitarios.colorir_aderencia,
+            subset=["Aderência Projetada", "Situação"],  # type: ignore[arg-type]
+        )
+        st.dataframe(styler, use_container_width=True, hide_index=True, height=420)
+        st.caption(
+            "Metodologia: meta do grupo = meta por equipe × nº de equipes; "
+            "aderência projetada = projeção de fechamento (ritmo atual, em "
+            "dias úteis Seg–Sáb sem feriados) ÷ meta do grupo. Ritmos em "
+            "pts/equipe/dia útil. A visão respeita os filtros da barra lateral."
+        )
+
+        col_dl, _ = st.columns([2.5, 7.5])
+        with col_dl:
+            st.download_button(
+                "📥 **Exportar Aderência (Excel)**",
+                data=Utilitarios.exportar_excel_aderencia(ader_view),
+                file_name="aderencia_projecao.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+
+        # ── Detalhe: equipes do grupo selecionado ──
+        st.markdown("<br>", unsafe_allow_html=True)
+        render_section_header("search", "Detalhe por Equipe do Grupo")
+        ader_view["_rotulo"] = ader_view[cols_grupo].astype(str).agg(
+            " · ".join, axis=1
+        )
+        escolha = st.selectbox(
+            "Grupo",
+            ader_view["_rotulo"].tolist(),
+            key="ader_grupo_detalhe",
+        )
+        linha = ader[ader_view["_rotulo"] == escolha].iloc[0]
+        mascara = pd.Series(True, index=ranking.index)
+        for col in grupos:
+            mascara &= ranking[col].fillna("—").astype(str) == str(linha[col])
+        detalhe = (
+            ranking[mascara]
+            .groupby("Nome Equipe")
+            .agg(
+                Supervisor=("Supervisor", "first"),
+                Projeto=("Projeto", "first"),
+                Pontos=("Pontos", "sum"),
+                Projeção=("Projeção", "sum"),
+            )
+            .reset_index()
+            .rename(columns={"Supervisor": "Monitor", "Nome Equipe": "Equipe"})
+        )
+        detalhe["Aderência"] = detalhe["Projeção"] / float(meta)
+        detalhe["Situação"] = detalhe["Aderência"].map(classificar_aderencia)
+        detalhe = detalhe.sort_values("Projeção", ascending=False)
+        render_dataframe(
+            detalhe,
+            titulo=f"Equipes — {escolha}",
+            icone="groups",
+            fmt={
+                "Pontos": "{:,.1f}",
+                "Projeção": "{:,.1f}",
+                "Aderência": "{:.1%}",
+            },
+            badge=f"{len(detalhe)} equipes · meta {meta} pts",
+            height=360,
+        )
 
 
 # ====================================================
@@ -212,6 +450,41 @@ class Utilitarios:
             "background-color:#0A2F6B;color:#FFFFFF;font-weight:800;"
             "text-align:center;border-left:3px solid #E8700A;"
         )
+
+    @staticmethod
+    def colorir_aderencia(valor: Any) -> str:
+        """Cor da aderência (razão projeção÷meta ou rótulo da situação)."""
+        estilos = {
+            "Alta performance": (
+                "background-color:#1E3A8A;color:#FFFFFF;font-weight:800;"
+                "text-align:center;"
+            ),
+            "Na meta": (
+                "background-color:#DCFCE7;color:#166534;font-weight:700;"
+                "text-align:center;"
+            ),
+            "Próximo da meta": (
+                "background-color:#FEF9C3;color:#854D0E;font-weight:700;"
+                "text-align:center;"
+            ),
+            "Abaixo da meta": (
+                "background-color:#FEF2F2;color:#991B1B;font-weight:700;"
+                "text-align:center;"
+            ),
+        }
+        if isinstance(valor, str):
+            return estilos.get(valor, "")
+        try:
+            v = float(valor)
+        except (ValueError, TypeError):
+            return ""
+        if v >= 4 / 3:
+            return estilos["Alta performance"]
+        if v >= 1.0:
+            return estilos["Na meta"]
+        if v >= 0.90:
+            return estilos["Próximo da meta"]
+        return estilos["Abaixo da meta"]
 
     @staticmethod
     def calcular_dias_uteis(df: pd.DataFrame) -> tuple[int, int, Any, int]:
@@ -323,6 +596,40 @@ class Utilitarios:
 
         return output.getvalue()
 
+    @staticmethod
+    def exportar_excel_aderencia(dataframe: pd.DataFrame) -> bytes:
+        """Excel da tabela de aderência, com cabeçalho corporativo."""
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            dataframe.to_excel(writer, index=False, sheet_name="Aderência")
+            ws = writer.sheets["Aderência"]
+
+            cor_cab = PatternFill("solid", fgColor="012869")
+            f_cab = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            centro = Alignment(horizontal="center", vertical="center")
+            cols_pct = {"Aderência Projetada", "% Equipes Aderentes"}
+
+            for cel in ws[1]:
+                cel.fill = cor_cab
+                cel.font = f_cab
+                cel.alignment = centro
+
+            for i, nome in enumerate(dataframe.columns, start=1):
+                letra = get_column_letter(i)
+                if nome in cols_pct:
+                    for cel in ws[letra][1:]:
+                        cel.number_format = "0.0%"
+                maior = max(
+                    [len(str(nome))]
+                    + [len(str(v)) for v in dataframe[nome].head(200).tolist()]
+                )
+                ws.column_dimensions[letra].width = min(max(maior + 3, 13), 44)
+
+            ws.freeze_panes = "A2"
+            ws.auto_filter.ref = ws.dimensions
+
+        return output.getvalue()
+
 
 # ====================================================
 # BLOCO 4: PROCESSAMENTO
@@ -358,7 +665,7 @@ class ProcessamentoDados:
         def _montar(modo_dia: bool) -> pd.DataFrame:
             r = base.copy()
             r.insert(0, "Posição", range(1, len(r) + 1))
-            for m in [300, 350, 375, 400]:
+            for m in METAS_PONTOS:
                 label = f"Meta Dia | {m}" if modo_dia else f"Meta | {m}"
                 r[label] = (
                     (r["Pontos"] - m) / dias_seguros if modo_dia else r["Pontos"] - m
@@ -481,58 +788,66 @@ if "Nome Equipe" in df.columns:
         df, dias_brutos, dias_seguros, dias_passados
     )
 
-col_t, col_tg = st.columns([3, 1])
-with col_t:
-    render_section_header("📊", "PRODUTIVIDADE · Metas & Projeção")
-with col_tg:
-    st.write("")
-    por_dia = st.toggle("📅 **Modo Meta Diária**", key="tg_meta_dia")
-
-df_exibir = ranking_dia if por_dia else ranking
-modo_txt = "Meta Diária" if por_dia else "Meta Mensal"
-
-ComponenteVisual.render_dataframe_corporativo(
-    df_exibir,
-    titulo=f"Performance por Equipe — {modo_txt}",
-    icone="🏆",
-    badge=f"{len(df_exibir)} equipes ativas",
-    modo_diario=por_dia,
+aba_ranking, aba_aderencia = st.tabs(
+    ["🏆 Ranking & Metas", "🎯 Aderência à Projeção"]
 )
 
-col_dl, _ = st.columns([2.5, 7.5])
-nome_arq = "ranking_diario.xlsx" if por_dia else "ranking_geral.xlsx"
+with aba_ranking:
+    col_t, col_tg = st.columns([3, 1])
+    with col_t:
+        render_section_header("📊", "PRODUTIVIDADE · Metas & Projeção")
+    with col_tg:
+        st.write("")
+        por_dia = st.toggle("📅 **Modo Meta Diária**", key="tg_meta_dia")
 
-with col_dl:
-    st.download_button(
-        "📥 **Exportar para Excel**",
-        data=Utilitarios.exportar_excel(df_exibir),
-        file_name=nome_arq,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
+    df_exibir = ranking_dia if por_dia else ranking
+    modo_txt = "Meta Diária" if por_dia else "Meta Mensal"
+
+    ComponenteVisual.render_dataframe_corporativo(
+        df_exibir,
+        titulo=f"Performance por Equipe — {modo_txt}",
+        icone="🏆",
+        badge=f"{len(df_exibir)} equipes ativas",
+        modo_diario=por_dia,
     )
 
-st.markdown(
-    f"""
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;
-         padding:12px 16px;background:#F8FAFC;border-radius:10px;
-         border:1px solid #DCE5F0;font-size:0.78rem;
-         font-family:{FONTE_TEXTO};align-items:center;">
-        <span style="font-weight:700;color:{COR_TEXTO_3};
-             text-transform:uppercase;letter-spacing:0.05em;">🎨 Legenda:</span>
-        <span style="background:#1E3A8A;color:white;padding:3px 10px;
-             border-radius:6px;font-weight:700;">🏆 400+ pts — Alta Performance</span>
-        <span style="background:#DCFCE7;color:#166534;padding:3px 10px;
-             border-radius:6px;font-weight:700;">✅ 300–399 — Na Meta</span>
-        <span style="background:#FEF9C3;color:#854D0E;padding:3px 10px;
-             border-radius:6px;font-weight:700;">⚠️ 275–299 — Próximo da Meta</span>
-        <span style="background:#FEF2F2;color:#991B1B;padding:3px 10px;
-             border-radius:6px;font-weight:700;">🚨 &lt; 275 — Abaixo da Meta</span>
-        <span style="background:#0A2F6B;color:white;padding:3px 10px;
-             border-radius:6px;font-weight:700;border-left:3px solid #E8700A;">🎯 Proj. Fechamento</span>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+    col_dl, _ = st.columns([2.5, 7.5])
+    nome_arq = "ranking_diario.xlsx" if por_dia else "ranking_geral.xlsx"
+
+    with col_dl:
+        st.download_button(
+            "📥 **Exportar para Excel**",
+            data=Utilitarios.exportar_excel(df_exibir),
+            file_name=nome_arq,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+
+    st.markdown(
+        f"""
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;
+             padding:12px 16px;background:#F8FAFC;border-radius:10px;
+             border:1px solid #DCE5F0;font-size:0.78rem;
+             font-family:{FONTE_TEXTO};align-items:center;">
+            <span style="font-weight:700;color:{COR_TEXTO_3};
+                 text-transform:uppercase;letter-spacing:0.05em;">🎨 Legenda:</span>
+            <span style="background:#1E3A8A;color:white;padding:3px 10px;
+                 border-radius:6px;font-weight:700;">🏆 400+ pts — Alta Performance</span>
+            <span style="background:#DCFCE7;color:#166534;padding:3px 10px;
+                 border-radius:6px;font-weight:700;">✅ 300–399 — Na Meta</span>
+            <span style="background:#FEF9C3;color:#854D0E;padding:3px 10px;
+                 border-radius:6px;font-weight:700;">⚠️ 275–299 — Próximo da Meta</span>
+            <span style="background:#FEF2F2;color:#991B1B;padding:3px 10px;
+                 border-radius:6px;font-weight:700;">🚨 &lt; 275 — Abaixo da Meta</span>
+            <span style="background:#0A2F6B;color:white;padding:3px 10px;
+                 border-radius:6px;font-weight:700;border-left:3px solid #E8700A;">🎯 Proj. Fechamento</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with aba_aderencia:
+    ComponenteVisual.render_aba_aderencia(ranking, dias_passados, dias_brutos)
 
 # ── Rodapé ──────────────────────────────────────────
 if pd.notna(ultima_atualizacao):

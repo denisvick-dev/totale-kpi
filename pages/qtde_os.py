@@ -291,12 +291,12 @@ def main() -> None:
     render_kpi(c3, "Projetos Ativos", str(proc.qtd_projetos), tema="laranja")
     render_kpi(c4, "Supervisores", str(proc.qtd_supervisores), tema="verde")
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    # ── Tabelas em abas (largura cheia para cada visão) ──────────────
+    aba_sup, aba_proj, aba_tec = st.tabs(
+        ["👥 Por Supervisor", "🏢 Por Projeto", "🔧 Técnicos"]
+    )
 
-    # ── Tabelas Supervisor × Projeto ─────────────────────────────────
-    col_esq, col_dir = st.columns(2)
-
-    with col_esq:
+    with aba_sup:
         df_sup = proc.tabela_supervisor(cal.dias_passados, cal.dias_faltantes)
         render_section_header(
             "groups", "Visão por Supervisor", f"{len(df_sup)} supervisores"
@@ -308,9 +308,10 @@ def main() -> None:
                 EstiloTabela.estilizar_resumo(df_sup),
                 use_container_width=True,
                 hide_index=True,
+                height=420,
             )
 
-    with col_dir:
+    with aba_proj:
         df_proj = proc.tabela_projeto(cal.dias_passados, cal.dias_faltantes)
         render_section_header(
             "business_center", "Visão por Projeto", f"{len(df_proj)} projetos"
@@ -322,27 +323,28 @@ def main() -> None:
                 EstiloTabela.estilizar_resumo(df_proj),
                 use_container_width=True,
                 hide_index=True,
+                height=420,
             )
 
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── Técnicos ─────────────────────────────────────────────────────
-    df_tec = proc.tabela_tecnico()
-    render_section_header(
-        "engineering", "Performance de Técnicos", f"{len(df_tec)} equipes"
-    )
-    if df_tec.empty:
-        st.info("Sem dados de Técnicos para exibir.")
-    else:
-        df_tec_display = df_tec.copy().reset_index(drop=True)
-        df_tec_display.insert(0, "Posição", range(1, len(df_tec_display) + 1))
-        df_tec_display = df_tec_display.rename(
-            columns={"CódAuxEquipe": "Cód. Equipe", "Nome Equipe": "Equipe"}
+    with aba_tec:
+        df_tec = proc.tabela_tecnico()
+        render_section_header(
+            "engineering", "Performance de Técnicos", f"{len(df_tec)} equipes"
         )
-        styled_tec = estilizar_dataframe(df_tec_display, {"Qtde. de O.S.": "{:,}"}).map(
-            EstiloTabela.cor_os, subset=["Qtde. de O.S."]
-        )  # type: ignore[arg-type]
-        st.dataframe(styled_tec, use_container_width=True, hide_index=True, height=420)
+        if df_tec.empty:
+            st.info("Sem dados de Técnicos para exibir.")
+        else:
+            df_tec_display = df_tec.copy().reset_index(drop=True)
+            df_tec_display.insert(0, "Posição", range(1, len(df_tec_display) + 1))
+            df_tec_display = df_tec_display.rename(
+                columns={"CódAuxEquipe": "Cód. Equipe", "Nome Equipe": "Equipe"}
+            )
+            styled_tec = estilizar_dataframe(
+                df_tec_display, {"Qtde. de O.S.": "{:,}"}
+            ).map(EstiloTabela.cor_os, subset=["Qtde. de O.S."])  # type: ignore[arg-type]
+            st.dataframe(
+                styled_tec, use_container_width=True, hide_index=True, height=420
+            )
 
     # ── Rodapé no Sidebar ────────────────────────────────────────────
     if proc.ultima_atualizacao is not None and pd.notna(proc.ultima_atualizacao):

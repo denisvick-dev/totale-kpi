@@ -70,6 +70,9 @@ from components.upload_base import (
 )
 
 __all__ = [
+    # Aderência à projeção (Produtividade)
+    "calcular_aderencia",
+    "classificar_aderencia",
     # Base operacional (leitura e tratamento)
     "carregar_hierarquia",
     "carregar_lista_ativos",
