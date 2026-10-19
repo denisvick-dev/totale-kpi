@@ -1347,9 +1347,8 @@ def _renderizar_interface_nuvem(
 
     st.markdown(
         """
-        <div style='font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;
-        letter-spacing:0.8px;margin:14px 0 6px;padding-left:4px;'>
-            Envio de Arquivo (Modo Nuvem)
+        <div style='font-size:24px;font-weight:700;color:#1F2937;margin:14px 0 12px;'>
+            Selecione a exportação CSV ou Excel, para rodar a Quebra e a Volumetria
         </div>
         """,
         unsafe_allow_html=True,
@@ -1364,6 +1363,7 @@ def _renderizar_interface_nuvem(
         "Selecione a exportação CSV ou Excel",
         type=["csv", "xlsx", "xlsm", "xls"],
         key="upload_nuvem",
+        label_visibility="collapsed",
     )
 
     # Se a pessoa enviou o arquivo e ele for diferente do já processado (evita loops)

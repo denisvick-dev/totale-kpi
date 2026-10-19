@@ -1090,6 +1090,7 @@ class StreamlitStub:
         self.reruns = 0
         self.reruns_com_scope = 0
         self.com_fragment = com_fragment
+        self.uploads: list[tuple[str, dict[str, object]]] = []
 
     # ── exibição
     def markdown(self, corpo: str, **_kwargs: object) -> None:
@@ -1111,6 +1112,10 @@ class StreamlitStub:
         self.mensagens.append(("error", corpo))
 
     # ── widgets
+    def file_uploader(self, rotulo: str, **kwargs: object):
+        self.uploads.append((rotulo, kwargs))
+        return None
+
     def toggle(self, rotulo: str, value: bool = False, key: str = "", **_kw) -> bool:
         self.mensagens.append(("toggle", rotulo))
         return bool(self.session_state.get(key, value))
@@ -1512,6 +1517,24 @@ def test_rerun_sem_scope_faz_fallback(st_stub) -> None:
 
 
 # ── renderizar_robo_local ───────────────────────────────────────────
+
+
+def test_interface_nuvem_exibe_titulo_e_upload(st_stub) -> None:
+    robo._renderizar_interface_nuvem(None, None, None, 0)
+
+    texto = " ".join(mensagem for _, mensagem in st_stub.mensagens)
+    assert "Selecione a exportação CSV ou Excel, para rodar a Quebra e a Volumetria" in texto
+    assert "Envio de Arquivo (Modo Nuvem)" not in texto
+    assert st_stub.uploads == [
+        (
+            "Selecione a exportação CSV ou Excel",
+            {
+                "type": ["csv", "xlsx", "xlsm", "xls"],
+                "key": "upload_nuvem",
+                "label_visibility": "collapsed",
+            },
+        )
+    ]
 
 
 def test_renderizar_exige_streamlit(monkeypatch) -> None:
