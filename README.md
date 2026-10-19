@@ -123,9 +123,8 @@ python scripts/robot_base.py --pasta-entrada "C:/caminho/das/bases"
 A página **Atualização de Dados** também hospeda o painel do robô local:
 
 - monitora a pasta **Downloads** (ou o caminho configurado) a cada 5 s;
-- para monitorar o Downloads do seu computador, execute o Streamlit localmente
-  nesse computador; no app publicado, o caminho pertence ao servidor e não pode
-  acessar os arquivos do seu Windows;
+- o app publicado não consegue acessar os arquivos locais do Windows. Para
+  enviar automaticamente ao app publicado, use o agente local abaixo;
 - aceita somente arquivos iniciados com `Atividades-` (`*.csv`, `.xlsx`, `.xlsm`, `.xls`);
 - ignora temporários (`~$`, `.tmp`, `.crdownload`) e arquivos em gravação;
 - valida o ZIP do Excel, o encoding/separador do CSV e a estabilidade do arquivo;
@@ -149,10 +148,33 @@ python components/robo_local.py "C:/bases" "dados/cache/robo.csv"
 ```
 
 Para usar uma pasta diferente na interface, abra **⚙️ Pasta monitorada** no painel.
-No Windows, execute `streamlit run streamlit_app.py` na raiz do projeto e abra
-`http://localhost:8501`. Deixe o app aberto para ele detectar automaticamente
-novas exportações na pasta Downloads local. O app hospedado não consegue ler essa
-pasta; nele, use o campo de envio de arquivo.
+
+#### Agente Windows para o app publicado
+
+O agente monitora o Downloads configurado no Windows e envia cada nova
+exportação estável pelo campo de envio do app. Ele abre uma janela de navegador
+persistente; se o app pedir autenticação, entre nela normalmente. Mantenha a
+janela e o agente abertos para continuar o monitoramento. O agente envia somente
+arquivos cujo nome começa com `Atividades-` e com até 80 MB.
+
+Na raiz do projeto, instale o navegador do agente e inicie-o:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-agent.txt
+.\.venv\Scripts\python.exe -m playwright install chromium
+.\scripts\iniciar_agente_downloads.bat
+```
+
+O agente usa `https://totale-kpi.streamlit.app/envio_excel` por padrão. Para
+testar uma única vez ou apontar para outra pasta:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.agente_downloads --uma-vez
+.\.venv\Scripts\python.exe -m scripts.agente_downloads --pasta "C:\bases"
+```
+
+Encerre com `Ctrl+C`. O perfil e a sessão autenticada do navegador ficam no
+`%LOCALAPPDATA%\TotaleKpi\agente-downloads\perfil`.
 
 ### 🗓️ Projeções em dias úteis (Seg–Sáb)
 - A semana útil é de **segunda a sábado** — **domingos não contam**
