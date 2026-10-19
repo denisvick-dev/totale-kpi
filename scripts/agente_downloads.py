@@ -84,7 +84,12 @@ def _sha256(caminho: Path) -> str:
 
 def _validar_url(url: str) -> str:
     analisada = urlparse(url)
-    if analisada.username or analisada.password or analisada.query or analisada.fragment:
+    if (
+        analisada.username
+        or analisada.password
+        or analisada.query
+        or analisada.fragment
+    ):
         raise ValueError("A URL do app não pode conter credenciais ou parâmetros.")
     if analisada.scheme != "https" and analisada.hostname not in {
         "localhost",
@@ -212,9 +217,9 @@ def executar(
                 logger.info("Enviando exportação: %s", candidato.name)
                 campo.set_input_files(str(candidato))
                 try:
-                    pagina.get_by_text(
-                        "Exportação recebida:", exact=False
-                    ).wait_for(state="visible", timeout=90_000)
+                    pagina.get_by_text("Exportação recebida:", exact=False).wait_for(
+                        state="visible", timeout=90_000
+                    )
                 except PlaywrightTimeoutError:
                     logger.error(
                         "O app não confirmou o recebimento de %s; o agente tentará "
