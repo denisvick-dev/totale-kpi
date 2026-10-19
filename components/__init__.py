@@ -5,17 +5,17 @@ Pacote de componentes reutilizáveis do portal TOTALE.
 """
 
 from components.base_operacional import (
-    carregar_base_quebra,
-    carregar_base_volumetria,
+    carregar_hierarquia,
     carregar_lista_ativos,
-    gerar_bases,
+    gerar_bases_upload,
+    hierarquia_de,
     ler_arquivo_bytes,
-    ler_arquivo_caminho,
-    localizar_base,
+    normalizar_erro_worksheet,
     normalizar_lista_ativos,
     preparar_base_quebra,
+    preparar_base_rota_inicial,
     preparar_base_volumetria,
-    status_base,
+    resolver_sheet_id,
 )
 from components.calendario import (
     InfoCalendario,
@@ -61,31 +61,33 @@ from components.criterios import (
     render_lista_colunas,
     render_painel_criterios,
 )
-from components.robo_local import (
-    TotaleRoboEngine,
-    executar_ciclo_headless,
-    renderizar_robo_local,
-    renderizar_sidebar_robo,
+from components.upload_base import (
+    limpar_bases_operacionais,
+    metadados_upload,
+    processar_e_publicar,
+    render_status_upload,
+    render_upload_base_operacional,
 )
 
 __all__ = [
-    # Base operacional (robô)
-    "carregar_base_quebra",
-    "carregar_base_volumetria",
+    # Base operacional (leitura e tratamento)
+    "carregar_hierarquia",
     "carregar_lista_ativos",
-    "gerar_bases",
+    "gerar_bases_upload",
+    "hierarquia_de",
     "ler_arquivo_bytes",
-    "ler_arquivo_caminho",
-    "localizar_base",
+    "normalizar_erro_worksheet",
     "normalizar_lista_ativos",
     "preparar_base_quebra",
+    "preparar_base_rota_inicial",
     "preparar_base_volumetria",
-    "status_base",
-    # Robô local
-    "TotaleRoboEngine",
-    "executar_ciclo_headless",
-    "renderizar_robo_local",
-    "renderizar_sidebar_robo",
+    "resolver_sheet_id",
+    # Upload manual compartilhado
+    "limpar_bases_operacionais",
+    "metadados_upload",
+    "processar_e_publicar",
+    "render_status_upload",
+    "render_upload_base_operacional",
     # Calendário
     "InfoCalendario",
     "carregar_feriados",

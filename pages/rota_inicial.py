@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
 from io import BytesIO
 from typing import Any, Literal
 
-import numpy as np
 import pandas as pd
 import streamlit as st
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from streamlit_gsheets import GSheetsConnection
 
 # ── Componentes corporativos ──────────────────────────────────────────────────
 from components.componentes import (
@@ -21,8 +17,12 @@ from components.componentes import (
     render_hero,
     render_insight,
     render_kpi,
-    render_section,
     render_section_header,
+)
+from components.upload_base import (
+    limpar_bases_operacionais,
+    render_status_upload,
+    render_upload_base_operacional,
 )
 
 # ====================================================
@@ -47,30 +47,6 @@ if "_reset_counter" not in st.session_state:
 # ====================================================
 # 2. CONFIGURAÇÕES GLOBAIS
 # ====================================================
-URL_GSHEETS = (
-    "https://docs.google.com/spreadsheets/d/"
-    "1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
-)
-
-CONTRATO_VALORES_VAZIOS = {"", "NAN", "NONE", "N/A", "NA", "-", "0", "NULL", "<NA>"}
-
-MAPEAMENTO_PERIODOS = {
-    "08:00 - 10:00": "Manhã",
-    "08:00 - 11:00": "Manhã",
-    "08:00 - 12:00": "Manhã",
-    "10:00 - 12:00": "Manhã",
-    "11:00 - 14:00": "Manhã",
-    "12:00 - 14:00": "Tarde I",
-    "12:00 - 15:00": "Tarde I",
-    "12:00 - 18:00": "Tarde II",
-    "14:00 - 16:00": "Tarde II",
-    "14:00 - 17:00": "Tarde II",
-    "15:00 - 18:00": "Tarde II",
-    "16:00 - 18:00": "Tarde II",
-    "17:00 - 20:00": "Tarde II",
-    "Imediata": "Imediata",
-}
-
 CORES_REGIAO = {
     "LESTE": {"bg": "#DBEAFE", "text": "#1E40AF", "border": "#3B82F6"},
     "GRU": {"bg": "#D1FAE5", "text": "#065F46", "border": "#10B981"},
@@ -351,213 +327,12 @@ def gerar_excel(df: pd.DataFrame, aba: str = "Dados") -> bytes:
     return out.getvalue()
 
 
-# ====================================================
-# 5. CARREGAMENTO DE DADOS
-# ====================================================
-@st.cache_data(ttl=600, show_spinner=False)
-def buscar_google_sheets() -> pd.DataFrame:
-    try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(
-            spreadsheet=URL_GSHEETS,
-            usecols=["Login", "Técnico", "Monitor", "Base"],
-        )
-        df = df.dropna(subset=["Login"])
-        df["Login"] = (
-            df["Login"]
-            .astype(str)
-            .str.replace(r"\.0$", "", regex=True)
-            .str.strip()
-            .str.upper()
-        )
-        return df
-    except Exception:
-        return pd.DataFrame(columns=["Login", "Técnico", "Monitor", "Base"])
-
-
-@st.cache_data(show_spinner=False)
-def ler_arquivo(file_bytes: bytes, filename: str) -> pd.DataFrame:
-    bio = BytesIO(file_bytes)
-    try:
-        if filename.lower().endswith(".csv"):
-            try:
-                return pd.read_csv(
-                    bio, sep=None, engine="python", encoding="utf-8-sig", dtype=str
-                )
-            except UnicodeDecodeError:
-                bio.seek(0)
-                return pd.read_csv(
-                    bio, sep=None, engine="python", encoding="latin1", dtype=str
-                )
-        return pd.read_excel(bio, engine="openpyxl", dtype=str)
-    except Exception as e:
-        st.error(f"Erro ao ler arquivo: {e}")
-        return pd.DataFrame()
-
-
-@st.cache_data(show_spinner=False)
-def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFrame:
-    if not isinstance(df_bruto, pd.DataFrame) or df_bruto.empty:
-        return pd.DataFrame()
-
-    _RE_REMOVER_FID = re.compile(r"\bFID\s*(12M|24M)\b", re.IGNORECASE)
-
-    df = df_bruto.copy()
-    df.columns = df.columns.astype(str).str.strip().str.upper()
-
-    mapa = {
-        "CONTRATO": ["CONTRATO"],
-        "LOGIN_TECNICO": ["LOGIN DO TÉCNICO", "LOGIN DO TECNICO"],
-        "STATUS_ATIVIDADE": ["STATUS DA ATIVIDADE"],
-        "STATUS_PRODUTO": [
-            "STATUS DO PRODUTO",
-            "STATUS PRODUTO",
-            "SITUACAO DO PRODUTO",
-            "SITUAÇÃO DO PRODUTO",
-            "STATUS_ITEM",
-        ],
-        "TOTAL_TAREFAS": ["TOTAL DE TAREFAS"],
-        "TIPO_OS": ["TIPO O.S 1"],
-        "HABILIDADE": ["HABILIDADE DE TRABALHO"],
-        "PRODUTO": ["PRODUTO"],
-        "INTERVALO": ["INTERVALO DE TEMPO", "INTERVALO"],
-        "CIDADE": ["CIDADE"],
-        "COORD_X": ["COORDENADA X", "LONGITUDE", "LON"],
-        "COORD_Y": ["COORDENADA Y", "LATITUDE", "LAT"],
-    }
-    for padrao, variacoes in mapa.items():
-        col = next((c for c in df.columns if c in variacoes), None)
-        if col:
-            df = df.rename(columns={col: padrao})
-        else:
-            df[padrao] = np.nan
-
-    contrato = (
-        df["CONTRATO"]
-        .astype("string")
-        .str.replace("\u00a0", " ", regex=False)
-        .str.strip()
-    )
-    mask_vazio = (
-        contrato.isna()
-        | contrato.eq("")
-        | contrato.str.upper().isin(CONTRATO_VALORES_VAZIOS)
-    )
-    removidos = int(mask_vazio.sum())
-    df = df.loc[~mask_vazio].copy()
-    df["CONTRATO"] = contrato.loc[df.index].str.upper()
-
-    if df.empty:
-        return pd.DataFrame()
-
-    df["LOGIN_TECNICO"] = (
-        df["LOGIN_TECNICO"]
-        .astype(str)
-        .str.replace(r"\.0$", "", regex=True)
-        .str.strip()
-        .str.upper()
-    )
-    df["TOTAL_TAREFAS"] = (
-        pd.to_numeric(
-            df["TOTAL_TAREFAS"].astype(str).str.replace(",", "."), errors="coerce"
-        )
-        .fillna(1)
-        .astype(int)
-    )
-    df["STATUS_ATIVIDADE"] = df["STATUS_ATIVIDADE"].astype(str).str.strip().str.upper()
-    if "STATUS_PRODUTO" in df.columns:
-        df["STATUS_PRODUTO"] = df["STATUS_PRODUTO"].astype(str).str.strip().str.upper()
-
-    if isinstance(df_ativos, pd.DataFrame) and not df_ativos.empty:
-        df = df.drop(
-            columns=[
-                c for c in ["Técnico", "Monitor", "Base"] if c.upper() in df.columns
-            ],
-            errors="ignore",
-        )
-        df = df.merge(df_ativos, left_on="LOGIN_TECNICO", right_on="Login", how="left")
-        df = df.rename(columns={"Técnico": "NOME_OFICIAL"})
-
-    df["NOME_OFICIAL"] = df.get("NOME_OFICIAL", df["LOGIN_TECNICO"]).fillna(
-        df["LOGIN_TECNICO"]
-    )
-    df["Monitor"] = df.get("Monitor", pd.Series(dtype=str)).fillna("SEM MONITOR")
-
-    hab = df["HABILIDADE"].astype(str).str.upper()
-    tipo = df["TIPO_OS"].astype(str).str.upper()
-
-    prod = df["PRODUTO"].astype(str).str.upper()
-    prod = prod.str.replace(_RE_REMOVER_FID, "", regex=True)
-    prod = prod.str.replace(r"\s{2,}", " ", regex=True).str.strip()
-    df["PRODUTO"] = prod
-
-    df["Check_GPON"] = hab.str.contains(r"PON\(1/100\)", regex=True, na=False)
-    df["Check_ND"] = tipo.str.contains("ADESAO", na=False)
-    df["Check_Migracao"] = (tipo.str.strip() == "24 - MUDANCA DE PACOTE") & df[
-        "Check_GPON"
-    ]
-    df["Check_PME"] = df["Check_ND"] & hab.str.contains("PME", na=False)
-    df["Check_Streaming"] = hab.str.contains("TV VAS(1/100)", na=False)
-    df["Check_Ponto_Ultra"] = hab.str.contains("NETLAR", na=False)
-    df["Check_4K"] = prod.str.contains("4K", na=False)
-    df["Check_Soundbox"] = prod.str.contains("SOUND", na=False)
-
-    df["PERIODO_TRATADO"] = (
-        df["INTERVALO"]
-        .astype(str)
-        .str.strip()
-        .map(MAPEAMENTO_PERIODOS)
-        .fillna("Outros/Sem Período")
-    )
-
-    cidade = (
-        df["CIDADE"]
-        .fillna("")
-        .astype(str)
-        .str.strip()
-        .str.upper()
-        .apply(
-            lambda v: (
-                unicodedata.normalize("NFKD", v).encode("ASCII", "ignore").decode()
-            )
-        )
-    )
-    df["REGIÃO"] = np.select(
-        [
-            cidade.isin(["SAO PAULO"]),
-            cidade.isin(
-                [
-                    "GUARULHOS",
-                    "ARUJA",
-                    "MOGI DAS CRUZES",
-                    "SUZANO",
-                    "ITAQUAQUECETUBA",
-                    "FERRAZ DE VASCONCELOS",
-                    "POA",
-                ]
-            ),
-            cidade.isin(
-                [
-                    "SANTO ANDRE",
-                    "SAO BERNARDO DO CAMPO",
-                    "SAO CAETANO DO SUL",
-                    "DIADEMA",
-                    "MAUA",
-                    "RIBEIRAO PIRES",
-                    "RIO GRANDE DA SERRA",
-                ]
-            ),
-        ],
-        ["LESTE", "GRU", "ABCDM"],
-        default="OUTRAS",
-    )
-
-    df.attrs["diagnostico"] = {"contrato_vazio": removidos}
-    return df
+# A leitura e o tratamento da base vivem em components/base_operacional
+# (preparar_base_rota_inicial); o envio usa components/upload_base.
 
 
 # ====================================================
-# 6. TABELAS ROTA/TURNO
+# 5. TABELAS ROTA/TURNO
 # ====================================================
 def _fmt_num_br(v: Any) -> str:
     try:
@@ -735,7 +510,7 @@ def render_bloco_rota_turno(df_master: pd.DataFrame, total_montados: int) -> Non
 
 
 # ====================================================
-# 7. APLICAÇÃO PRINCIPAL
+# 6. APLICAÇÃO PRINCIPAL
 # ====================================================
 def main() -> None:
     aplicar_estilo()
@@ -746,61 +521,37 @@ def main() -> None:
         subtitulo="Visão operacional de rotas, serviços premium e distribuição de equipes",
     )
 
-    # ── Sidebar — configurações ──────────────────────
+    # ── Sidebar — base de dados ──────────────────────
     with st.sidebar:
-        st.header("⚙️ Configurações")
-        c_atualizar, c_reiniciar = st.columns(2)
-        with c_atualizar:
-            if st.button(
-                "🤖 Atualizar base",
-                use_container_width=True,
-                help="Reprocessa a base atual e reaplica os cálculos do painel.",
-            ):
-                if "df_master" in st.session_state:
-                    st.session_state["df_master"] = None
-                if "sim_equipe" in st.session_state:
-                    del st.session_state["sim_equipe"]
-                st.session_state["total_montados_manual"] = 0
-                st.session_state["_reset_counter"] = (
-                    int(st.session_state.get("_reset_counter", 0)) + 1
-                )
-                st.rerun()
-        with c_reiniciar:
-            if st.button("🧹 Reiniciar", use_container_width=True):
-                st.session_state["df_master"] = None
-                if "sim_equipe" in st.session_state:
-                    del st.session_state["sim_equipe"]
-                st.session_state["total_montados_manual"] = 0
-                st.session_state["_reset_counter"] = (
-                    int(st.session_state.get("_reset_counter", 0)) + 1
-                )
-                st.rerun()
+        st.header("⚙️ Base de dados")
+        render_status_upload()
+        if st.button(
+            "📁 Trocar base",
+            use_container_width=True,
+            help=(
+                "Limpa as bases operacionais da sessão e volta ao envio "
+                "manual. Vale para Quebra, Volumetria e Rota Inicial, "
+                "que compartilham o mesmo arquivo."
+            ),
+        ):
+            limpar_bases_operacionais()
+            st.session_state.pop("sim_equipe", None)
+            st.session_state["total_montados_manual"] = 0
+            st.session_state["_reset_counter"] = (
+                int(st.session_state.get("_reset_counter", 0)) + 1
+            )
+            st.rerun()
         st.divider()
 
     reset_key = int(st.session_state.get("_reset_counter", 0))
 
-    # ── Upload ───────────────────────────────────────
+    # ── Upload manual ────────────────────────────────
     if st.session_state["df_master"] is None:
-        render_section("📁 Importação de Dados")
-        arq = st.file_uploader(
-            "Selecione a base (Excel/CSV)",
-            type=["xlsx", "csv"],
-            key=f"upload_base_{reset_key}",
+        render_upload_base_operacional(
+            "rota_inicial",
+            titulo="Importação de Dados",
+            recarregar_apos_envio=True,
         )
-        if arq:
-            with st.spinner("Processando..."):
-                raw = ler_arquivo(arq.getvalue(), arq.name)
-                gs = buscar_google_sheets()
-                df_proc = processar_base(raw, gs)
-                st.session_state["df_master"] = df_proc
-
-            diag = df_proc.attrs.get("diagnostico", {})
-            if diag.get("contrato_vazio", 0) > 0:
-                st.toast(
-                    f"🗑️ {diag['contrato_vazio']} linha(s) sem contrato removida(s).",
-                    icon="⚠️",
-                )
-            st.rerun()
         return
 
     df_master = st.session_state["df_master"].copy()

@@ -13,12 +13,10 @@ import pandas as pd
 import streamlit as st
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from streamlit_gsheets import GSheetsConnection
 
 # ====================================================
 # IMPORTAÇÃO DOS COMPONENTES CORPORATIVOS
 # ====================================================
-from components import base_operacional as bo
 from components.calendario import InfoCalendario
 from components.componentes import (
     aplicar_estilo,
@@ -27,6 +25,12 @@ from components.componentes import (
     render_insight,
     render_kpi,
     render_section_header,
+)
+
+from components.upload_base import (
+    limpar_bases_operacionais,
+    render_status_upload,
+    render_upload_base_operacional,
 )
 
 # ==========================================================
@@ -41,9 +45,6 @@ st.set_page_config(
 
 
 class Config:
-    URL_GSHEETS = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
-    META_EXECUCAO = 0.80
-
     COL_STATUS = "STATUS CONTRATO"
     COL_TOTAL = "TOTAL DE TAREFAS"
     COL_TECNICO = "TÉCNICO"
@@ -51,72 +52,6 @@ class Config:
     COL_REGIAO = "REGIÃO"
 
     STATUS_ORDEM = ["Executada", "Não Executada", "Pendente"]
-    CONTRATO_VALORES_VAZIOS = {"", "NAN", "NONE", "N/A", "NA", "-", "0", "NULL"}
-
-
-# ==========================================================
-# UTILITÁRIOS
-# ==========================================================
-class DataLoader:
-    """Leitura e tratamento — reaproveita o mesmo pipeline do robô."""
-
-    @staticmethod
-    @st.cache_data(show_spinner=False)
-    def ler_arquivo(file_bytes: bytes, filename: str) -> pd.DataFrame:
-        return bo.ler_arquivo_bytes(file_bytes, filename)
-
-    @staticmethod
-    @st.cache_data(ttl=600, show_spinner=False)
-    def buscar_hierarquia_gsheets() -> pd.DataFrame:
-        """Lista de ativos (mesma aba da Gestão de Ativos) via robô/base_operacional."""
-        try:
-            return bo.carregar_hierarquia(
-                read_csv=pd.read_csv,
-            )
-        except Exception:
-            return pd.DataFrame()
-
-    @staticmethod
-    @st.cache_data(ttl=900, show_spinner="🤖 Carregando a base automática do robô...")
-    def carregar_base_automatica(forcar: bool = False) -> pd.DataFrame:
-        """
-        Base gerada pelo robô (``dados/cache``).
-
-        O robô lê o arquivo mais recente da pasta monitorada (por padrão,
-        ``Downloads``). Se a pasta não
-        existir ou estiver vazia, devolve um DataFrame vazio e a página cai no
-        upload manual.
-        """
-        try:
-            base = bo.carregar_base_volumetria(
-                forcar=forcar,
-                segredos=lambda: dict(st.secrets["gcp_service_account"]),
-                conexao=lambda: st.connection("gsheets", type=GSheetsConnection),
-                read_csv=pd.read_csv,
-            )
-        except Exception as exc:
-            st.error(f"Falha ao carregar a base automática: {exc}")
-            return pd.DataFrame()
-        return base if base is not None else pd.DataFrame()
-
-    @staticmethod
-    def recarregar_base_automatica() -> pd.DataFrame:
-        """Invalida os caches relacionados e força uma nova leitura do robô."""
-        DataLoader.buscar_hierarquia_gsheets.clear()
-        DataLoader.carregar_base_automatica.clear()
-        return DataLoader.carregar_base_automatica(forcar=True)
-
-    @staticmethod
-    def preparar_base(df: pd.DataFrame, df_gs: pd.DataFrame) -> pd.DataFrame:
-        base = bo.preparar_base_volumetria(df, df_gs)
-        diagnostico = base.attrs.get("diagnostico", {})
-        for aviso in diagnostico.get("avisos", []):
-            st.warning(f"⚠️ {aviso}")
-        for erro in diagnostico.get("erros", []):
-            st.error(f"❌ {erro}")
-        if diagnostico.get("erros"):
-            st.stop()
-        return base
 
 
 # ==========================================================
@@ -238,94 +173,36 @@ def main():
     if "base_data" not in st.session_state:
         st.session_state.base_data = None
 
-    # Não repete a leitura automática se a atualização forçada não encontrar base.
-    tentativa_automatica_realizada = False
-
-    # ── SIDEBAR CONFIGURAÇÕES ─────────────────────────────
+    # ── SIDEBAR: BASE DE DADOS ────────────────────────────
     with st.sidebar:
-        st.header("⚙️ Configurações")
-
-        c_atualizar, c_reiniciar = st.columns(2)
-        with c_atualizar:
-            atualizar = st.button(
-                "🤖 Atualizar base",
-                use_container_width=True,
-                help="Roda o robô: relê o arquivo mais recente da pasta monitorada e refaz o cache.",
-            )
-        with c_reiniciar:
-            reiniciar = st.button("🧹 Reiniciar", use_container_width=True)
-
-        if atualizar:
-            tentativa_automatica_realizada = True
-            with st.spinner("🤖 Robô processando a base ..."):
-                base = DataLoader.recarregar_base_automatica()
-            if base is not None and not base.empty:
-                st.session_state.base_data = base
-                st.rerun()
-            if st.session_state.base_data is not None:
-                st.warning(
-                    "Não foi possível atualizar; a base já carregada foi mantida."
-                )
-            else:
-                st.warning(
-                    "Não foi possível carregar uma base válida. Verifique a pasta "
-                    f"monitorada (`{bo.config().pasta_entrada}`) ou envie o arquivo abaixo."
-                )
-
-        if reiniciar:
-            st.session_state.base_data = None
-            st.rerun()
-
-        st.divider()
-        bo.render_status_base()
-
-        st.divider()
+        st.header("⚙️ Base de dados")
+        render_status_upload()
 
         if st.session_state.base_data is not None:
             diag = st.session_state.base_data.attrs.get("diagnostico", {})
             st.write(f"📥 **Entrada:** {diag.get('Inicial', 0)}")
             st.write(f"🗑️ **Vazios:** {diag.get('Removidos por contrato vazio', 0)}")
             st.write(f"📈 **Processadas:** {diag.get('Final', 0)}")
+            st.divider()
+            if st.button(
+                "📁 Trocar base",
+                use_container_width=True,
+                help=(
+                    "Limpa as bases operacionais da sessão e volta ao envio "
+                    "manual. Vale para Quebra, Volumetria e Rota Inicial, "
+                    "que compartilham o mesmo arquivo."
+                ),
+            ):
+                limpar_bases_operacionais()
+                st.rerun()
 
-    # ── BASE AUTOMÁTICA (ROBÔ) ─────────────────────────────
-    if st.session_state.base_data is None and not tentativa_automatica_realizada:
-        with st.spinner("🤖 Buscando a base gerada pelo robô ..."):
-            base_auto = DataLoader.carregar_base_automatica()
-        if base_auto is not None and not base_auto.empty:
-            st.session_state.base_data = base_auto
-            st.rerun()
-        # Sem arquivo agora: limpa o cache para a próxima tentativa já encontrar
-        # um arquivo novo chegado na pasta monitorada.
-        DataLoader.carregar_base_automatica.clear()
-
-    # ── UPLOAD (FALLBACK) ──────────────────────────────────
+    # ── UPLOAD MANUAL ─────────────────────────────────────
     if st.session_state.base_data is None:
-        render_section_header("upload_file", "Importação Manual")
-        st.caption(
-            "O robô lê automaticamente o arquivo mais recente de "
-            f"`{bo.config().pasta_entrada}`. "
-            "Use o upload apenas quando quiser analisar outro arquivo."
+        render_upload_base_operacional(
+            "volumetria",
+            titulo="Importação Manual",
+            recarregar_apos_envio=True,
         )
-        u = st.file_uploader(
-            "Selecione a base (Excel/CSV)", type=["xlsx", "xls", "csv"]
-        )
-
-        if u:
-            try:
-                with st.spinner("Processando..."):
-                    arquivo = DataLoader.ler_arquivo(u.getvalue(), u.name)
-                    if arquivo.empty:
-                        st.error("O arquivo não possui registros.")
-                        return
-
-                    st.session_state.base_data = DataLoader.preparar_base(
-                        arquivo,
-                        DataLoader.buscar_hierarquia_gsheets(),
-                    )
-                    st.rerun()
-            except Exception as exc:
-                st.error(f"Não foi possível processar o arquivo: {exc}")
-                st.exception(exc)
         return
 
     df_full = st.session_state.base_data

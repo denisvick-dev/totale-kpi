@@ -57,13 +57,6 @@ PAINEIS_OPERACAO = [
     ),
 ]
 
-PAINEL_GESTAO = (
-    "pages/gestao_ativos.py",
-    "👥 Gestão de Ativos",
-    "Administre técnicos, hierarquia, cadastros e relatórios de ativos.",
-)
-
-
 def _status_base_producao() -> str:
     """Indica se as planilhas exigidas pelos painéis foram carregadas na sessão."""
     dados = st.session_state.get("dados_prod")
@@ -161,7 +154,6 @@ def main() -> None:
     )
     _render_grupo_paineis("Performance e metas", "trending_up", PAINEIS_PERFORMANCE)
     _render_grupo_paineis("Operação diária", "engineering", PAINEIS_OPERACAO)
-    _render_grupo_paineis("Gestão de ativos", "groups", [PAINEL_GESTAO])
 
     render_section_header("sync", "Dados e atualização")
     with st.container(border=True):
@@ -169,7 +161,8 @@ def main() -> None:
         with col_info:
             st.markdown("#### 🔄 Atualizar as bases compartilhadas")
             st.caption(
-                "Sincronize os dados de produção e consultivos antes de iniciar "
+                "Envie a base operacional (Quebra, Volumetria e Rota Inicial) e "
+                "sincronize os dados de produção e consultivos antes de iniciar "
                 "a análise. A atualização fica disponível durante esta sessão."
             )
         with col_acao:

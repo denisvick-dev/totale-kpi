@@ -20,7 +20,6 @@ import streamlit as st
 from google.oauth2.service_account import Credentials
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from streamlit_gsheets import GSheetsConnection
 
 from components import base_operacional as bo
 from components.componentes import (
@@ -31,6 +30,12 @@ from components.componentes import (
     render_insight,
     render_kpi,
     render_section_header,
+)
+from components.upload_base import (
+    limpar_bases_operacionais,
+    limpar_cache_lista_ativos,
+    render_status_upload,
+    render_upload_base_operacional,
 )
 from components.criterios import (
     classificar_tipo_servico,
@@ -145,12 +150,12 @@ class Utils:
 # CARREGAMENTO E TRATAMENTO DE DADOS
 # ═══════════════════════════════════════════════════════
 class DataLoader:
-    """Leitura e tratamento — reaproveita o mesmo pipeline do robô."""
+    """Leitura e tratamento — pipeline compartilhado de ``base_operacional``."""
 
     @staticmethod
     @st.cache_data(show_spinner=False)
     def ler_arquivo(file_bytes: bytes, filename: str) -> pd.DataFrame:
-        """Leitura compartilhada com o robô (tudo como texto, como na página)."""
+        """Leitura compartilhada (tudo como texto, como na página)."""
         try:
             return bo.ler_arquivo_bytes(file_bytes, filename, dtype=str)
         except Exception as e:
@@ -161,12 +166,10 @@ class DataLoader:
     @st.cache_data(ttl=300, show_spinner="🔗 Vinculando Lista de Ativos...")
     def buscar_gsheets() -> pd.DataFrame:
         """
-        Lê a mesma aba privada da Gestão de Ativos; só recorre ao CSV público
-        se necessário.
-
-        A implementação vive em ``components/base_operacional`` (mesma usada
-        pelo robô). As dependências são injetadas aqui para manter o cache do
-        Streamlit e os testes de regressão funcionando.
+        Lê a aba ``lista_ativos`` da planilha de ativos; só recorre ao CSV
+        público se necessário. A implementação vive em
+        ``components/base_operacional``; as dependências são injetadas aqui
+        para manter o cache do Streamlit funcionando.
         """
         return bo.carregar_lista_ativos(
             sheet_id=Config.SHEET_ID_ATIVOS,
@@ -176,38 +179,6 @@ class DataLoader:
             autorizar=gspread.authorize,
             read_csv=pd.read_csv,
         )
-
-    @staticmethod
-    @st.cache_data(ttl=900, show_spinner="🤖 Carregando a base automática do robô...")
-    def carregar_base_automatica(forcar: bool = False) -> pd.DataFrame:
-        """
-        Base gerada pelo robô (``dados/cache``).
-
-        O robô lê o arquivo mais recente da pasta monitorada (por padrão,
-        ``Downloads``). Se a pasta não
-        existir ou estiver vazia, devolve um DataFrame vazio e a página cai no
-        upload manual.
-        """
-        try:
-            base = bo.carregar_base_quebra(
-                forcar=forcar,
-                segredos=lambda: dict(st.secrets["gcp_service_account"]),
-                credenciais=Credentials.from_service_account_info,
-                autorizar=gspread.authorize,
-                conexao=lambda: st.connection("gsheets", type=GSheetsConnection),
-                read_csv=pd.read_csv,
-            )
-        except Exception as exc:
-            st.error(f"Falha ao carregar a base automática: {exc}")
-            return pd.DataFrame()
-        return base if base is not None else pd.DataFrame()
-
-    @staticmethod
-    def recarregar_base_automatica() -> pd.DataFrame:
-        """Refaz a base do robô com uma leitura nova da lista de ativos."""
-        DataLoader.buscar_gsheets.clear()
-        DataLoader.carregar_base_automatica.clear()
-        return DataLoader.carregar_base_automatica(forcar=True)
 
     @staticmethod
     def _normalizar_lista_ativos(raw: pd.DataFrame) -> pd.DataFrame:
@@ -297,7 +268,7 @@ class DataLoader:
         erro_ativos: str = "",
     ) -> pd.DataFrame:
         """
-        Tratamento compartilhado com o robô (``components/base_operacional``).
+        Tratamento compartilhado (``components/base_operacional``).
 
         Mantém os ``attrs`` de diagnóstico usados pelas abas da página.
         """
@@ -841,53 +812,16 @@ def main():
     aplicar_estilo()
 
     if "df_memoria" not in st.session_state or st.session_state["df_memoria"] is None:
-        # ── BASE AUTOMÁTICA (ROBÔ) ──────────────────────────────
-        with st.spinner("🤖 Buscando a base gerada pelo robô ..."):
-            base_auto = DataLoader.carregar_base_automatica()
-        if base_auto is not None and not base_auto.empty:
-            st.session_state["df_memoria"] = base_auto
-            st.rerun()
-        # Sem arquivo agora: limpa o cache para a próxima tentativa já encontrar
-        # um arquivo novo chegado na pasta monitorada.
-        DataLoader.carregar_base_automatica.clear()
-
-    if "df_memoria" not in st.session_state or st.session_state["df_memoria"] is None:
         render_hero(
             titulo="Gestão de Quebra de Agenda",
             subtitulo="Importe a base operacional para gerar o Super Relatório Consolidado",
             badge="SISTEMA TOTALE",
         )
-        render_section_header("folder_open", "Carregar Base de Dados", "CSV / XLSX")
-        st.caption(
-            "O robô lê automaticamente o arquivo mais recente de "
-            f"`{bo.config().pasta_entrada}`. "
-            "Use o upload apenas quando quiser analisar outro arquivo."
+        render_upload_base_operacional(
+            "quebra",
+            titulo="Carregar Base de Dados",
+            recarregar_apos_envio=True,
         )
-        arq = st.file_uploader(
-            "Base operacional",
-            type=["xlsx", "csv"],
-            key="uploader_principal",
-            label_visibility="collapsed",
-        )
-
-        if arq:
-            with st.spinner(
-                "🔄 Processando base, classificando segmentos e sincronizando monitores..."
-            ):
-                conteudo = arq.getvalue()
-                raw = DataLoader.ler_arquivo(conteudo, arq.name)
-                if raw.empty:
-                    return
-                gs = DataLoader.buscar_gsheets()
-                df_proc = DataLoader.preparar_base(
-                    raw,
-                    gs,
-                    gs.attrs.get("fonte_ativos", ""),
-                    gs.attrs.get("erro_ativos", ""),
-                )
-                st.session_state["quebra_arquivo"] = (conteudo, arq.name)
-                st.session_state["df_memoria"] = df_proc
-                st.rerun()
         return
 
     df_full = st.session_state["df_memoria"]
@@ -928,43 +862,26 @@ def main():
             if sel_reg != "Todas":
                 df = df[df[Config.COL_REGIAO] == sel_reg]
 
-        st.header("⚙️ Configurações")
-
-        c_atualizar, c_reiniciar = st.columns(2)
-        with c_atualizar:
-            atualizar = st.button(
-                "🤖 Atualizar base",
-                use_container_width=True,
-                help="Roda o robô: relê o arquivo mais recente da pasta monitorada e refaz o cache.",
-            )
-        with c_reiniciar:
-            reiniciar = st.button("🧹 Reiniciar", use_container_width=True)
-
-        if atualizar:
-            with st.spinner("🤖 Robô processando a base ..."):
-                base = DataLoader.recarregar_base_automatica()
-            if base is not None and not base.empty:
-                st.session_state["df_memoria"] = base
-                st.session_state.pop("quebra_arquivo", None)
-                st.rerun()
-            st.warning(
-                "O robô não encontrou uma base em "
-                f"`{bo.config().pasta_entrada}` — envie o arquivo manualmente."
-            )
-
-        if reiniciar:
-            st.session_state["df_memoria"] = None
-            st.session_state.pop("quebra_arquivo", None)
+        st.header("⚙️ Base de dados")
+        render_status_upload()
+        if st.button(
+            "📁 Trocar base",
+            use_container_width=True,
+            help=(
+                "Limpa as bases operacionais da sessão e volta ao envio "
+                "manual. Vale para Quebra, Volumetria e Rota Inicial, "
+                "que compartilham o mesmo arquivo."
+            ),
+        ):
+            limpar_bases_operacionais()
             st.rerun()
-
-        st.divider()
-        bo.render_status_base()
 
         with st.expander("Opções avançadas", expanded=False):
             if st.button("🔗 Atualizar Lista de Ativos", use_container_width=True):
                 arquivo = st.session_state.get("quebra_arquivo")
                 if arquivo:
                     DataLoader.buscar_gsheets.clear()
+                    limpar_cache_lista_ativos()
                     gs = DataLoader.buscar_gsheets()
                     raw = DataLoader.ler_arquivo(*arquivo)
                     st.session_state["df_memoria"] = DataLoader.preparar_base(
@@ -975,21 +892,10 @@ def main():
                     )
                     st.rerun()
                 else:
-                    with st.spinner(
-                        "🔗 Atualizando a lista de ativos na base automática..."
-                    ):
-                        base = DataLoader.recarregar_base_automatica()
-                    if base is not None and not base.empty:
-                        st.session_state["df_memoria"] = base
-                        st.rerun()
                     st.warning(
-                        "Não foi possível atualizar a lista de ativos. Verifique se a "
-                        "base original do robô ainda está disponível ou envie o arquivo."
+                        "O arquivo original não está mais nesta sessão. Use "
+                        "**📁 Trocar base** e envie o arquivo novamente."
                     )
-            if st.button("🔄 Trocar Base de Dados", use_container_width=True):
-                st.session_state["df_memoria"] = None
-                st.session_state.pop("quebra_arquivo", None)
-                st.rerun()
 
     # ── HERO TOPO ──
     render_hero(
