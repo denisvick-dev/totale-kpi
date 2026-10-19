@@ -1389,6 +1389,7 @@ def renderizar_robo_local(
 ) -> None:
     """Função Wrapper que decide se exibe a interface Local (Robô) ou Nuvem (Upload)."""
     _exigir_streamlit()
+    assert st is not None
 
     # ROTEAMENTO HÍBRIDO (LOCAL vs STREAMLIT.APP)
     if _rodando_na_nuvem():
@@ -1409,8 +1410,6 @@ def renderizar_robo_local(
         return
 
     # ------------ MODO LOCAL (ROBÔ ORIGINAL) ------------
-    assert st is not None
-
     if "robo_ativo" not in st.session_state:
         st.session_state["robo_ativo"] = True
     st.session_state["robo_modo_leitura"] = "ultimo"
