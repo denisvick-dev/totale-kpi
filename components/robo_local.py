@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import csv
 import fnmatch
+import hashlib
 import logging
 import math
 import os
@@ -482,6 +483,46 @@ def _listar_candidatos_com_stat(
         candidatos.append((str(arq), mtime, size))
     candidatos.sort(key=lambda item: item[1], reverse=True)
     return candidatos
+
+
+def _salvar_exportacao_enviada(nome: str, conteudo: bytes, pasta: str) -> str:
+    nome_arquivo = Path(nome.replace("\\", "/")).name
+    extensao = Path(nome_arquivo).suffix.lower()
+    if (
+        not nome_arquivo.lower().startswith("atividades-")
+        or extensao not in EXTENSOES_VALIDAS
+    ):
+        raise ValueError(
+            "O nome deve começar com 'Atividades-' e terminar em CSV ou Excel."
+        )
+    if not conteudo:
+        raise ValueError("O arquivo enviado está vazio.")
+    if len(conteudo) > _TAMANHO_MAXIMO_PADRAO:
+        raise ValueError("O arquivo excede o limite de 80 MB.")
+
+    digest = hashlib.sha256(conteudo).hexdigest()[:16]
+    caminho_pasta = Path(pasta)
+    caminho_pasta.mkdir(parents=True, exist_ok=True)
+    caminho_destino = caminho_pasta / (
+        f"{Path(nome_arquivo).stem[:120]}-{digest}{extensao}"
+    )
+    if caminho_destino.exists():
+        return str(caminho_destino)
+
+    descritor, caminho_temporario = tempfile.mkstemp(
+        prefix=".robo-upload-", suffix=".tmp", dir=caminho_pasta
+    )
+    try:
+        with os.fdopen(descritor, "wb") as arquivo:
+            arquivo.write(conteudo)
+        os.replace(caminho_temporario, caminho_destino)
+    except OSError:
+        try:
+            os.unlink(caminho_temporario)
+        except FileNotFoundError:
+            pass
+        raise
+    return str(caminho_destino)
 
 
 def buscar_arquivo_mais_recente(
@@ -1462,8 +1503,8 @@ def _html_painel_robo(
         )
     elif n_candidatos == 0:
         resumo = (
-            "Nenhuma exportação TOTALE encontrada. Salve o arquivo em "
-            f"<code>{escape(pasta)}</code> e o robô assume o restante."
+            "Nenhuma exportação TOTALE encontrada. Envie o arquivo pelo campo acima "
+            "ou salve-o na pasta monitorada do servidor."
         )
     elif sig_ok:
         resumo = (
@@ -1593,8 +1634,8 @@ def _html_pasta_vazia(pasta: str, ativo: bool) -> str:
     if ativo:
         titulo = "Monitorando novas exportações"
         detalhe = (
-            "Nenhum arquivo TOTALE nesta pasta ainda. Salve a exportação em "
-            f"{pasta} — o robô detecta sozinho."
+            "Nenhum arquivo TOTALE nesta pasta ainda. Envie a exportação pelo campo "
+            f"acima ou salve-a na pasta monitorada do servidor: {pasta}."
         )
     else:
         titulo = "Sincronização pausada"
@@ -1615,7 +1656,10 @@ def _html_passos_robo() -> str:
         ),
         ("Valida", "Confere estabilidade, tamanho, ZIP do Excel e encoding do CSV."),
         ("Trata", "Padroniza texto, bases e colunas antes de qualquer publicação."),
-        ("Publica", "Atualiza a base da sessão e libera os painéis sem upload manual."),
+        (
+            "Publica",
+            "Atualiza a base da sessão após detectar ou receber o arquivo.",
+        ),
     )
     itens = "".join(
         f'<div class="robo-step"><b><span>{i:02d}</span>{escape(titulo)}</b>'
@@ -1800,6 +1844,30 @@ def renderizar_robo_local(
         st.session_state["robo_pasta_alvo"] = pasta_padrao
 
     pasta_alvo = str(st.session_state["robo_pasta_alvo"])
+    upload = st.file_uploader(
+        "Enviar exportação do computador",
+        type=["csv", "xlsx", "xlsm", "xls"],
+        key="robo_upload_exportacao",
+        help=(
+            "Em um app publicado, o robô não acessa o Downloads do seu computador. "
+            "Envie aqui uma exportação cujo nome comece com Atividades-."
+        ),
+    )
+    if upload is not None:
+        try:
+            caminho_enviado = _salvar_exportacao_enviada(
+                upload.name, upload.getvalue(), pasta_alvo
+            )
+            st.success(
+                f"Exportação recebida: {Path(caminho_enviado).name}. "
+                "O robô vai processá-la automaticamente."
+            )
+        except ValueError as exc:
+            st.error(str(exc))
+        except OSError as exc:
+            logger.exception("Não foi possível salvar a exportação enviada.")
+            st.error(f"Não foi possível salvar a exportação: {exc}")
+
     recursivo = _estado_bool("robo_recursivo", False)
     modo = _modo_atual()
     candidatos_ui = _listar_candidatos_com_stat(pasta_alvo, recursivo=recursivo)

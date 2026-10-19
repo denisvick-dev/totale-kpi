@@ -191,6 +191,35 @@ def test_xlsx_truncado_e_rejeitado_com_mensagem_clara(tmp_path):
 
 
 # ── Descoberta e ciclo ──────────────────────────────────────────────
+def test_upload_salva_exportacao_no_servidor_e_robô_a_detecta(tmp_path):
+    conteudo = b"nome;valor\nAna;1\n"
+
+    caminho = robo._salvar_exportacao_enviada(
+        "Atividades-SPO-2026.csv", conteudo, str(tmp_path / "Downloads")
+    )
+    repetido = robo._salvar_exportacao_enviada(
+        "Atividades-SPO-2026.csv", conteudo, str(tmp_path / "Downloads")
+    )
+
+    assert caminho == repetido
+    assert Path(caminho).read_bytes() == conteudo
+    assert robo.detectar_base_arquivo(caminho) == "NET-LESTE"
+    assert robo._listar_candidatos_com_stat(str(tmp_path / "Downloads"))[0][0] == caminho
+
+
+@pytest.mark.parametrize(
+    ("nome", "conteudo", "mensagem"),
+    [
+        ("Relatorio.csv", b"nome\nAna\n", "Atividades-"),
+        ("Atividades-SPO.txt", b"nome\nAna\n", "Atividades-"),
+        ("Atividades-SPO.csv", b"", "vazio"),
+    ],
+)
+def test_upload_rejeita_arquivo_invalido(tmp_path, nome, conteudo, mensagem):
+    with pytest.raises(ValueError, match=mensagem):
+        robo._salvar_exportacao_enviada(nome, conteudo, str(tmp_path))
+
+
 def test_pasta_padrao_usa_downloads_configurado_no_windows(tmp_path, monkeypatch):
     downloads = tmp_path / "OneDrive" / "Downloads"
     downloads.mkdir(parents=True)
@@ -292,6 +321,7 @@ def test_painel_renderiza_bases_e_nao_quebra_sem_arquivos(tmp_path):
     app = _app_robo(tmp_path)
 
     assert not app.exception
+    assert app.get("file_uploader")[0].label == "Enviar exportação do computador"
     painel = _markdown(app)
     assert "Bases locais prontas para os painéis" in painel
     assert "NET-ABCDM" in painel
