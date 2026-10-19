@@ -127,7 +127,8 @@ Downloads do computador e envia os arquivos ao app. Veja o [guia do agente](docs
 
 - monitora a pasta configurada a cada 5 s quando o caminho é acessível ao processo;
 - o app publicado não acessa arquivos locais diretamente;
-- aceita somente arquivos iniciados com `Atividades-` (`*.csv`, `.xlsx`, `.xlsm`, `.xls`);
+- aceita `*.csv`, `.xlsx`, `.xlsm` e `.xls` cujo nome siga `Atividades-*`, contenha
+  `atividades` ou traga o marcador da base (`SPO`, `GRS`, `ABCDM`);
 - ignora temporários (`~$`, `.tmp`, `.crdownload`) e arquivos em gravação;
 - valida o ZIP do Excel, o encoding/separador do CSV e a estabilidade do arquivo;
 - publica a base tratada em `df_memoria` para os painéis e mantém a versão bruta
@@ -139,8 +140,11 @@ Downloads do computador e envia os arquivos ao app. Veja o [guia do agente](docs
   duplicados e desligados), então o vínculo não depende do formato da aba;
 - se a planilha estiver inacessível ou nenhum login coincidir, a prévia da
   base publicada exibe um aviso — o merge vazio não passa mais despercebido;
-- mostra o status de cada base (SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM), a fila
-  da pasta e o diagnóstico do último ciclo.
+- entra no pipeline apenas o arquivo mais recente da pasta; os demais aparecem
+  como "fora do pipeline" no painel;
+- mostra o status de cada base (SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM), a
+  contagem de candidatos/fila, a estabilidade do ciclo e o último erro, com os
+  botões **🧹 Limpar** e **🔄 Retentar**.
 
 Uso via terminal (sem Streamlit):
 
@@ -149,7 +153,7 @@ python components/robo_local.py "C:/Users/<usuario>/Downloads"
 python components/robo_local.py "C:/bases" "dados/cache/robo.csv"
 ```
 
-Para usar uma pasta diferente na interface, abra **⚙️ Pasta monitorada** no painel.
+Para usar uma pasta diferente na interface, abra **⚙️ Configurar Pasta** no painel.
 
 #### Agente Windows para o app publicado
 
