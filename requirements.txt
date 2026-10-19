@@ -8,4 +8,13 @@ xlrd
 requests
 gspread
 google-auth
-st-gsheets-connection
+google-auth-oauthlib
+altair
+pydeck
+pyarrow
+pillow
+matplotlib
+reportlab
+xlsxwriter
+fastapi
+starlette<1.7.0
