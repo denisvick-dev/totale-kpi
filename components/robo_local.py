@@ -383,8 +383,10 @@ def _obter_pasta_downloads_windows() -> Path | None:
 
 
 def obter_pasta_robo_padrao() -> str:
-    """Retorna a pasta Downloads configurada para o usuário atual."""
+    # 1ª tentativa: API do Windows (SHGetKnownFolderPath)
+    #    → retorna C:\Users\João\Downloads (exemplo)
     robo = _obter_pasta_downloads_windows() or Path.home() / "Downloads"
+    #                 ↑ fallback: também resolve para o usuário logado
     robo.mkdir(parents=True, exist_ok=True)
     return str(robo.resolve())
 
