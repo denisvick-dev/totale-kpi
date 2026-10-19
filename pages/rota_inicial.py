@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from io import BytesIO
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -17,23 +17,12 @@ from streamlit_gsheets import GSheetsConnection
 # ── Componentes corporativos ──────────────────────────────────────────────────
 from components.componentes import (
     aplicar_estilo,
+    estilizar_dataframe,
     render_hero,
+    render_insight,
     render_kpi,
     render_section,
     render_section_header,
-    render_insight,
-    FONTE_TEXTO,
-    FONTE_TITULO,
-    COR_PRIMARIA,
-    COR_SECUNDARIA,
-    COR_SUCESSO,
-    COR_ALERTA,
-    COR_NEUTRO,
-    COR_TEXTO,
-    COR_TEXTO_2,
-    COR_TEXTO_3,
-    COR_BORDA,
-    COR_FUNDO,
 )
 
 # ====================================================
@@ -82,25 +71,14 @@ MAPEAMENTO_PERIODOS = {
     "Imediata": "Imediata",
 }
 
-TEMAS_CARD = {
-    "amarelo":  {"fundo": "#FEF9C3", "texto": "#854D0E", "borda": "#EAB308", "titulo": "#A16207"},
-    "azul":     {"fundo": "#F0F9FF", "texto": "#0369A1", "borda": "#0EA5E9", "titulo": "#075985"},
-    "verde":    {"fundo": "#F0FDF4", "texto": "#15803D", "borda": "#22C55E", "titulo": "#166534"},
-    "roxo":     {"fundo": "#FAF5FF", "texto": "#7E22CE", "borda": "#A855F7", "titulo": "#6B21A8"},
-    "cinza":    {"fundo": "#F8FAFC", "texto": "#334155", "borda": "#94A3B8", "titulo": "#64748B"},
-    "escuro":   {"fundo": "#1E293B", "texto": "#FFFFFF", "borda": "#475569", "titulo": "#E2E8F0"},
-    "laranja":  {"fundo": "#FFF7ED", "texto": "#C2410C", "borda": "#F97316", "titulo": "#9A3412"},
-    "vermelho": {"fundo": "#FEF2F2", "texto": "#B91C1C", "borda": "#EF4444", "titulo": "#991B1B"},
-}
-
 CORES_REGIAO = {
-    "LESTE":  {"bg": "#DBEAFE", "text": "#1E40AF", "border": "#3B82F6"},
-    "GRU":    {"bg": "#D1FAE5", "text": "#065F46", "border": "#10B981"},
-    "ABCDM":  {"bg": "#EDE9FE", "text": "#5B21B6", "border": "#8B5CF6"},
+    "LESTE": {"bg": "#DBEAFE", "text": "#1E40AF", "border": "#3B82F6"},
+    "GRU": {"bg": "#D1FAE5", "text": "#065F46", "border": "#10B981"},
+    "ABCDM": {"bg": "#EDE9FE", "text": "#5B21B6", "border": "#8B5CF6"},
     "OUTRAS": {"bg": "#F1F5F9", "text": "#475569", "border": "#94A3B8"},
 }
 
-RENOMEAR_COLUNAS: Dict[str, str] = {
+RENOMEAR_COLUNAS: dict[str, str] = {
     "Monitor": "Monitor",
     "OS": "Volume de O.S.",
     "GPON": "GPON",
@@ -165,88 +143,82 @@ def _injetar_css_local() -> None:
             font-weight:700; position:relative; z-index:2;
         }
 
-        /* ── Tabelas Rota/Turno ── */
+        /* ── Tabelas Rota/Turno (Visual Corporativo TOTALE) ── */
         .rota-wrapper {
-            margin: 24px 0;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-            border-radius: 12px; overflow: hidden; border: 1px solid #E2E8F0;
+            margin: 22px 0;
+            box-shadow: 0 8px 24px rgba(10, 47, 107, 0.08);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #DCE5F0;
+            background: #FFFFFF;
         }
         .rota-titulo {
-            background: #0F172A; color: #F8FAFC;
-            font-weight: 700; font-size: 14px; text-align: left;
-            padding: 14px 20px; letter-spacing: 0.5px;
-            text-transform: uppercase; border-bottom: 3px solid #312E81;
+            background: linear-gradient(115deg, #092452 0%, #0A2F6B 65%, #164583 100%);
+            color: #FFFFFF;
+            font-weight: 800;
+            font-size: 13.5px;
+            text-align: left;
+            padding: 13px 20px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            border-bottom: 3px solid #E8700A;
         }
         table.rota-tab {
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: white; font-size: 13px;
         }
         table.rota-tab th {
-            background: #1E293B; color: #F1F5F9;
-            font-weight: 600; font-size: 11px;
+            background: #0F2547; color: #F8FAFC;
+            font-weight: 700; font-size: 11px;
             text-transform: uppercase; letter-spacing: 0.05em;
-            padding: 12px 14px; text-align: center;
-            border-bottom: 1px solid #334155;
+            padding: 11px 14px; text-align: center;
+            border-bottom: 1px solid #1E3A6D;
         }
-        table.rota-tab th.th-os     { background: #2E2514; color: #FBBF24; }
+        table.rota-tab th.th-os     { background: #3B2106; color: #FDBA74; }
         table.rota-tab th.th-equipe { background: #064E3B; color: #6EE7B7; }
         table.rota-tab th.th-media  { background: #1E3A8A; color: #93C5FD; }
         table.rota-tab td {
             padding: 10px 14px; text-align: center;
-            border-bottom: 1px solid #F1F5F9;
-            color: #334155; font-variant-numeric: tabular-nums;
+            border-bottom: 1px solid #EEF2F6;
+            color: #1E293B; font-variant-numeric: tabular-nums;
         }
         table.rota-tab td.col-monitor {
-            text-align: left; font-weight: 600; padding-left: 20px; color: #0F172A;
+            text-align: left; font-weight: 700; padding-left: 20px; color: #0A2F6B;
         }
         table.rota-tab td.col-os {
-            background: #FFFBEB; font-weight: 700; color: #92400E;
-            border-left: 1px solid #FEF3C7; border-right: 1px solid #FEF3C7;
+            background: #FFF7ED; font-weight: 700; color: #9A3412;
+            border-left: 1px solid #FFEDD5; border-right: 1px solid #FFEDD5;
         }
         table.rota-tab td.col-equipe {
-            background: #F0FDF4; font-weight: 700; color: #166534;
+            background: #ECFDF5; font-weight: 700; color: #065F46;
             border-left: 1px solid #D1FAE5; border-right: 1px solid #D1FAE5;
         }
         table.rota-tab td.col-media {
-            background: #F8FAFC; font-weight: 700; color: #1E293B;
+            background: #F8FAFC; font-weight: 700; color: #0A2F6B;
         }
         table.rota-tab tr.total-escalados td {
-            background: #F1F5F9; color: #0F172A; font-weight: 700; font-size: 13px;
-            border-top: 2px solid #CBD5E1; border-bottom: 1px solid #CBD5E1;
+            background: #EAF2FC; color: #0A2F6B; font-weight: 700; font-size: 13px;
+            border-top: 2px solid #0A2F6B; border-bottom: 1px solid #C8DCF5;
         }
         table.rota-tab tr.total-escalados td.col-os     { background: #FEF3C7; color: #92400E; }
         table.rota-tab tr.total-escalados td.col-equipe { background: #D1FAE5; color: #065F46; }
-        table.rota-tab tr.total-escalados td.col-media  { background: #E2E8F0; color: #0F172A; }
+        table.rota-tab tr.total-escalados td.col-media  { background: #DBEAFE; color: #0A2F6B; }
         table.rota-tab tr.total-montados td {
-            background: #E2E8F0; color: #0F172A; font-weight: 800; font-size: 13px;
+            background: #DCE8F8; color: #092452; font-weight: 800; font-size: 13px;
             border-bottom: none;
         }
         table.rota-tab tr.total-montados td.col-os     { background: #FDE68A; color: #78350F; }
         table.rota-tab tr.total-montados td.col-equipe { background: #A7F3D0; color: #064E3B; }
-        table.rota-tab tr.total-montados td.col-media  { background: #CBD5E1; color: #0F172A; }
+        table.rota-tab tr.total-montados td.col-media  { background: #BFDBFE; color: #092452; }
         table.rota-tab tbody tr:nth-child(even):not(.total-escalados):not(.total-montados) td
-            { background: #FAFAFA; }
+            { background: #F8FAFC; }
         table.rota-tab tbody tr:nth-child(even):not(.total-escalados):not(.total-montados) td.col-os
-            { background: #FFFDF5; }
+            { background: #FFFBEB; }
         table.rota-tab tbody tr:nth-child(even):not(.total-escalados):not(.total-montados) td.col-equipe
-            { background: #F4FDF7; }
+            { background: #F0FDF4; }
         table.rota-tab tbody tr:hover:not(.total-escalados):not(.total-montados) td
-            { background: #F1F5F9; }
+            { background: #EFF6FF; }
 
-        /* ── DataFrames estilizados ── */
-        .styled-table-wrapper {
-            background: #FFFFFF; border-radius: 0.75rem;
-            padding: 1rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            margin-bottom: 0.5rem;
-        }
-        .styled-table-title {
-            font-size: 1rem; font-weight: 700; color: #0F172A;
-            margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem;
-        }
-        .styled-table-badge {
-            font-size: 0.68rem; background: #E0F2FE; color: #0369A1;
-            padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600;
-        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -256,7 +228,7 @@ def _injetar_css_local() -> None:
 # ====================================================
 # 4. COMPONENTES LOCAIS
 # ====================================================
-def render_resultado_base(regioes: List[str], total: int) -> None:
+def render_resultado_base(regioes: list[str], total: int) -> None:
     badges = ""
     for reg in sorted(regioes):
         c = CORES_REGIAO.get(reg, CORES_REGIAO["OUTRAS"])
@@ -282,27 +254,17 @@ def render_dataframe_local(
     titulo: str = "",
     icone: str = "📊",
     badge: str = "",
-    fmt: Optional[Dict[str, Any]] = None,
-    color_col: Optional[str] = None,
-    color_meta: Optional[float] = None,
+    fmt: dict[str, Any] | None = None,
+    color_col: str | None = None,
+    color_meta: float | None = None,
     color_invertido: bool = False,
     height: int | Literal["auto", "stretch", "content"] = "auto",
 ) -> None:
     badge_text = badge or f"{len(df)} registros"
-    st.markdown(
-        f"""
-        <div class="styled-table-wrapper">
-            <div class="styled-table-title">
-                <span>{icone}</span><span>{titulo}</span>
-                <span class="styled-table-badge">{badge_text}</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    render_section_header(icone, titulo, badge_text)
 
     df_display = df.copy()
-    colunas_para_renomear: Dict[str, str] = {}
+    colunas_para_renomear: dict[str, str] = {}
     nomes_existentes = set(df_display.columns)
     nomes_ja_usados: set[str] = set()
 
@@ -310,8 +272,7 @@ def render_dataframe_local(
         if col_original in RENOMEAR_COLUNAS:
             novo_nome = RENOMEAR_COLUNAS[col_original]
             if novo_nome == col_original or (
-                novo_nome not in nomes_existentes
-                and novo_nome not in nomes_ja_usados
+                novo_nome not in nomes_existentes and novo_nome not in nomes_ja_usados
             ):
                 colunas_para_renomear[col_original] = novo_nome
                 nomes_ja_usados.add(novo_nome)
@@ -324,10 +285,24 @@ def render_dataframe_local(
         color_col = colunas_para_renomear.get(color_col, color_col)
 
     colunas_int_originais = [
-        "Executada", "Não Executada", "Pendente", "Baixadas",
-        "Total Alocado", "Projeção", "Alocado", "Considerado",
-        "OS", "GPON", "ND", "PME", "Migração",
-        "Qtd_4K", "Ultra", "Soundbox", "Equipe", "TOTAL_TAREFAS",
+        "Executada",
+        "Não Executada",
+        "Pendente",
+        "Baixadas",
+        "Total Alocado",
+        "Projeção",
+        "Alocado",
+        "Considerado",
+        "OS",
+        "GPON",
+        "ND",
+        "PME",
+        "Migração",
+        "Qtd_4K",
+        "Ultra",
+        "Soundbox",
+        "Equipe",
+        "TOTAL_TAREFAS",
     ]
     for c in [colunas_para_renomear.get(c, c) for c in colunas_int_originais]:
         if c in df_display.columns:
@@ -335,11 +310,10 @@ def render_dataframe_local(
                 pd.to_numeric(df_display[c], errors="coerce").fillna(0).astype(int)
             )
 
-    styler = df_display.style
-    if fmt:
-        styler = styler.format(fmt)
+    styler = estilizar_dataframe(df_display, fmt)
 
     if color_col and color_col in df_display.columns and color_meta is not None:
+
         def _cor(val: Any) -> str:
             try:
                 v = float(val)
@@ -360,21 +334,7 @@ def render_dataframe_local(
 
         styler = styler.map(_cor, subset=pd.Index([color_col]))
 
-    styler = styler.set_table_styles([
-        {"selector": "th", "props": [
-            ("background-color", "#0F172A"), ("color", "#FFFFFF"),
-            ("font-size", "0.78rem"), ("font-weight", "700"),
-            ("text-transform", "uppercase"), ("letter-spacing", "0.03em"),
-            ("padding", "0.6rem 0.8rem"), ("border", "none"),
-        ]},
-        {"selector": "td", "props": [
-            ("font-size", "0.82rem"), ("padding", "0.5rem 0.8rem"),
-            ("border-bottom", "1px solid #F1F5F9"),
-        ]},
-        {"selector": "tr:hover td", "props": [("background-color", "#F8FAFC")]},
-    ])
-
-    st.dataframe(styler, use_container_width=True, hide_index=True, height="auto")
+    st.dataframe(styler, use_container_width=True, hide_index=True, height=height)
 
 
 def gerar_excel(df: pd.DataFrame, aba: str = "Dados") -> bytes:
@@ -404,9 +364,11 @@ def buscar_google_sheets() -> pd.DataFrame:
         )
         df = df.dropna(subset=["Login"])
         df["Login"] = (
-            df["Login"].astype(str)
+            df["Login"]
+            .astype(str)
             .str.replace(r"\.0$", "", regex=True)
-            .str.strip().str.upper()
+            .str.strip()
+            .str.upper()
         )
         return df
     except Exception:
@@ -448,8 +410,11 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
         "LOGIN_TECNICO": ["LOGIN DO TÉCNICO", "LOGIN DO TECNICO"],
         "STATUS_ATIVIDADE": ["STATUS DA ATIVIDADE"],
         "STATUS_PRODUTO": [
-            "STATUS DO PRODUTO", "STATUS PRODUTO",
-            "SITUACAO DO PRODUTO", "SITUAÇÃO DO PRODUTO", "STATUS_ITEM",
+            "STATUS DO PRODUTO",
+            "STATUS PRODUTO",
+            "SITUACAO DO PRODUTO",
+            "SITUAÇÃO DO PRODUTO",
+            "STATUS_ITEM",
         ],
         "TOTAL_TAREFAS": ["TOTAL DE TAREFAS"],
         "TIPO_OS": ["TIPO O.S 1"],
@@ -468,11 +433,14 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
             df[padrao] = np.nan
 
     contrato = (
-        df["CONTRATO"].astype("string")
-        .str.replace("\u00a0", " ", regex=False).str.strip()
+        df["CONTRATO"]
+        .astype("string")
+        .str.replace("\u00a0", " ", regex=False)
+        .str.strip()
     )
     mask_vazio = (
-        contrato.isna() | contrato.eq("")
+        contrato.isna()
+        | contrato.eq("")
         | contrato.str.upper().isin(CONTRATO_VALORES_VAZIOS)
     )
     removidos = int(mask_vazio.sum())
@@ -483,26 +451,28 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
         return pd.DataFrame()
 
     df["LOGIN_TECNICO"] = (
-        df["LOGIN_TECNICO"].astype(str)
+        df["LOGIN_TECNICO"]
+        .astype(str)
         .str.replace(r"\.0$", "", regex=True)
-        .str.strip().str.upper()
+        .str.strip()
+        .str.upper()
     )
     df["TOTAL_TAREFAS"] = (
         pd.to_numeric(
             df["TOTAL_TAREFAS"].astype(str).str.replace(",", "."), errors="coerce"
-        ).fillna(1).astype(int)
-    )
-    df["STATUS_ATIVIDADE"] = (
-        df["STATUS_ATIVIDADE"].astype(str).str.strip().str.upper()
-    )
-    if "STATUS_PRODUTO" in df.columns:
-        df["STATUS_PRODUTO"] = (
-            df["STATUS_PRODUTO"].astype(str).str.strip().str.upper()
         )
+        .fillna(1)
+        .astype(int)
+    )
+    df["STATUS_ATIVIDADE"] = df["STATUS_ATIVIDADE"].astype(str).str.strip().str.upper()
+    if "STATUS_PRODUTO" in df.columns:
+        df["STATUS_PRODUTO"] = df["STATUS_PRODUTO"].astype(str).str.strip().str.upper()
 
     if isinstance(df_ativos, pd.DataFrame) and not df_ativos.empty:
         df = df.drop(
-            columns=[c for c in ["Técnico", "Monitor", "Base"] if c.upper() in df.columns],
+            columns=[
+                c for c in ["Técnico", "Monitor", "Base"] if c.upper() in df.columns
+            ],
             errors="ignore",
         )
         df = df.merge(df_ativos, left_on="LOGIN_TECNICO", right_on="Login", how="left")
@@ -523,7 +493,9 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
 
     df["Check_GPON"] = hab.str.contains(r"PON\(1/100\)", regex=True, na=False)
     df["Check_ND"] = tipo.str.contains("ADESAO", na=False)
-    df["Check_Migracao"] = (tipo.str.strip() == "24 - MUDANCA DE PACOTE") & df["Check_GPON"]
+    df["Check_Migracao"] = (tipo.str.strip() == "24 - MUDANCA DE PACOTE") & df[
+        "Check_GPON"
+    ]
     df["Check_PME"] = df["Check_ND"] & hab.str.contains("PME", na=False)
     df["Check_Streaming"] = hab.str.contains("TV VAS(1/100)", na=False)
     df["Check_Ponto_Ultra"] = hab.str.contains("NETLAR", na=False)
@@ -531,28 +503,50 @@ def processar_base(df_bruto: pd.DataFrame, df_ativos: pd.DataFrame) -> pd.DataFr
     df["Check_Soundbox"] = prod.str.contains("SOUND", na=False)
 
     df["PERIODO_TRATADO"] = (
-        df["INTERVALO"].astype(str).str.strip()
-        .map(MAPEAMENTO_PERIODOS).fillna("Outros/Sem Período")
+        df["INTERVALO"]
+        .astype(str)
+        .str.strip()
+        .map(MAPEAMENTO_PERIODOS)
+        .fillna("Outros/Sem Período")
     )
 
     cidade = (
-        df["CIDADE"].fillna("").astype(str).str.strip().str.upper()
+        df["CIDADE"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.upper()
         .apply(
-            lambda v: unicodedata.normalize("NFKD", v)
-            .encode("ASCII", "ignore").decode()
+            lambda v: (
+                unicodedata.normalize("NFKD", v).encode("ASCII", "ignore").decode()
+            )
         )
     )
     df["REGIÃO"] = np.select(
         [
             cidade.isin(["SAO PAULO"]),
-            cidade.isin([
-                "GUARULHOS", "ARUJA", "MOGI DAS CRUZES", "SUZANO",
-                "ITAQUAQUECETUBA", "FERRAZ DE VASCONCELOS", "POA",
-            ]),
-            cidade.isin([
-                "SANTO ANDRE", "SAO BERNARDO DO CAMPO", "SAO CAETANO DO SUL",
-                "DIADEMA", "MAUA", "RIBEIRAO PIRES", "RIO GRANDE DA SERRA",
-            ]),
+            cidade.isin(
+                [
+                    "GUARULHOS",
+                    "ARUJA",
+                    "MOGI DAS CRUZES",
+                    "SUZANO",
+                    "ITAQUAQUECETUBA",
+                    "FERRAZ DE VASCONCELOS",
+                    "POA",
+                ]
+            ),
+            cidade.isin(
+                [
+                    "SANTO ANDRE",
+                    "SAO BERNARDO DO CAMPO",
+                    "SAO CAETANO DO SUL",
+                    "DIADEMA",
+                    "MAUA",
+                    "RIBEIRAO PIRES",
+                    "RIO GRANDE DA SERRA",
+                ]
+            ),
         ],
         ["LESTE", "GRU", "ABCDM"],
         default="OUTRAS",
@@ -581,8 +575,8 @@ def _fmt_media_br(v: Any) -> str:
 
 def calcular_tabela_rota_turno(
     df: pd.DataFrame,
-    turno: Optional[str] = None,
-    total_equipe_montada: Optional[int] = None,
+    turno: str | None = None,
+    total_equipe_montada: int | None = None,
 ) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame()
@@ -594,7 +588,9 @@ def calcular_tabela_rota_turno(
         return pd.DataFrame()
 
     df_work = df_work[
-        ~df_work["Monitor"].astype(str).str.upper()
+        ~df_work["Monitor"]
+        .astype(str)
+        .str.upper()
         .isin({"NAN", "SEM MONITOR", "NÃO MAPEADO", ""})
     ].copy()
     if df_work.empty:
@@ -604,51 +600,67 @@ def calcular_tabela_rota_turno(
         pd.to_numeric(df_work["TOTAL_TAREFAS"], errors="coerce").fillna(1).astype(int)
     )
 
-    linhas: List[Dict[str, Any]] = []
+    linhas: list[dict[str, Any]] = []
     for mon in sorted(df_work["Monitor"].unique()):
         df_mon = df_work[df_work["Monitor"] == mon]
         total_os = int(df_mon["TOTAL_TAREFAS"].sum())
         equipe = int(df_mon["LOGIN_TECNICO"].nunique())
-        linhas.append({
-            "Monitor": mon,
-            "WO": int(df_mon["Check_ND"].sum()),
-            "GPON": int(df_mon["Check_GPON"].sum()),
-            "OS": total_os,
-            "ND": int(df_mon["Check_ND"].sum()),
-            "Migração": int(df_mon["Check_Migracao"].sum()),
-            "Equipe": equipe,
-            "Média": total_os / equipe if equipe > 0 else 0.0,
-        })
+        linhas.append(
+            {
+                "Monitor": mon,
+                "WO": int(df_mon["Check_ND"].sum()),
+                "GPON": int(df_mon["Check_GPON"].sum()),
+                "OS": total_os,
+                "ND": int(df_mon["Check_ND"].sum()),
+                "Migração": int(df_mon["Check_Migracao"].sum()),
+                "Equipe": equipe,
+                "Média": total_os / equipe if equipe > 0 else 0.0,
+            }
+        )
 
     df_out = pd.DataFrame(linhas)
     total_os_g = int(df_out["OS"].sum())
     total_eq_escalados = int(df_out["Equipe"].sum())
     total_eq_montados = (
-        total_equipe_montada if total_equipe_montada is not None
+        total_equipe_montada
+        if total_equipe_montada is not None
         else int(df_work["LOGIN_TECNICO"].nunique())
     )
 
-    df_out = pd.concat([
-        df_out,
-        pd.DataFrame([
-            {
-                "Monitor": "Total Geral | Escalados",
-                "WO": int(df_out["WO"].sum()), "GPON": int(df_out["GPON"].sum()),
-                "OS": total_os_g, "ND": int(df_out["ND"].sum()),
-                "Migração": int(df_out["Migração"].sum()),
-                "Equipe": total_eq_escalados,
-                "Média": total_os_g / total_eq_escalados if total_eq_escalados else 0.0,
-            },
-            {
-                "Monitor": "Total Geral | Montados",
-                "WO": int(df_out["WO"].sum()), "GPON": int(df_out["GPON"].sum()),
-                "OS": total_os_g, "ND": int(df_out["ND"].sum()),
-                "Migração": int(df_out["Migração"].sum()),
-                "Equipe": total_eq_montados,
-                "Média": total_os_g / total_eq_montados if total_eq_montados else 0.0,
-            },
-        ]),
-    ], ignore_index=True)
+    df_out = pd.concat(
+        [
+            df_out,
+            pd.DataFrame(
+                [
+                    {
+                        "Monitor": "Total Geral | Escalados",
+                        "WO": int(df_out["WO"].sum()),
+                        "GPON": int(df_out["GPON"].sum()),
+                        "OS": total_os_g,
+                        "ND": int(df_out["ND"].sum()),
+                        "Migração": int(df_out["Migração"].sum()),
+                        "Equipe": total_eq_escalados,
+                        "Média": total_os_g / total_eq_escalados
+                        if total_eq_escalados
+                        else 0.0,
+                    },
+                    {
+                        "Monitor": "Total Geral | Montados",
+                        "WO": int(df_out["WO"].sum()),
+                        "GPON": int(df_out["GPON"].sum()),
+                        "OS": total_os_g,
+                        "ND": int(df_out["ND"].sum()),
+                        "Migração": int(df_out["Migração"].sum()),
+                        "Equipe": total_eq_montados,
+                        "Média": total_os_g / total_eq_montados
+                        if total_eq_montados
+                        else 0.0,
+                    },
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
 
     return df_out
 
@@ -662,12 +674,14 @@ def render_tabela_rota_turno(df: pd.DataFrame, titulo: str) -> str:
             f"Sem dados disponíveis</td></tr></table></div>"
         )
 
-    linhas_html: List[str] = []
+    linhas_html: list[str] = []
     for _, row in df.iterrows():
         monitor = str(row["Monitor"])
         classe = (
-            "total-escalados" if "Escalados" in monitor
-            else "total-montados" if "Montados" in monitor
+            "total-escalados"
+            if "Escalados" in monitor
+            else "total-montados"
+            if "Montados" in monitor
             else ""
         )
         linhas_html.append(
@@ -694,16 +708,18 @@ def render_tabela_rota_turno(df: pd.DataFrame, titulo: str) -> str:
         f'<th class="th-equipe">Equipe</th>'
         f'<th class="th-media">Média</th>'
         f"</tr></thead>"
-        f'<tbody>{"".join(linhas_html)}</tbody>'
+        f"<tbody>{''.join(linhas_html)}</tbody>"
         f"</table></div>"
     )
 
 
 def render_bloco_rota_turno(df_master: pd.DataFrame, total_montados: int) -> None:
     from datetime import datetime
+
     data_hoje = datetime.now().strftime("%d/%m/%Y")
     total_efetivo = (
-        total_montados if total_montados > 0
+        total_montados
+        if total_montados > 0
         else int(df_master["LOGIN_TECNICO"].nunique())
     )
     for turno, label in [
@@ -733,15 +749,32 @@ def main() -> None:
     # ── Sidebar — configurações ──────────────────────
     with st.sidebar:
         st.header("⚙️ Configurações")
-        if st.button("🔄 Reiniciar Painel", use_container_width=True):
-            st.session_state["df_master"] = None
-            if "sim_equipe" in st.session_state:
-                del st.session_state["sim_equipe"]
-            st.session_state["total_montados_manual"] = 0
-            st.session_state["_reset_counter"] = (
-                int(st.session_state.get("_reset_counter", 0)) + 1
-            )
-            st.rerun()
+        c_atualizar, c_reiniciar = st.columns(2)
+        with c_atualizar:
+            if st.button(
+                "🤖 Atualizar base",
+                use_container_width=True,
+                help="Reprocessa a base atual e reaplica os cálculos do painel.",
+            ):
+                if "df_master" in st.session_state:
+                    st.session_state["df_master"] = None
+                if "sim_equipe" in st.session_state:
+                    del st.session_state["sim_equipe"]
+                st.session_state["total_montados_manual"] = 0
+                st.session_state["_reset_counter"] = (
+                    int(st.session_state.get("_reset_counter", 0)) + 1
+                )
+                st.rerun()
+        with c_reiniciar:
+            if st.button("🧹 Reiniciar", use_container_width=True):
+                st.session_state["df_master"] = None
+                if "sim_equipe" in st.session_state:
+                    del st.session_state["sim_equipe"]
+                st.session_state["total_montados_manual"] = 0
+                st.session_state["_reset_counter"] = (
+                    int(st.session_state.get("_reset_counter", 0)) + 1
+                )
+                st.rerun()
         st.divider()
 
     reset_key = int(st.session_state.get("_reset_counter", 0))
@@ -777,7 +810,8 @@ def main() -> None:
         st.header("👥 Equipe Montada")
         total_montados_input = st.number_input(
             "Total de Técnicos Montados",
-            min_value=0, max_value=999,
+            min_value=0,
+            max_value=999,
             value=st.session_state["total_montados_manual"],
             step=1,
             help="Deixe em 0 para usar a contagem automática da base.",
@@ -786,7 +820,9 @@ def main() -> None:
         st.session_state["total_montados_manual"] = total_montados_input
 
         if total_montados_input > 0:
-            st.caption(f"✅ Usando **{total_montados_input}** técnicos montados (manual)")
+            st.caption(
+                f"✅ Usando **{total_montados_input}** técnicos montados (manual)"
+            )
         else:
             auto_count = int(df_master["LOGIN_TECNICO"].nunique())
             st.caption(f"🔄 Usando **{auto_count}** técnicos (automático da base)")
@@ -852,7 +888,9 @@ def main() -> None:
     c1, c2, c3 = st.columns(3)
     render_kpi(c1, "Volume O.S.", f"{soma_os:,}", tema="azul")
     render_kpi(
-        c2, "Técnicos Operando", f"{tecnicos}",
+        c2,
+        "Técnicos Operando",
+        f"{tecnicos}",
         sub=f"Média: {soma_os / tecnicos:.1f} O.S./Téc." if tecnicos else "",
         tema="cinza",
     )
@@ -871,7 +909,9 @@ def main() -> None:
     render_kpi(s1, "GPON", f"{qtd_gpon:,}", tema="verde")
     render_kpi(s2, "Adesão (ND)", f"{qtd_nd:,}", tema="azul")
     render_kpi(
-        s3, "PME", f"{qtd_pme:,}",
+        s3,
+        "PME",
+        f"{qtd_pme:,}",
         sub=f"{qtd_pme / qtd_nd:.1%} das ND" if qtd_nd > 0 else "sem ND",
         tema="azul",
     )
@@ -885,9 +925,7 @@ def main() -> None:
     render_bloco_rota_turno(df_master, st.session_state["total_montados_manual"])
 
     # ── Abas de Detalhamento ─────────────────────────
-    aba_base, aba_contratos = st.tabs(
-        ["🗃️ Base Completa", "📄 Resumo Contratos"]
-    )
+    aba_base, aba_contratos = st.tabs(["🗃️ Base Completa", "📄 Resumo Contratos"])
 
     # ============================================================
     # ABA — BASE COMPLETA
@@ -912,7 +950,7 @@ def main() -> None:
     with aba_contratos:
         render_section_header("📄", "Resumo dos Contratos da Rota")
 
-        COLUNAS_CONTRATOS: Dict[str, List[str]] = {
+        COLUNAS_CONTRATOS: dict[str, list[str]] = {
             "CONTRATO": ["CONTRATO"],
             "INTERVALO": ["PERIODO_TRATADO", "INTERVALO"],
             "CEP": ["CEP/CÓDIGO POSTAL", "CEP", "CODIGO POSTAL"],
@@ -922,7 +960,7 @@ def main() -> None:
             "MONITOR": ["Monitor"],
         }
 
-        colunas_encontradas: Dict[str, str] = {}
+        colunas_encontradas: dict[str, str] = {}
         for nome_amigavel, aliases in COLUNAS_CONTRATOS.items():
             for alias in aliases:
                 if alias in df_master.columns:
@@ -949,7 +987,8 @@ def main() -> None:
                     if str(x) not in {"nan", "SEM MONITOR", "NÃO MAPEADO"}
                 )
                 sel_mon = st.selectbox(
-                    "👔 Monitor", mon_contratos,
+                    "👔 Monitor",
+                    mon_contratos,
                     key=f"filtro_mon_contratos_{reset_key}",
                 )
 
@@ -966,7 +1005,8 @@ def main() -> None:
                     if str(x) not in {"nan", "NÃO MAPEADO"}
                 )
                 sel_tec = st.selectbox(
-                    "👤 Técnico", tec_contratos,
+                    "👤 Técnico",
+                    tec_contratos,
                     key=f"filtro_tec_contratos_{reset_key}",
                 )
 

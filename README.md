@@ -36,6 +36,152 @@ O **Totale KPI** é uma plataforma corporativa completa desenvolvida em **Stream
 
 ## ✨ Funcionalidades
 
+### 🎨 Aparência TOTALE
+Na barra lateral, abra **Aparência TOTALE → Cor da barra lateral** e escolha:
+- **Prata TOTALE** (padrão): acabamento prata com detalhes institucionais.
+- **Azul institucional**: fundo azul com textos claros.
+- **Laranja TOTALE**: tons suaves de laranja com textos escuros.
+- **Claro corporativo**: fundo claro com destaques em azul.
+
+A escolha vale para todas as páginas durante a sessão atual, sem alterar as
+cores semânticas dos indicadores ou os dados e filtros dos painéis.
+
+Os temas, o seletor e o CSS da barra lateral ficam em `components/sidebar.py`.
+As cores compartilhadas ficam em `components/paleta.py`, evitando dependências
+circulares com `componentes.py`. O seletor é renderizado uma única vez em
+`streamlit_app.py`, antes de `aplicar_estilo()`. As páginas continuam chamando
+apenas `aplicar_estilo()`.
+Heros, cards de KPI, cabeçalhos, links de painéis e tabelas são reutilizados de
+`components/componentes.py` (`render_hero`, `render_kpi`,
+`render_section_header`, `render_painel_link`, `render_dataframe`). Evite CSS
+próprio para esses elementos: mantenha estilos específicos apenas quando a
+página precisar de uma visualização especial. A Gestão de Ativos preserva o
+modo escuro, mas reutiliza os mesmos componentes.
+Para scripts independentes, importe `render_seletor_tema_sidebar` de
+`components.sidebar` e chame essa função após
+`st.set_page_config()` e antes de `aplicar_estilo()`.
+
+Para executar os testes e a verificação estática, instale as dependências de
+desenvolvimento e rode:
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+ruff check .
+```
+
+### 🤖 Robô de Bases (Volumetria + Quebra de Agenda)
+- **Puxa a base automaticamente**: vigia a pasta **Downloads** do usuário (padrão) e processa sempre o arquivo **mais recente** (`.xlsx`, `.xls` ou `.csv`)
+- **Atualiza os dois painéis de uma vez**: gera as bases prontas de `volumetria.py` e `quebra.py` com o mesmo pipeline (sem upload manual)
+- **Só reprocessa quando muda**: compara o hash SHA-256 do arquivo; base inalterada reaproveita o cache
+- **Modo contínuo ou agendado**: `--modo loop --intervalo 15`, cron (Linux/macOS) ou Agendador de Tarefas (Windows)
+- **Funciona offline da planilha**: se a `lista_ativos` não estiver acessível, o robô segue e avisa no painel
+- Botão **🤖 Atualizar base** na barra lateral das duas páginas roda o robô sob demanda
+
+```bash
+# execução única
+python scripts/robot_base.py
+
+# forçar reprocessamento
+python scripts/robot_base.py --forcar
+
+# vigiar a pasta a cada 15 minutos
+python scripts/robot_base.py --modo loop --intervalo 15
+
+# ver a situação do cache
+python scripts/robot_base.py --status
+```
+
+Configuração (`.streamlit/secrets.toml` ou variáveis de ambiente):
+
+| Chave | Variável | Padrão |
+|-------|----------|--------|
+| `pasta_entrada` | `TOTALE_BASE_ENTRADA` | `Downloads` do usuário |
+| `pasta_cache` | `TOTALE_BASE_CACHE` | `dados/cache` |
+| `arquivo_glob` | `TOTALE_BASE_ARQUIVO` | `Atividades-*.csv;Atividades-*.xlsx` |
+| `ttl_minutos` | `TOTALE_BASE_TTL` | `0` (sem expiração) |
+
+O arquivo automático precisa conter uma coluna de status operacional. São
+aceitos `STATUS DA O.S 1`, `STATUS OS 1`, `STATUS DA OS 1` e `STATUS CONTRATO`.
+Arquivos mais recentes de outros tipos são rejeitados sem substituir o cache de
+dados. Para monitorar apenas arquivos de exportação, configure `arquivo_glob`
+(por exemplo, `base_*.xlsx`; para vários padrões, separe-os com `;`).
+
+```toml
+[base_operacional]
+# Opcional: por padrão o robô já usa a pasta Downloads do usuário.
+# pasta_entrada = "C:/Users/denis/Downloads"
+pasta_cache   = "dados/cache"
+```
+
+Para apontar outra pasta na execução:
+```bash
+python scripts/robot_base.py --pasta-entrada "C:/caminho/das/bases"
+```
+
+### 🤖 Robô de Sincronismo local (Central de Atualização)
+
+A página **Atualização de Dados** também hospeda o painel do robô local:
+
+- monitora a pasta **Downloads** (ou o caminho configurado) a cada 5 s;
+- o app publicado não consegue acessar os arquivos locais do Windows. Para
+  enviar automaticamente ao app publicado, use o agente local abaixo;
+- aceita somente arquivos iniciados com `Atividades-` (`*.csv`, `.xlsx`, `.xlsm`, `.xls`);
+- ignora temporários (`~$`, `.tmp`, `.crdownload`) e arquivos em gravação;
+- valida o ZIP do Excel, o encoding/separador do CSV e a estabilidade do arquivo;
+- publica a base tratada em `df_memoria` para os painéis e mantém a versão bruta
+  em `df_memoria_raw`;
+- vincula a `lista_ativos` (mesma aba da Gestão de Ativos) **mesmo em sessão
+  nova**: reaproveita o download da sessão (`dados_ativos`) quando existe e,
+  caso contrário, busca a planilha com o mesmo cache de 5 min da Quebra de
+  Agenda; a lista é normalizada antes do merge (caixa, espaços, `.0`,
+  duplicados e desligados), então o vínculo não depende do formato da aba;
+- se a planilha estiver inacessível ou nenhum login coincidir, a prévia da
+  base publicada exibe um aviso — o merge vazio não passa mais despercebido;
+- mostra o status de cada base (SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM), a fila
+  da pasta e o diagnóstico do último ciclo.
+
+Uso via terminal (sem Streamlit):
+
+```bash
+python components/robo_local.py "C:/Users/<usuario>/Downloads"
+python components/robo_local.py "C:/bases" "dados/cache/robo.csv"
+```
+
+Para usar uma pasta diferente na interface, abra **⚙️ Pasta monitorada** no painel.
+
+#### Agente Windows para o app publicado
+
+O agente monitora o Downloads configurado no Windows e envia cada nova
+exportação estável pelo campo de envio do app. Ele abre uma janela de navegador
+persistente; se o app pedir autenticação, entre nela normalmente. Mantenha a
+janela e o agente abertos para continuar o monitoramento. O agente envia somente
+arquivos cujo nome começa com `Atividades-` e com até 80 MB.
+
+Na raiz do projeto, instale o navegador do agente e inicie-o:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-agent.txt
+.\.venv\Scripts\python.exe -m playwright install chromium
+.\scripts\iniciar_agente_downloads.bat
+```
+
+O agente usa `https://totale-kpi.streamlit.app/envio_excel` por padrão. Para
+testar uma única vez ou apontar para outra pasta:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.agente_downloads --uma-vez
+.\.venv\Scripts\python.exe -m scripts.agente_downloads --pasta "C:\bases"
+```
+
+Encerre com `Ctrl+C`. O perfil e a sessão autenticada do navegador ficam no
+`%LOCALAPPDATA%\TotaleKpi\agente-downloads\perfil`.
+
+### 🗓️ Projeções em dias úteis (Seg–Sáb)
+- A semana útil é de **segunda a sábado** — **domingos não contam**
+- **Feriados** também são descontados: nacionais (fixos e móveis: Carnaval, Paixão de Cristo, Corpus Christi) e **estaduais de SP** (09/07)
+- Regra única em `components/calendario.py`, usada por **Qtde. de O.S.**, **Ranking de Pontos** e **Consultivos**
+- Feriados extras (municipais, pontos facultativos da operação) podem ser adicionados em `config/feriados_extra.json` ou na variável `TOTALE_FERIADOS_EXTRA`
+
 ### 📊 Dashboard Operacional
 - Panorama em tempo real com KPIs essenciais
 - Filtros dinâmicos por Base, Monitor e Situação
@@ -74,38 +220,25 @@ O **Totale KPI** é uma plataforma corporativa completa desenvolvida em **Stream
 
 ---
 
-## 🚀 Demonstração
+## 🎯 Critérios de Classificação (Quebra de Agenda)
 
-### Screenshots
+Regras oficiais implementadas em `components/criterios.py`:
 
-<details>
-<summary>📊 Dashboard Principal</summary>
+| Segmento | Critério |
+|----------|----------|
+| 🏠 **Novos Domicílios** | `TIPO O.S 1` contém `ADESAO`, `ADESÃO`, `NOVO`, `NOVA`, `INSTALACAO`, `INSTALAÇÃO`, `INST`, `NOVO DOMICÍLIO`, `PRIMEIRA`, `1 VIA` ou `PRIMEIRO ACESSO` |
+| 🔄 **Migração** | `TIPO O.S 1` contém `MUDANCA DE PACOTE` **E** `HABILIDADE DE TRABALHO` contém `PON` |
+| 🏢 **PME** | É **Novos Domicílios** **E** `HABILIDADE DE TRABALHO` contém `PME` (sobrepõe ND) |
+| ⚪ **Outros** | Não atende a nenhum dos critérios acima |
 
-![Dashboard](docs/screenshots/dashboard.png)
-
-</details>
-
-<details>
-<summary>🗂️ Hierarquia</summary>
-
-![Hierarquia](docs/screenshots/hierarquia.png)
-
-</details>
-
-<details>
-<summary>✉️ Gerador de Assinatura</summary>
-
-![Assinatura](docs/screenshots/assinatura.png)
-
-</details>
-
----
+- 🔦 `FLAG_GPON` é derivada automaticamente: `HABILIDADE` contém `PON` → `Sim`
+- A detecção das colunas aceita variações de nome (`TIPO OS 1`, `tipo_os_1`, `HABILIDADES`, `SKILL`...)
 
 ## 🛠️ Tecnologias
 
 | Categoria | Tecnologias |
 |-----------|-------------|
-| **Framework** | Streamlit 1.31+ |
+| **Framework** | Streamlit 1.55+ |
 | **Linguagem** | Python 3.11+ |
 | **Backend** | Google Sheets API |
 | **Visualização** | Plotly, Pandas |
@@ -127,13 +260,13 @@ O **Totale KPI** é uma plataforma corporativa completa desenvolvida em **Stream
 ## ⚙️ Instalação Local
 
 ### 1. Clone o Repositório
-\```bash
+```bash
 git clone https://github.com/denisvick-dev/totale-kpi.git
 cd totale-kpi
-\```
+```
 
 ### 2. Crie o Ambiente Virtual
-\```bash
+```bash
 python -m venv .venv
 
 # Windows
@@ -141,19 +274,19 @@ python -m venv .venv
 
 # Linux/Mac
 source .venv/bin/activate
-\```
+```
 
 ### 3. Instale as Dependências
-\```bash
+```bash
 pip install -r requirements.txt
-\```
+```
 
 ### 4. Configure as Credenciais
 
 Copie o arquivo de exemplo:
-\```bash
+```bash
 cp .streamlit/secrets.example.toml .streamlit/secrets.toml
-\```
+```
 
 Edite o `.streamlit/secrets.toml` com suas credenciais reais do Google Cloud e usuários.
 
@@ -169,10 +302,16 @@ Edite o `.streamlit/secrets.toml` com suas credenciais reais do Google Cloud e u
 6. Compartilhe sua planilha com o e-mail da service account
 7. Preencha os dados no `secrets.toml`
 
+Na página **Quebra de Agenda**, o vínculo de monitores usa a aba `lista_ativos` da mesma planilha da Gestão de Ativos. A aba deve conter `Login` e `Monitor` (e, opcionalmente, `Técnico`, `Base` e `Situação`). O login do arquivo operacional deve corresponder ao da lista. A leitura autenticada usa `[gcp_service_account]`; confira se a planilha foi compartilhada com o `client_email` dessa conta. Quando a base já estiver carregada, clique em **Atualizar Lista de Ativos** na barra lateral para refazer o vínculo sem enviar o arquivo novamente. Para base automática, o botão relê a lista e reprocessa o arquivo original do robô; para upload manual, refaz o vínculo com o arquivo enviado. A página mostra a quantidade de registros vinculados e alerta quando a aba não puder ser lida ou os logins não coincidirem.
+
+As páginas **Volumetria de O.S.** e **Quebra de Agenda** carregam sozinhas a base
+gerada pelo robô (`dados/cache`). O upload manual continua disponível como
+alternativa — veja a seção [🤖 Robô de Bases](#-robô-de-bases-volumetria--quebra-de-agenda).
+
 ### 6. Execute o Aplicativo
-\```bash
+```bash
 streamlit run streamlit_app.py
-\```
+```
 
 Acesse: **http://localhost:8501**
 
@@ -199,30 +338,27 @@ Acesse: **http://localhost:8501**
 
 ## 📁 Estrutura do Projeto
 
-\```
+```text
 totale-kpi/
-├── 📄 streamlit_app.py           # Aplicação principal
-├── 📄 componentes.py             # Componentes reutilizáveis
-├── 📄 requirements.txt           # Dependências Python
-├── 📄 README.md                  # Este arquivo
-├── 📄 LICENSE                    # Licença
-├── 📄 .gitignore                 # Arquivos ignorados
-├── 📁 .streamlit/
-│   ├── config.toml               # Configurações Streamlit
-│   └── secrets.example.toml      # Exemplo de credenciais
-├── 📁 pages/
-│   ├── gestao_ativos.py          # Gestão de Ativos
-│   ├── gerador_assinatura.py     # Gerador de Assinatura
-│   └── ...                       # Outras páginas
-├── 📁 assets/
-│   ├── icons/                    # Ícones
-│   └── images/                   # Imagens e templates
-├── 📁 fonts/
-│   ├── Oscine-Regular.ttf        # Fonte corporativa
-│   └── Oscine-Bold.ttf
-└── 📁 docs/
-    └── screenshots/              # Documentação visual
-\```
+├── streamlit_app.py                 # Entrada e navegação
+├── components/                      # Design system e regras de negócio
+├── pages/                           # Painéis da aplicação
+├── scripts/robot_base.py            # Robô de atualização das bases
+├── dados/                           # Entrada, cache e logs locais (não versionados)
+├── assets/
+│   ├── fonts/LEIA-ME.md             # Instruções sobre a fonte Oscine
+│   ├── icons/totale.ico             # Ícone do app
+│   └── images/novo-logo-totale.png  # Logo da navegação
+├── fonts/                           # Arquivos Oscine versionados
+├── tests/                           # Testes de interface e de dados
+├── .github/workflows/ci.yml         # Testes, compilação e lint
+├── .devcontainer/                   # Ambiente Python 3.11
+├── .streamlit/                      # Configuração e exemplo de credenciais
+├── requirements.txt                 # Dependências de execução
+├── requirements-dev.txt             # Ferramentas de teste e lint
+├── pyproject.toml                   # Configuração do pytest e Ruff
+└── README.md
+```
 
 ---
 
@@ -247,6 +383,37 @@ Cores oficiais Totale Tecnologia:
 | 🟠 Laranja Marca | `#F37C04` | Destaques, botões, acentos |
 | ⚪ Branco | `#FFFFFF` | Backgrounds |
 | ⬜ Cinza Claro | `#F1F5F9` | Backgrounds secundários |
+
+**Tipografia**
+| Uso | Fonte |
+|-----|-------|
+| 🅰️ **Títulos** (heros, `h1`–`h6`, seções) | **Oscine** (heros em Regular; fallback para Manrope → Segoe UI) |
+| 🔢 Valores de KPI e métricas | Manrope |
+| Textos | Inter |
+| Tabelas e DataFrames | **Oscine** (fallback para Manrope → Segoe UI) |
+| Códigos | JetBrains Mono |
+
+A **Oscine** é uma fonte licenciada (Dalton Maag / Adobe Fonts) e vale para
+**heros, `h1`–`h6`, títulos de seção, tabelas e DataFrames**; valores de KPI
+seguem em Manrope. Os títulos dos heros usam o arquivo `Oscine-Regular.ttf`;
+tabelas e DataFrames também renderizam em Oscine — a família definida em
+`[theme] font` (`.streamlit/config.toml`) alimenta o canvas dos
+`st.dataframe`, enquanto o `@font-face` auto-hospedado (base64 a partir de
+`fonts/`) disponibiliza os pesos Regular e Bold no documento.
+
+Para instalá-la:
+```bash
+python scripts/instalar_fonte_hero.py ~/Downloads/Oscine   # normaliza os nomes
+python scripts/instalar_fonte_hero.py --listar              # confere sem copiar
+```
+
+Os arquivos podem ficar em `assets/fonts/` ou em `fonts/` na raiz do
+repositório (ambas as pastas são lidas). Sem os arquivos, o app usa a Oscine
+se ela estiver ativa no computador (Adobe Creative Cloud) e cai no
+**Manrope** caso contrário — nada quebra.
+Para servir a todos os usuários (Streamlit Cloud), configure o kit web:
+`[tipografia] fonte_hero_url` nos secrets ou `TOTALE_FONTE_HERO_URL`.
+Detalhes em `assets/fonts/LEIA-ME.md`.
 
 ---
 

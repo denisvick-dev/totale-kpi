@@ -3,19 +3,23 @@ components/criterios.py
 =======================
 Módulo centralizado de critérios de classificação para o portal TOTALE.
 
-CRITÉRIOS PRINCIPAIS:
+CRITÉRIOS OFICIAIS (ordem de prioridade da classificação):
+    🏠 NOVOS DOMICÍLIOS (AND — TIPO O.S 1 contém um dos termos de ND)
+        ADESAO · ADESÃO · ADESA · NOVO · NOVA · NOVO DOMICILIO ·
+        INSTALACAO · INSTALAÇÃO · INST · PRIMEIRA · 1 VIA · PRIMEIRO ACESSO
+
     🔄 MIGRAÇÃO (AND — os 2 critérios juntos):
         1️⃣  TIPO O.S 1  contém  "MUDANCA DE PACOTE"
-        2️⃣  FLAG_GPON   =       "Sim"
+        2️⃣  HABILIDADE  contém  "PON"
 
-    🔦 FLAG_GPON (auto-gerado):
-        HABILIDADE DE TRABALHO contém "PON(1/100)" → "Sim"
+    🏢 PME (AND — os 2 critérios juntos, sobrepõe Novos Domicílios):
+        1️⃣  É Novos Domicílios
+        2️⃣  HABILIDADE DE TRABALHO contém "PME"
 
-    🏠 NOVOS DOMICÍLIOS: TIPO O.S contém "ADESAO"
+    🔦 FLAG_GPON (auto-gerado quando a coluna não existe):
+        HABILIDADE DE TRABALHO contém "PON" → "Sim"
 
-    🏢 PME:
-        É Novos Domicílios E
-        HABILIDADE DE TRABALHO contém "PME(1/100)"
+    ⚪ OUTROS: não atende a nenhum dos critérios acima.
 
 ARQUITETURA:
     ✅ Regras de classificação
@@ -27,11 +31,13 @@ ARQUITETURA:
 from __future__ import annotations
 
 import unicodedata
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import streamlit as st
+
+from components.componentes import estilizar_dataframe
 
 # ═══════════════════════════════════════════════════════════════════════
 # CONSTANTES
@@ -52,18 +58,13 @@ VAZIOS_GERAIS: set[str] = {
     "..",
     "...",
 }
-VAZIOS_CONTRATO: set[str] = VAZIOS_GERAIS | {
-    "0",
-    "S/N",
-    "SEM CONTRATO",
-    "?",
-    "??",
-}
+VAZIOS_CONTRATO: set[str] = {"", "NULL", "NAN", "NONE"}
 
 
-def _norm_str(texto: str) -> str:
+def _norm_str(texto: Any) -> str:
+    """Normaliza qualquer valor para ASCII maiúsculo sem acentos."""
     return (
-        unicodedata.normalize("NFKD", texto)
+        unicodedata.normalize("NFKD", str(texto))
         .encode("ascii", errors="ignore")
         .decode("ascii")
         .upper()
@@ -71,42 +72,81 @@ def _norm_str(texto: str) -> str:
     )
 
 
-TERMO_MIGRACAO_OS: str = _norm_str("MUDANCA DE PACOTE")
+TERMO_MIGRACAO_OS: str = "MUDANCA DE PACOTE"
 VALOR_FLAG_GPON_SIM: str = "SIM"
-TERMO_GPON_HABILIDADE: str = "PON(1/100)"
-TERMO_PME_HABILIDADE: str = "PME(1/100)"
+TERMO_GPON_HABILIDADE: str = "PON"
+TERMO_PME_HABILIDADE: str = "PME"
 
-TERMOS_ND: Tuple[str, ...] = ("ADESAO",)
-TERMOS_PME: Tuple[str, ...] = (TERMO_PME_HABILIDADE,)
+#: Termos que caracterizam Novos Domicílios em TIPO O.S 1.
+TERMOS_ND: tuple[str, ...] = (
+    "ADESAO",
+    "ADESÃO",
+    "ADESA",
+    "NOVO",
+    "INSTALACAO",
+    "INSTALAÇÃO",
+    "INST",
+    "NOVA",
+    "NOVO DOMICILIO",
+    "NOVO DOMICÍLIO",
+    "PRIMEIRA",
+    "1 VIA",
+    "PRIMEIRO ACESSO",
+)
+TERMOS_PME: tuple[str, ...] = (TERMO_PME_HABILIDADE,)
 
-CANDS_TIPO_OS_1: List[str] = [
+CANDS_TIPO_OS_1: list[str] = [
     "TIPO O.S 1",
     "TIPO OS 1",
     "TIPO O.S. 1",
     "TIPO_OS_1",
     "TIPO_O_S_1",
+    "TIPOOS1",
+    "TIPO OS 1",
+    "TIPO O.S",
+    "TIPO_DE_OS",
+    "TIPO DE OS",
 ]
-CANDS_FLAG_GPON: List[str] = [
+CANDS_FLAG_GPON: list[str] = [
     "FLAG_GPON",
     "FLAG GPON",
     "FLAGGPON",
     "IS_GPON",
 ]
-CANDS_CAPACIDADE: List[str] = [
+CANDS_CAPACIDADE: list[str] = [
     "CATEGORIAS DA CAPACIDADE",
     "CATEGORIA DA CAPACIDADE",
     "CATEGORIAS CAPACIDADE",
     "CATEGORIA CAPACIDADE",
     "CAPACIDADE",
 ]
-CANDS_HABILIDADE: List[str] = [
+CANDS_HABILIDADE: list[str] = [
     "HABILIDADE DE TRABALHO",
     "HABILIDADES DE TRABALHO",
     "HABILIDADE",
     "HABILIDADES",
     "SKILL",
     "SKILLS",
+    "HABILIDADE_TECNICA",
+    "HABILIDADE TÉCNICA",
 ]
+
+#: Termos que não podem ser confundidos com "TIPO O.S 1" no fallback genérico.
+_RUIDO_TIPO_OS: tuple[str, ...] = (
+    "ATIVIDADE",
+    "DATA",
+    "STATUS",
+    "SITUACAO",
+    "CONTRATO",
+    "CLIENTE",
+    "EQUIPE",
+    "HABILIDAD",
+    "ENDERECO",
+    "BAIRRO",
+    "CIDADE",
+    "PACOTE",
+    "PLANO",
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -131,7 +171,7 @@ def norm_col_nome(nome: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════
 # DETECÇÃO DE COLUNAS
 # ═══════════════════════════════════════════════════════════════════════
-def detectar_cols_tipo(df: pd.DataFrame) -> List[str]:
+def detectar_cols_tipo(df: pd.DataFrame) -> list[str]:
     return [
         c
         for c in df.columns
@@ -140,20 +180,43 @@ def detectar_cols_tipo(df: pd.DataFrame) -> List[str]:
     ]
 
 
-def detectar_col_tipo_os_1(df: pd.DataFrame) -> Optional[str]:
+def detectar_col_tipo_os_1(df: pd.DataFrame) -> str | None:
+    if df is None or df.empty:
+        return None
+
     cols_norm = {norm_col_nome(str(c)): c for c in df.columns}
+
+    # 1. Busca exata pelos apelidos conhecidos
     for cand in CANDS_TIPO_OS_1:
         cn = norm_col_nome(cand)
         if cn in cols_norm:
             return cols_norm[cn]
+
+    # 2. Busca parcial: TIPO + O.S + 1
+    for col_norm, col_real in cols_norm.items():
+        if (
+            "TIPO" in col_norm
+            and ("OS" in col_norm or "O S" in col_norm)
+            and (col_norm.endswith(("1", " 1")) or " 1 " in col_norm)
+        ):
+            return col_real
+
+    # 3. Qualquer coluna com TIPO e O.S
     for col_norm, col_real in cols_norm.items():
         if "TIPO" in col_norm and ("OS" in col_norm or "O S" in col_norm):
-            if col_norm.endswith("1") or col_norm.endswith(" 1"):
-                return col_real
+            return col_real
+
+    # 4. Fallback: coluna genérica de TIPO (sem ruído de outras naturezas)
+    for col_norm, col_real in cols_norm.items():
+        if "TIPO" in col_norm and not any(r in col_norm for r in _RUIDO_TIPO_OS):
+            return col_real
+
     return None
 
 
-def detectar_col_flag_gpon(df: pd.DataFrame) -> Optional[str]:
+def detectar_col_flag_gpon(df: pd.DataFrame) -> str | None:
+    if df is None or df.empty:
+        return None
     cols_norm = {norm_col_nome(str(c)): c for c in df.columns}
     for cand in CANDS_FLAG_GPON:
         cn = norm_col_nome(cand)
@@ -165,7 +228,9 @@ def detectar_col_flag_gpon(df: pd.DataFrame) -> Optional[str]:
     return None
 
 
-def detectar_col_capacidade(df: pd.DataFrame) -> Optional[str]:
+def detectar_col_capacidade(df: pd.DataFrame) -> str | None:
+    if df is None or df.empty:
+        return None
     cols_norm = {norm_col_nome(str(c)): c for c in df.columns}
     for cand in CANDS_CAPACIDADE:
         cn = norm_col_nome(cand)
@@ -177,7 +242,9 @@ def detectar_col_capacidade(df: pd.DataFrame) -> Optional[str]:
     return None
 
 
-def detectar_col_habilidade(df: pd.DataFrame) -> Optional[str]:
+def detectar_col_habilidade(df: pd.DataFrame) -> str | None:
+    if df is None or df.empty:
+        return None
     for nome in [
         "HABILIDADE DE TRABALHO",
         "Habilidade de Trabalho",
@@ -202,14 +269,14 @@ def detectar_col_habilidade(df: pd.DataFrame) -> Optional[str]:
     for c in df.columns:
         try:
             amostra = df[c].dropna().astype(str).head(100)
-            if amostra.str.contains(r"PON\(1/100\)", na=False, regex=True).any():
+            if amostra.str.contains(r"PON\(|PME\(", na=False, regex=True).any():
                 return c
         except Exception:
             continue
     return None
 
 
-def detectar_col_status_atividade(df: pd.DataFrame) -> Optional[str]:
+def detectar_col_status_atividade(df: pd.DataFrame) -> str | None:
     for nome in [
         "STATUS DA ATIVIDADE",
         "Status da Atividade",
@@ -232,7 +299,7 @@ def detectar_col_status_atividade(df: pd.DataFrame) -> Optional[str]:
     return None
 
 
-def detectar_col_contrato(df: pd.DataFrame) -> Optional[str]:
+def detectar_col_contrato(df: pd.DataFrame) -> str | None:
     for nome in ["CONTRATO", "Contrato", "contrato"]:
         if nome in df.columns:
             return nome
@@ -271,7 +338,7 @@ def criar_coluna_tipos_agrupados(df: pd.DataFrame) -> pd.DataFrame:
         )
         return df
 
-    def _agrupar(row: pd.Series) -> Tuple[str, FrozenSet[str]]:
+    def _agrupar(row: pd.Series) -> tuple[str, frozenset[str]]:
         raw, norm = set(), set()
         for col in cols_tipo:
             val = str(row.get(col, "")).strip()
@@ -289,7 +356,7 @@ def criar_coluna_tipos_agrupados(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def criar_flag_gpon(df: pd.DataFrame) -> Tuple[pd.DataFrame, Optional[str], int]:
+def criar_flag_gpon(df: pd.DataFrame) -> tuple[pd.DataFrame, str | None, int]:
     df = df.copy()
 
     col_ex = detectar_col_flag_gpon(df)
@@ -314,8 +381,7 @@ def criar_flag_gpon(df: pd.DataFrame) -> Tuple[pd.DataFrame, Optional[str], int]
         return df, None, 0
 
     serie = df[col_hab].fillna("").astype(str).str.strip()
-    serie_v = serie.where(~serie.str.upper().isin(VAZIOS_GERAIS), other="")
-    mask = serie_v.str.contains(TERMO_GPON_HABILIDADE, na=False, regex=False)
+    mask = serie.str.upper().str.contains(TERMO_GPON_HABILIDADE, na=False, regex=False)
     df["FLAG_GPON"] = np.where(mask, "Sim", "Não")
     return df, col_hab, int(mask.sum())
 
@@ -323,14 +389,16 @@ def criar_flag_gpon(df: pd.DataFrame) -> Tuple[pd.DataFrame, Optional[str], int]
 # ═══════════════════════════════════════════════════════════════════════
 # CLASSIFICAÇÃO PRINCIPAL
 # ═══════════════════════════════════════════════════════════════════════
-def classificar_tipo_servico(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
+def classificar_tipo_servico(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
     """
     Classifica cada linha em: Migração, PME, Novos Domicílios ou Outros.
 
-    Regras oficiais (prioridade):
-      1. MIGRAÇÃO  = TIPO O.S 1 contém "MUDANCA DE PACOTE"  AND  FLAG_GPON = "Sim"
-      2. PME       = é Novos Domicílios  AND  HABILIDADE contém "PME(1/100)"
-      3. NOVOS DOMICÍLIOS = algum TIPO O.S contém "ADESAO"
+    Regras oficiais (ordem de escrita = ordem de prioridade):
+      1. NOVOS DOMICÍLIOS = TIPO O.S 1 contém um dos ``TERMOS_ND``
+      2. MIGRAÇÃO  = TIPO O.S 1 contém "MUDANCA DE PACOTE"  AND
+                     HABILIDADE DE TRABALHO contém "PON"
+      3. PME       = é Novos Domicílios  AND  HABILIDADE contém "PME"
+                     (sobrepõe Novos Domicílios quando a habilidade é PME)
       4. OUTROS    = restante
     """
     df = df.copy()
@@ -348,11 +416,6 @@ def classificar_tipo_servico(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]
         if col_tipo_os_1
         else pd.Series("", index=df.index, dtype=object)
     )
-    serie_flag_gpon = (
-        df["FLAG_GPON"].fillna("").astype(str).str.strip().str.upper()
-        if "FLAG_GPON" in df.columns
-        else pd.Series("", index=df.index, dtype=object)
-    )
     serie_habilidade = (
         df[col_hab].fillna("").astype(str).map(normalizar_str)
         if col_hab
@@ -360,24 +423,29 @@ def classificar_tipo_servico(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]
     )
 
     # ── Máscaras ─────────────────────────────────────────────────────
-    flag_pacote = serie_tipo_os_1.str.contains(TERMO_MIGRACAO_OS, na=False, regex=False)
-    flag_gpon_sim = serie_flag_gpon.eq(VALOR_FLAG_GPON_SIM)
+    # 1) Novos Domicílios: TIPO O.S 1 contém um dos termos de ND
     flag_nd = _mask_novos_domicilios(df)
-    flag_hab_pme = serie_habilidade.str.contains(
-        TERMO_PME_HABILIDADE, na=False, regex=False
+
+    # 2) Migração: MUDANCA DE PACOTE + HABILIDADE contendo PON
+    flag_migracao_tipo = serie_tipo_os_1.str.contains(
+        _norm_str(TERMO_MIGRACAO_OS), na=False, regex=False
     )
+    flag_hab_pon = serie_habilidade.str.contains(
+        _norm_str(TERMO_GPON_HABILIDADE), na=False, regex=False
+    )
+    flag_migracao = flag_migracao_tipo & flag_hab_pon
 
-    # ── Prioridade: Migração > PME > Novos Domicílios > Outros ───────
+    # 3) PME: Novos Domicílios + HABILIDADE contendo PME
+    flag_hab_pme = serie_habilidade.str.contains(
+        _norm_str(TERMO_PME_HABILIDADE), na=False, regex=False
+    )
+    flag_pme = flag_nd & flag_hab_pme
+
+    # ── Aplicação da lógica de prioridade ────────────────────────────
     tipo = pd.Series("Outros", index=df.index, dtype=object)
-
-    # 3. Novos Domicílios (base)
-    tipo = tipo.where(~flag_nd, other="Novos Domicílios")
-
-    # 2. PME sobrescreve ND quando HABILIDADE tem PME(1/100)
-    tipo = tipo.where(~(flag_nd & flag_hab_pme), other="PME")
-
-    # 1. Migração tem prioridade máxima
-    tipo = tipo.where(~(flag_pacote & flag_gpon_sim), other="Migração")
+    tipo.loc[flag_nd.fillna(False)] = "Novos Domicílios"
+    tipo.loc[flag_migracao.fillna(False)] = "Migração"
+    tipo.loc[flag_pme.fillna(False)] = "PME"  # PME sobrepõe ND
 
     df["TIPO_SERVICO"] = tipo
     return df, tipo
@@ -399,27 +467,32 @@ def _serie_total_tarefas(df: pd.DataFrame) -> pd.Series:
     )
 
 
+def _serie_tipo_os_1_normalizada(df: pd.DataFrame) -> pd.Series:
+    """Série normalizada (ASCII maiúsculo) da coluna TIPO O.S 1."""
+    col_tipo_os_1 = detectar_col_tipo_os_1(df)
+    if not col_tipo_os_1:
+        return pd.Series("", index=df.index, dtype=object)
+    return df[col_tipo_os_1].fillna("").astype(str).map(_norm_str)
+
+
 def _mask_novos_domicilios(df: pd.DataFrame) -> pd.Series:
-    """Máscara bruta de Novos Domicílios (algum TIPO O.S contém ADESAO)."""
-    if "_TIPOS_OS_SET" in df.columns:
+    """
+    Máscara bruta de Novos Domicílios.
 
-        def _tem_nd(tipo_set: Any) -> bool:
-            if not isinstance(tipo_set, (set, frozenset)):
-                return False
-            return any(termo in val for val in tipo_set for termo in TERMOS_ND)
-
-        return df["_TIPOS_OS_SET"].map(_tem_nd).fillna(False).astype(bool)
-
-    cols_tipo = detectar_cols_tipo(df)
-    mascara = pd.Series(False, index=df.index, dtype=bool)
-    for col in cols_tipo:
-        serie = df[col].fillna("").astype(str).map(normalizar_str)
-        for termo in TERMOS_ND:
-            mascara = mascara | serie.str.contains(termo, na=False, regex=False)
-    return mascara
+    Critério oficial: **TIPO O.S 1** contém um dos ``TERMOS_ND``.
+    A busca é iterativa e com ``regex=False`` (segurança contra caracteres
+    especiais vindos da base).
+    """
+    serie_tipo_os_1 = _serie_tipo_os_1_normalizada(df)
+    flag_nd = pd.Series(False, index=df.index)
+    for termo in TERMOS_ND:
+        termo_norm = _norm_str(termo)
+        if termo_norm:
+            flag_nd |= serie_tipo_os_1.str.contains(termo_norm, na=False, regex=False)
+    return flag_nd.fillna(False).astype(bool)
 
 
-def extrair_metricas_criterios(df: pd.DataFrame) -> Dict[str, int]:
+def extrair_metricas_criterios(df: pd.DataFrame) -> dict[str, int]:
     """
     Extrai métricas usando TOTAL DE TAREFAS do DF já classificado.
     NÃO recalcula classificação.
@@ -431,38 +504,45 @@ def extrair_metricas_criterios(df: pd.DataFrame) -> Dict[str, int]:
     tipo_final = df["TIPO_SERVICO"].fillna("").astype(str).str.strip()
 
     col_tipo_os_1 = detectar_col_tipo_os_1(df)
-    col_flag_gpon = detectar_col_flag_gpon(df)
     col_hab = detectar_col_habilidade(df)
 
     serie_tipo_os_1 = (
-        df[col_tipo_os_1].fillna("").astype(str).map(normalizar_str)
+        df[col_tipo_os_1].fillna("").astype(str).map(_norm_str)
         if col_tipo_os_1
         else pd.Series("", index=df.index, dtype=object)
     )
-    serie_flag_gpon = (
-        df[col_flag_gpon].fillna("").astype(str).map(normalizar_str)
-        if col_flag_gpon
+    serie_habilidade = (
+        df[col_hab].fillna("").astype(str).map(_norm_str)
+        if col_hab
         else pd.Series("", index=df.index, dtype=object)
     )
-    serie_habilidade = (
-        df[col_hab].fillna("").astype(str).map(normalizar_str)
-        if col_hab
+    serie_flag_gpon = (
+        df["FLAG_GPON"].fillna("").astype(str).str.strip().str.upper()
+        if "FLAG_GPON" in df.columns
         else pd.Series("", index=df.index, dtype=object)
     )
 
     # ── Máscaras individuais ──────────────────────────────────────────
-    flag_pacote = serie_tipo_os_1.str.contains(TERMO_MIGRACAO_OS, na=False, regex=False)
-    flag_gpon_sim = serie_flag_gpon.eq(VALOR_FLAG_GPON_SIM)
-    flag_pon = serie_habilidade.str.contains(
-        TERMO_GPON_HABILIDADE, na=False, regex=False
-    )
+    # 1) Novos Domicílios (TIPO O.S 1 contém um dos TERMOS_ND)
     flag_nd = _mask_novos_domicilios(df)
-    flag_hab_pme = serie_habilidade.str.contains(
-        TERMO_PME_HABILIDADE, na=False, regex=False
-    )
 
-    flag_and_mig = flag_pacote & flag_gpon_sim
+    # 2) Migração (MUDANCA DE PACOTE + HABILIDADE contém PON)
+    flag_mudanca_pacote = serie_tipo_os_1.str.contains(
+        _norm_str(TERMO_MIGRACAO_OS), na=False, regex=False
+    )
+    flag_hab_pon = serie_habilidade.str.contains(
+        _norm_str(TERMO_GPON_HABILIDADE), na=False, regex=False
+    )
+    flag_and_mig = flag_mudanca_pacote & flag_hab_pon
+
+    # 3) PME (Novos Domicílios + HABILIDADE contém PME)
+    flag_hab_pme = serie_habilidade.str.contains(
+        _norm_str(TERMO_PME_HABILIDADE), na=False, regex=False
+    )
     flag_and_pme = flag_nd & flag_hab_pme
+
+    # 4) FLAG_GPON (coluna informativa, derivada de PON quando ausente)
+    flag_gpon_sim = serie_flag_gpon.eq(VALOR_FLAG_GPON_SIM)
 
     def _soma(mask: pd.Series) -> int:
         return int(tarefas[mask.fillna(False)].sum())
@@ -470,21 +550,23 @@ def extrair_metricas_criterios(df: pd.DataFrame) -> Dict[str, int]:
     return {
         # Totais
         "total": int(tarefas.sum()),
-        "total_registros": int(len(df)),
+        "total_registros": len(df),
         # Classificação final
         "migracao": _soma(tipo_final.eq("Migração")),
         "novos_domicilios": _soma(tipo_final.eq("Novos Domicílios")),
         "pme": _soma(tipo_final.eq("PME")),
         "outros": _soma(tipo_final.eq("Outros")),
-        # Critérios de Migração
-        "criterio_pacote": _soma(flag_pacote),
-        "criterio_gpon_sim": _soma(flag_gpon_sim),
-        "criterio_habilidade_pon": _soma(flag_pon),
+        # Critérios oficiais
+        "criterio_adesao": _soma(flag_nd),
+        "criterio_mudanca_pacote": _soma(flag_mudanca_pacote),
+        "criterio_habilidade_pon": _soma(flag_hab_pon),
         "criterio_and_migracao": _soma(flag_and_mig),
-        # Critérios de ND / PME
-        "criterio_nd_adesao": _soma(flag_nd),
         "criterio_habilidade_pme": _soma(flag_hab_pme),
         "criterio_and_pme": _soma(flag_and_pme),
+        # Compatibilidade com painéis antigos
+        "criterio_pacote": _soma(flag_mudanca_pacote),
+        "criterio_gpon_sim": _soma(flag_gpon_sim),
+        "criterio_nd_adesao": _soma(flag_nd),
     }
 
 
@@ -625,8 +707,8 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
         card_criterio(
             m2,
             "2️⃣",
-            "FLAG_GPON = Sim",
-            metricas["criterio_gpon_sim"],
+            "Habilidade contém PON",
+            metricas["criterio_habilidade_pon"],
             "#E0F2FE",
             "#0284C7",
             "#0369A1",
@@ -650,8 +732,8 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
         card_criterio(
             p1,
             "🏠",
-            "ADESAO em TIPO O.S",
-            metricas["criterio_nd_adesao"],
+            "ND em TIPO O.S 1",
+            metricas["criterio_adesao"],
             "#F0FDF4",
             "#16A34A",
             "#15803D",
@@ -660,7 +742,7 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
         card_criterio(
             p2,
             "🏢",
-            "Habilidade PME(1/100)",
+            "Habilidade contém PME",
             metricas["criterio_habilidade_pme"],
             "#FAF5FF",
             "#7C3AED",
@@ -670,7 +752,7 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
         card_criterio(
             p3,
             "✅",
-            "AND — PME",
+            "AND — PME (ND + PME)",
             metricas["criterio_and_pme"],
             "#EDE9FE",
             "#8B5CF6",
@@ -694,19 +776,25 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
             [
                 {
                     "Classificação": "🔄 Migração",
-                    "Regra": "TIPO O.S 1 contém MUDANCA DE PACOTE E FLAG_GPON = Sim",
+                    "Regra": (
+                        "TIPO O.S 1 contém MUDANCA DE PACOTE E "
+                        "HABILIDADE DE TRABALHO contém PON"
+                    ),
                 },
                 {
                     "Classificação": "🔦 FLAG_GPON",
-                    "Regra": "HABILIDADE DE TRABALHO contém PON(1/100) → Sim",
+                    "Regra": "HABILIDADE DE TRABALHO contém PON → Sim",
                 },
                 {
                     "Classificação": "🏠 Novos Domicílios",
-                    "Regra": "Alguma coluna TIPO O.S contém ADESAO",
+                    "Regra": (
+                        "TIPO O.S 1 contém um dos termos de ND "
+                        "(ADESAO, INSTALACAO, NOVO, 1 VIA, ...)"
+                    ),
                 },
                 {
                     "Classificação": "🏢 PME",
-                    "Regra": "É Novos Domicílios E HABILIDADE DE TRABALHO contém PME(1/100)",
+                    "Regra": ("É Novos Domicílios E HABILIDADE DE TRABALHO contém PME"),
                 },
                 {
                     "Classificação": "⚪ Outros",
@@ -714,7 +802,9 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
                 },
             ]
         )
-        st.dataframe(regras, hide_index=True, use_container_width=True)
+        st.dataframe(
+            estilizar_dataframe(regras), hide_index=True, use_container_width=True
+        )
 
         st.markdown("---")
         st.markdown("### 🔗 Colunas Detectadas")
@@ -742,7 +832,9 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
                 },
             ]
         )
-        st.dataframe(deteccao, hide_index=True, use_container_width=True)
+        st.dataframe(
+            estilizar_dataframe(deteccao), hide_index=True, use_container_width=True
+        )
 
         st.markdown("---")
         st.markdown("### 📊 Distribuição por TIPO_SERVICO")
@@ -767,12 +859,13 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
             0,
         )
         st.dataframe(
-            distribuicao.style.format(
+            estilizar_dataframe(
+                distribuicao,
                 {
                     "Tarefas": "{:,.0f}",
                     "Registros": "{:,.0f}",
                     "% das Tarefas": "{:.1%}",
-                }
+                },
             ),
             hide_index=True,
             use_container_width=True,
@@ -784,13 +877,13 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
         d1, d2, d3 = st.columns(3)
         d1.metric(
             "1️⃣ Mudança de Pacote",
-            fmt(metricas["criterio_pacote"]),
-            help="Soma das tarefas com TIPO O.S 1 = MUDANCA DE PACOTE.",
+            fmt(metricas["criterio_mudanca_pacote"]),
+            help="Soma das tarefas com TIPO O.S 1 contendo MUDANCA DE PACOTE.",
         )
         d2.metric(
-            "2️⃣ FLAG_GPON = Sim",
-            fmt(metricas["criterio_gpon_sim"]),
-            help="Soma das tarefas com FLAG_GPON = Sim.",
+            "2️⃣ Habilidade contém PON",
+            fmt(metricas["criterio_habilidade_pon"]),
+            help="Soma das tarefas com HABILIDADE DE TRABALHO contendo PON.",
         )
         d3.metric(
             "✅ AND — Migração",
@@ -799,14 +892,14 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
         )
 
         if metricas["criterio_and_migracao"] == 0:
-            if metricas["criterio_pacote"] == 0:
+            if metricas["criterio_mudanca_pacote"] == 0:
                 st.error("❌ Nenhuma tarefa com MUDANCA DE PACOTE em TIPO O.S 1.")
-            elif metricas["criterio_gpon_sim"] == 0:
-                st.error("❌ Nenhuma tarefa com FLAG_GPON = Sim.")
+            elif metricas["criterio_habilidade_pon"] == 0:
+                st.error("❌ Nenhuma tarefa com PON em HABILIDADE DE TRABALHO.")
             else:
                 st.warning(
-                    "⚠️ Existem tarefas com Mudança de Pacote e tarefas GPON, "
-                    "mas nenhum registro atende aos dois juntos."
+                    "⚠️ Existem tarefas com Mudança de Pacote e tarefas com "
+                    "habilidade PON, mas nenhum registro atende aos dois juntos."
                 )
         else:
             st.success(
@@ -819,30 +912,29 @@ def render_painel_criterios(df: pd.DataFrame) -> None:
 
         p1, p2, p3 = st.columns(3)
         p1.metric(
-            "🏠 ADESAO / ND",
-            fmt(metricas["criterio_nd_adesao"]),
-            help="Soma das tarefas em que algum TIPO O.S contém ADESAO.",
+            "🏠 Novos Domicílios",
+            fmt(metricas["criterio_adesao"]),
+            help="Soma das tarefas em que TIPO O.S 1 contém um termo de ND.",
         )
         p2.metric(
-            "🏢 PME(1/100)",
+            "🏢 Habilidade PME",
             fmt(metricas["criterio_habilidade_pme"]),
-            help="Soma das tarefas com HABILIDADE contendo PME(1/100).",
+            help="Soma das tarefas com HABILIDADE contendo PME.",
         )
         p3.metric(
             "✅ AND — PME",
             fmt(metricas["criterio_and_pme"]),
-            help="Tarefas ND com HABILIDADE PME(1/100).",
+            help="Tarefas ND com HABILIDADE contendo PME.",
         )
 
         if metricas["criterio_and_pme"] == 0:
-            if metricas["criterio_nd_adesao"] == 0:
+            if metricas["criterio_adesao"] == 0:
                 st.warning(
-                    "⚠️ Nenhuma tarefa identificada como Novos Domicílios / ADESAO."
+                    "⚠️ Nenhuma tarefa identificada como Novos Domicílios "
+                    "(TIPO O.S 1 sem termos de ND)."
                 )
             elif metricas["criterio_habilidade_pme"] == 0:
-                st.warning(
-                    "⚠️ Nenhuma tarefa com PME(1/100) em HABILIDADE DE TRABALHO."
-                )
+                st.warning("⚠️ Nenhuma tarefa com PME em HABILIDADE DE TRABALHO.")
             else:
                 st.warning(
                     "⚠️ Existem tarefas ND e tarefas com habilidade PME, "
@@ -868,20 +960,22 @@ def render_debug_criterios(df_full: pd.DataFrame, expanded: bool = False) -> Non
         st.markdown("**🔗 Colunas detectadas:**")
         cc1, cc2 = st.columns(2)
         cc1.markdown(
-            f"**TIPO O.S 1:** "
+            "**TIPO O.S 1:** "
             + (f"✅ `{col_tipo}`" if col_tipo else "❌")
-            + f"\n\n**FLAG_GPON:** "
+            + "\n\n**FLAG_GPON:** "
             + (f"✅ `{col_gpon}`" if col_gpon else "❌")
         )
-        cc2.markdown(f"**HABILIDADE:** " + (f"✅ `{col_hab}`" if col_hab else "❌"))
+        cc2.markdown("**HABILIDADE:** " + (f"✅ `{col_hab}`" if col_hab else "❌"))
 
         st.markdown("---")
         st.markdown(
             "**📋 Regras:**\n\n"
-            "🔄 **Migração**: `TIPO O.S 1` contém `MUDANCA DE PACOTE` E `FLAG_GPON = Sim`\n\n"
-            "🔦 **FLAG_GPON**: `HABILIDADE` contém `PON(1/100)`\n\n"
-            "🏠 **Novos Domicílios**: TIPO O.S contém `ADESAO`\n\n"
-            "🏢 **PME**: é ND + `HABILIDADE` contém `PME(1/100)`"
+            "🔄 **Migração**: `TIPO O.S 1` contém `MUDANCA DE PACOTE` E "
+            "`HABILIDADE` contém `PON`\n\n"
+            "🔦 **FLAG_GPON**: `HABILIDADE` contém `PON`\n\n"
+            "🏠 **Novos Domicílios**: `TIPO O.S 1` contém um dos termos de ND "
+            "(`ADESAO`, `INSTALACAO`, `NOVO`, `1 VIA`, ...)\n\n"
+            "🏢 **PME**: é ND + `HABILIDADE` contém `PME`"
         )
 
         if "TIPO_SERVICO" in df_full.columns:
@@ -889,7 +983,11 @@ def render_debug_criterios(df_full: pd.DataFrame, expanded: bool = False) -> Non
             st.markdown("**📊 Distribuição:**")
             dist = df_full["TIPO_SERVICO"].value_counts().reset_index()
             dist.columns = ["Segmento", "Registros"]
-            st.dataframe(dist, hide_index=True, use_container_width=True)
+            st.dataframe(
+                estilizar_dataframe(dist, {"Registros": "{:,}"}),
+                hide_index=True,
+                use_container_width=True,
+            )
 
 
 def render_card_destaque_migracao() -> None:
@@ -912,12 +1010,12 @@ def render_card_destaque_migracao() -> None:
             1️⃣ <code>TIPO O.S 1</code> contém <b>"MUDANCA DE PACOTE"</b>
         </div>
         <div style="background:rgba(255,255,255,0.10);padding:12px 16px;border-radius:8px;">
-            2️⃣ <code>FLAG_GPON</code> = <b>"Sim"</b>
+            2️⃣ <code>HABILIDADE</code> contém <b>"PON"</b>
         </div>
     </div>
     <div style="margin-top:12px;padding:10px;background:rgba(251,191,36,0.15);
                 border-radius:6px;font-size:12px;color:#FEF3C7;">
-        🔦 <b>FLAG_GPON</b> auto: HABILIDADE contém <b>PON(1/100)</b>
+        🔦 <b>FLAG_GPON</b> auto: HABILIDADE contém <b>PON</b>
     </div>
 </div>
         """,
@@ -937,41 +1035,42 @@ def render_lista_colunas(df: pd.DataFrame, expanded: bool = False) -> None:
             }
         )
         st.dataframe(
-            df_cols,
+            estilizar_dataframe(df_cols),
             hide_index=True,
             use_container_width=True,
-            height=min(600, 40 + len(df_cols) * 35),
+            height=min(600, 46 + len(df_cols) * 36),
         )
         st.caption(
-            f"Total: **{len(df.columns)} colunas** · "
-            f"**{len(df):,} registros**".replace(",", ".")
+            f"Total: **{len(df.columns)} colunas** · **{len(df):,} registros**".replace(
+                ",", "."
+            )
         )
 
 
 __all__ = [
-    "VAZIOS_GERAIS",
-    "VAZIOS_CONTRATO",
-    "TERMO_MIGRACAO_OS",
-    "VALOR_FLAG_GPON_SIM",
-    "TERMO_GPON_HABILIDADE",
-    "TERMO_PME_HABILIDADE",
     "TERMOS_ND",
     "TERMOS_PME",
-    "normalizar_str",
-    "norm_col_nome",
-    "detectar_cols_tipo",
-    "detectar_col_tipo_os_1",
-    "detectar_col_flag_gpon",
-    "detectar_col_capacidade",
-    "detectar_col_habilidade",
-    "detectar_col_status_atividade",
-    "detectar_col_contrato",
+    "TERMO_GPON_HABILIDADE",
+    "TERMO_MIGRACAO_OS",
+    "TERMO_PME_HABILIDADE",
+    "VALOR_FLAG_GPON_SIM",
+    "VAZIOS_CONTRATO",
+    "VAZIOS_GERAIS",
+    "classificar_tipo_servico",
     "criar_coluna_tipos_agrupados",
     "criar_flag_gpon",
-    "classificar_tipo_servico",
+    "detectar_col_capacidade",
+    "detectar_col_contrato",
+    "detectar_col_flag_gpon",
+    "detectar_col_habilidade",
+    "detectar_col_status_atividade",
+    "detectar_col_tipo_os_1",
+    "detectar_cols_tipo",
     "extrair_metricas_criterios",
-    "render_painel_criterios",
-    "render_debug_criterios",
+    "norm_col_nome",
+    "normalizar_str",
     "render_card_destaque_migracao",
+    "render_debug_criterios",
     "render_lista_colunas",
+    "render_painel_criterios",
 ]

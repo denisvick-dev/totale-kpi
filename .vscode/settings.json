@@ -2,11 +2,28 @@
     "editor.fontFamily": "Fira Mono",
     "editor.fontSize": 13,
     "editor.fontVariations": false,
+    "liveServer.settings.CustomBrowser": "edge",
     "editor.defaultFormatter": "ms-python.black-formatter",
-<<<<<<< HEAD
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter"
-    }
-=======
->>>>>>> b6032ce7c518d531cd75ced8bb23c2698a99e3a9
+    },
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "chat.tools.terminal.autoApprove": {
+        "/^\\.\\\\\\.venv\\\\Scripts\\\\python\\.exe -m pytest tests\\\\test_componentes_visuais\\.py -q -k \"titulos_dos_heros or oscine_vale or fonte_auto_hospedada\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^git status --short; python \"C:\\\\Users\\\\denis\\\\\\.agents\\\\skills\\\\developing-with-streamlit\\\\scripts\\\\discover\\.py\" --project-dir \"C:\\\\Users\\\\denis\\\\Projects\\\\totale-kpi\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^py -3 C:\\\\Users\\\\denis\\\\\\.agents\\\\skills\\\\developing-with-streamlit\\\\scripts\\\\discover\\.py --project-dir C:\\\\Users\\\\denis\\\\Projects\\\\totale-kpi$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^\\.\\\\\\.venv\\\\Scripts\\\\python\\.exe -c \"import streamlit; print\\(streamlit\\.__version__\\)\"; Get-Content pyproject\\.toml; Get-Content requirements-dev\\.txt$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    },
 }

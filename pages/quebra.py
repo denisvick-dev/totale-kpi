@@ -7,78 +7,46 @@ Integrado ao novo Design System (componentes.py) e às Regras Oficiais (criterio
 
 from __future__ import annotations
 
-import csv
+import logging
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict, List, Optional, cast
+from typing import Any
 
+import gspread
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from google.oauth2.service_account import Credentials
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
+from streamlit_gsheets import GSheetsConnection
 
-# ═══════════════════════════════════════════════════════
-# IMPORT DOS COMPONENTES (NOVO DESIGN SYSTEM)
-# ═══════════════════════════════════════════════════════
-try:
-    from components.componentes import (
-        aplicar_estilo,
-        render_hero,
-        render_section_header,
-        render_kpi,
-        render_insight,
-        render_dataframe,
-    )
-except ImportError:
-    from components.componentes import (
-        aplicar_estilo,
-        render_hero,
-        render_section_header,
-        render_kpi,
-        render_insight,
-        render_dataframe,
-    )
-
-# ═══════════════════════════════════════════════════════
-# IMPORT DAS REGRAS OFICIAIS DE CLASSIFICAÇÃO
-# ═══════════════════════════════════════════════════════
-try:
-    from components.criterios import (
-        VAZIOS_CONTRATO,
-        classificar_tipo_servico,
-        detectar_col_contrato,
-        detectar_col_status_atividade,
-        detectar_col_habilidade,
-        detectar_col_tipo_os_1,
-        detectar_col_flag_gpon,
-        extrair_metricas_criterios,
-        render_painel_criterios,
-        render_debug_criterios,
-        render_card_destaque_migracao,
-        render_lista_colunas,
-    )
-except ImportError:
-    from components.criterios import (
-        VAZIOS_CONTRATO,
-        classificar_tipo_servico,
-        detectar_col_contrato,
-        detectar_col_status_atividade,
-        detectar_col_habilidade,
-        detectar_col_tipo_os_1,
-        detectar_col_flag_gpon,
-        extrair_metricas_criterios,
-        render_painel_criterios,
-        render_debug_criterios,
-        render_card_destaque_migracao,
-        render_lista_colunas,
-    )
-
+from components import base_operacional as bo
+from components.componentes import (
+    aplicar_estilo,
+    estilizar_dataframe,
+    render_dataframe,
+    render_hero,
+    render_insight,
+    render_kpi,
+    render_section_header,
+)
+from components.criterios import (
+    classificar_tipo_servico,
+    extrair_metricas_criterios,
+    render_card_destaque_migracao,
+    render_debug_criterios,
+    render_lista_colunas,
+    render_painel_criterios,
+)
 
 # ═══════════════════════════════════════════════════════
 # CONFIGURAÇÕES E CONSTANTES
 # ═══════════════════════════════════════════════════════
+logger = logging.getLogger(__name__)
+
+
 class Config:
     SLA_GERAL = 0.20
     SLA_MIGRACAO = 0.25
@@ -116,7 +84,7 @@ def _fmt_int(v: int) -> str:
 # ═══════════════════════════════════════════════════════
 class Utils:
     @staticmethod
-    def buscar_coluna(df: pd.DataFrame, palavras: list) -> Optional[str]:
+    def buscar_coluna(df: pd.DataFrame, palavras: list) -> str | None:
         if df is None or df.empty:
             return None
         cols = {
@@ -141,16 +109,6 @@ class Utils:
                 if pn in cn:
                     return co
         return None
-
-    @staticmethod
-    def classificar_status(serie: pd.Series) -> pd.Series:
-        s = serie.fillna("").astype(str).str.strip().str.upper()
-        exe = s == "EXECUTADA"
-        nex = s.isin(["NÃO EXECUTADA", "NAO EXECUTADA"])
-        return pd.Series(
-            np.select([exe, nex], ["Executada", "Não Executada"], default="Pendente"),
-            index=serie.index,
-        )
 
     @staticmethod
     def gerar_excel(df: pd.DataFrame, aba: str = "Dados") -> bytes:
@@ -182,320 +140,163 @@ class Utils:
 # CARREGAMENTO E TRATAMENTO DE DADOS
 # ═══════════════════════════════════════════════════════
 class DataLoader:
+    """Leitura e tratamento — reaproveita o mesmo pipeline do robô."""
+
     @staticmethod
     @st.cache_data(show_spinner=False)
     def ler_arquivo(file_bytes: bytes, filename: str) -> pd.DataFrame:
-        bio = BytesIO(file_bytes)
+        """Leitura compartilhada com o robô (tudo como texto, como na página)."""
         try:
-            if filename.lower().endswith(".csv"):
-                bio.seek(0)
-                amostra = bio.read(5000).decode("utf-8", errors="ignore")
-                bio.seek(0)
-                sep = csv.Sniffer().sniff(amostra).delimiter if amostra else ";"
-                return pd.read_csv(
-                    bio, sep=sep, encoding="utf-8", dtype=str, engine="python"
-                )
-            return pd.read_excel(bio, engine="openpyxl", dtype=str)
+            return bo.ler_arquivo_bytes(file_bytes, filename, dtype=str)
         except Exception as e:
             st.error(f"❌ Erro ao ler arquivo: {e}")
             return pd.DataFrame()
 
     @staticmethod
-    @st.cache_data(ttl=600, show_spinner="🔗 Vinculando Lista de Ativos...")
+    @st.cache_data(ttl=300, show_spinner="🔗 Vinculando Lista de Ativos...")
     def buscar_gsheets() -> pd.DataFrame:
-        SHEET_ID = Config.SHEET_ID_ATIVOS
-        try:
-            from streamlit_gsheets import GSheetsConnection
+        """
+        Lê a mesma aba privada da Gestão de Ativos; só recorre ao CSV público
+        se necessário.
 
-            conn = st.connection("gsheets", type=GSheetsConnection)
-            raw = conn.read(
-                spreadsheet=Config.URL_LISTA_ATIVOS, worksheet=Config.WORKSHEET_ATIVOS
-            )
-            if raw is not None and not raw.empty:
-                return DataLoader._normalizar_lista_ativos(raw)
-        except Exception:
-            pass
+        A implementação vive em ``components/base_operacional`` (mesma usada
+        pelo robô). As dependências são injetadas aqui para manter o cache do
+        Streamlit e os testes de regressão funcionando.
+        """
+        return bo.carregar_lista_ativos(
+            sheet_id=Config.SHEET_ID_ATIVOS,
+            worksheet=Config.WORKSHEET_ATIVOS,
+            url=Config.URL_LISTA_ATIVOS,
+            credenciais=Credentials.from_service_account_info,
+            autorizar=gspread.authorize,
+            read_csv=pd.read_csv,
+        )
 
+    @staticmethod
+    @st.cache_data(ttl=900, show_spinner="🤖 Carregando a base automática do robô...")
+    def carregar_base_automatica(forcar: bool = False) -> pd.DataFrame:
+        """
+        Base gerada pelo robô (``dados/cache``).
+
+        O robô lê o arquivo mais recente da pasta monitorada (por padrão,
+        ``Downloads``). Se a pasta não
+        existir ou estiver vazia, devolve um DataFrame vazio e a página cai no
+        upload manual.
+        """
         try:
-            url = (
-                f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
-                f"/gviz/tq?tqx=out:csv&sheet={Config.WORKSHEET_ATIVOS}"
+            base = bo.carregar_base_quebra(
+                forcar=forcar,
+                segredos=lambda: dict(st.secrets["gcp_service_account"]),
+                credenciais=Credentials.from_service_account_info,
+                autorizar=gspread.authorize,
+                conexao=lambda: st.connection("gsheets", type=GSheetsConnection),
+                read_csv=pd.read_csv,
             )
-            raw = pd.read_csv(url)
-            if raw is not None and not raw.empty:
-                return DataLoader._normalizar_lista_ativos(raw)
-        except Exception:
-            pass
-        return pd.DataFrame()
+        except Exception as exc:
+            st.error(f"Falha ao carregar a base automática: {exc}")
+            return pd.DataFrame()
+        return base if base is not None else pd.DataFrame()
+
+    @staticmethod
+    def recarregar_base_automatica() -> pd.DataFrame:
+        """Refaz a base do robô com uma leitura nova da lista de ativos."""
+        DataLoader.buscar_gsheets.clear()
+        DataLoader.carregar_base_automatica.clear()
+        return DataLoader.carregar_base_automatica(forcar=True)
 
     @staticmethod
     def _normalizar_lista_ativos(raw: pd.DataFrame) -> pd.DataFrame:
-        if raw is None or raw.empty:
-            return pd.DataFrame()
-        raw = raw.copy()
-        raw.columns = raw.columns.astype(str).str.strip()
+        """Padroniza a aba ``lista_ativos`` (implementação em base_operacional)."""
+        return bo.normalizar_lista_ativos(raw)
 
-        rename_map = {}
-        for col in raw.columns:
-            cu = col.upper().strip().replace(".", "").replace("_", " ")
-            if cu in ("LOGIN", "MATRICULA", "MATRÍCULA", "ID", "USUARIO", "USUÁRIO"):
-                rename_map[col] = "Login"
-            elif cu in (
-                "TECNICO",
-                "TÉCNICO",
-                "NOME",
-                "NOME TECNICO",
-                "NOME DO TECNICO",
-            ):
-                rename_map[col] = "Técnico"
-            elif cu in (
-                "MONITOR",
-                "GESTOR",
-                "SUPERVISOR",
-                "COORDENADOR",
-                "NOME MONITOR",
-            ):
-                rename_map[col] = "Monitor"
-            elif cu in ("BASE", "REGIAO", "REGIÃO", "CIDADE"):
-                rename_map[col] = "Base"
-
-        raw = raw.rename(columns=rename_map)
-        cols = [c for c in ["Login", "Técnico", "Monitor", "Base"] if c in raw.columns]
-        if "Login" not in cols:
-            return pd.DataFrame()
-
-        raw = raw[cols].copy()
-        raw["Login"] = (
-            raw["Login"]
+    @staticmethod
+    def _normalizar_login(serie: pd.Series) -> pd.Series:
+        return (
+            serie.fillna("")
             .astype(str)
-            .str.replace(r"\.0$", "", regex=True)
             .str.strip()
+            .str.replace(r"\.0$", "", regex=True)
             .str.upper()
         )
-        raw = raw[~raw["Login"].isin(["NAN", "NONE", "NULL", "N/A", "0", "-", ""])]
-        return raw.drop_duplicates(subset=["Login"], keep="last").reset_index(drop=True)
+
+    @staticmethod
+    def compatibilizar_base(df: pd.DataFrame) -> pd.DataFrame:
+        """Adapta sessões/caches antigos ao esquema esperado pelo relatório."""
+        if df is None:
+            return pd.DataFrame()
+
+        base = df.copy()
+        base.columns = base.columns.astype(str).str.strip()
+
+        # Sessões do Streamlit sobrevivem a mudanças de código e podem conter
+        # versões antigas da base (por exemplo, ``Monitor`` em vez de ``MONITOR``).
+        if "MONITOR" not in base.columns:
+            col_monitor = Utils.buscar_coluna(
+                base, ["MONITOR", "SUPERVISOR", "GESTOR", "COORDENADOR", "NOME MONITOR"]
+            )
+            if col_monitor:
+                base["MONITOR"] = base[col_monitor]
+            else:
+                base["MONITOR"] = "SEM MONITOR"
+                base.attrs["coluna_monitor_ausente"] = True
+        base["MONITOR"] = base["MONITOR"].fillna("").astype(str).str.strip().str.upper()
+        base.loc[
+            base["MONITOR"].isin(["", "NAN", "NONE", "NULL", "0", "N/A", "<NA>"]),
+            "MONITOR",
+        ] = "SEM MONITOR"
+
+        if "TÉCNICO" not in base.columns:
+            col_tecnico = Utils.buscar_coluna(
+                base,
+                [
+                    "TÉCNICO",
+                    "TECNICO",
+                    "NOME TÉCNICO",
+                    "NOME TECNICO",
+                    "NOME DO TÉCNICO",
+                    "NOME DO TECNICO",
+                ],
+            )
+            base["TÉCNICO"] = base[col_tecnico] if col_tecnico else "NÃO MAPEADO"
+        base["TÉCNICO"] = base["TÉCNICO"].fillna("").astype(str).str.strip().str.upper()
+        base.loc[
+            base["TÉCNICO"].isin(["", "NAN", "NONE", "NULL", "0", "N/A", "<NA>"]),
+            "TÉCNICO",
+        ] = "NÃO MAPEADO"
+
+        col_status = Utils.buscar_coluna(base, ["STATUS CONTRATO"])
+        if col_status is None:
+            col_status = Utils.buscar_coluna(
+                base, ["STATUS DA O.S 1", "STATUS OS 1", "STATUS DA OS 1"]
+            )
+        base["Status Contrato"] = (
+            bo.Utils.classificar_status(base[col_status]) if col_status else "Pendente"
+        )
+
+        col_total = Utils.buscar_coluna(
+            base, ["TOTAL DE TAREFAS", "TOTAL TAREFAS", "QTD TAREFAS"]
+        )
+        base["TOTAL DE TAREFAS"] = (
+            pd.to_numeric(base[col_total], errors="coerce").fillna(1).clip(lower=0)
+            if col_total
+            else 1
+        )
+        return base
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def preparar_base(df: pd.DataFrame, df_gs: pd.DataFrame) -> pd.DataFrame:
-        if df.empty:
-            return pd.DataFrame()
+    def preparar_base(
+        df: pd.DataFrame,
+        df_gs: pd.DataFrame,
+        fonte_ativos: str = "",
+        erro_ativos: str = "",
+    ) -> pd.DataFrame:
+        """
+        Tratamento compartilhado com o robô (``components/base_operacional``).
 
-        df = df.copy()
-        df.columns = df.columns.astype(str).str.strip().str.upper()
-        total_importado = len(df)
-
-        col_mon_orig = Utils.buscar_coluna(
-            df, ["MONITOR", "SUPERVISOR", "GESTOR", "COORDENADOR", "NOME MONITOR"]
-        )
-        col_tec_orig = Utils.buscar_coluna(
-            df, ["TECNICO", "NOME TECNICO", "NOME DO TECNICO", "TÉCNICO"]
-        )
-
-        # 1. Remover Suspensos
-        col_atv = detectar_col_status_atividade(df)
-        n_susp = 0
-        if col_atv:
-            serie_atv = df[col_atv].fillna("").astype(str).str.strip().str.upper()
-            mask_susp = serie_atv.str.contains("SUSP", na=False) | serie_atv.eq(
-                "SUSPENSO"
-            )
-            n_susp = int(mask_susp.sum())
-            df = df[~mask_susp].copy()
-
-        # 2. Remover Contratos Vazios
-        col_con = detectar_col_contrato(df)
-        n_inv = 0
-        if col_con:
-            serie_con = (
-                df[col_con]
-                .fillna("")
-                .astype(str)
-                .str.strip()
-                .str.upper()
-                .str.replace(r"\.0$", "", regex=True)
-            )
-            mask_inv = serie_con.isin(VAZIOS_CONTRATO)
-            n_inv = int(mask_inv.sum())
-            df = df[~mask_inv].copy()
-
-        # 3. Total de Tarefas
-        col_tot = Utils.buscar_coluna(
-            df, ["TOTAL DE TAREFAS", "QTD TAREFAS", "TOTAL TAREFAS"]
-        )
-        if col_tot:
-            df["TOTAL DE TAREFAS"] = (
-                pd.to_numeric(
-                    df[col_tot].astype(str).str.replace(",", "."), errors="coerce"
-                )
-                .fillna(1)
-                .astype(int)
-            )
-        else:
-            df["TOTAL DE TAREFAS"] = 1
-
-        # 4. Merge com Lista de Ativos
-        col_login = Utils.buscar_coluna(
-            df,
-            ["LOGIN DO TÉCNICO", "LOGIN DO TECNICO", "LOGIN", "USUÁRIO", "MATRÍCULA"],
-        )
-        if col_login and not df_gs.empty and "Login" in df_gs.columns:
-            df["LOGIN"] = (
-                df[col_login]
-                .astype(str)
-                .str.replace(r"\.0$", "", regex=True)
-                .str.strip()
-                .str.upper()
-            )
-            df = df.merge(
-                df_gs,
-                left_on="LOGIN",
-                right_on="Login",
-                how="left",
-                suffixes=("", "_GS"),
-            )
-        elif col_login:
-            df["LOGIN"] = df[col_login].astype(str).str.strip().str.upper()
-        else:
-            df["LOGIN"] = "SEM LOGIN"
-
-        # 5. Fallback Monitor
-        mon_gs = (
-            df["Monitor_GS"]
-            if "Monitor_GS" in df.columns
-            else (
-                df["Monitor"]
-                if "Monitor" in df.columns
-                else pd.Series(np.nan, index=df.index)
-            )
-        )
-        mon_file = (
-            df[col_mon_orig]
-            if col_mon_orig and col_mon_orig in df.columns
-            else pd.Series(np.nan, index=df.index)
-        )
-        mon_gs_c = (
-            mon_gs.fillna(pd.NA)
-            .astype("string")
-            .str.strip()
-            .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
-        )
-        mon_file_c = (
-            mon_file.fillna(pd.NA)
-            .astype("string")
-            .str.strip()
-            .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
-        )
-
-        df["ORIGEM_MAPEAMENTO"] = np.where(
-            mon_gs_c.notna(),
-            "Merge (Sheets)",
-            np.where(mon_file_c.notna(), "Arquivo Origem", "Não Mapeado"),
-        )
-        df["MONITOR"] = (
-            mon_gs_c.combine_first(mon_file_c)
-            .fillna("SEM MONITOR")
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-        df.loc[
-            df["MONITOR"].isin(["", "NAN", "NONE", "NULL", "0", "N/A"]), "MONITOR"
-        ] = "SEM MONITOR"
-
-        # 6. Fallback Técnico
-        tec_gs = (
-            df["Técnico_GS"]
-            if "Técnico_GS" in df.columns
-            else (
-                df["Técnico"]
-                if "Técnico" in df.columns
-                else pd.Series(np.nan, index=df.index)
-            )
-        )
-        tec_file = (
-            df[col_tec_orig]
-            if col_tec_orig and col_tec_orig in df.columns
-            else pd.Series(np.nan, index=df.index)
-        )
-        tec_gs_c = (
-            tec_gs.fillna(pd.NA)
-            .astype("string")
-            .str.strip()
-            .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
-        )
-        tec_file_c = (
-            tec_file.fillna(pd.NA)
-            .astype("string")
-            .str.strip()
-            .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
-        )
-
-        df["TÉCNICO"] = (
-            tec_gs_c.combine_first(tec_file_c)
-            .fillna("NÃO MAPEADO")
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-        df.loc[
-            df["TÉCNICO"].isin(["", "NAN", "NONE", "NULL", "0", "N/A"]), "TÉCNICO"
-        ] = "NÃO MAPEADO"
-
-        # 7. Contrato normalizado
-        if col_con and col_con in df.columns:
-            df["CONTRATO"] = df[col_con].astype(str).str.strip()
-
-        # 8. Região
-        col_cid = Utils.buscar_coluna(df, ["CIDADE", "LOCALIDADE"])
-        cidade = (
-            df[col_cid].fillna("").astype(str).str.strip().str.upper()
-            if col_cid
-            else pd.Series("", index=df.index)
-        )
-        df["REGIÃO"] = np.select(
-            [
-                cidade.isin(["SAO PAULO", "SÃO PAULO"]),
-                cidade.isin(
-                    ["GUARULHOS", "ARUJA", "MOGI", "SUZANO", "ITAQUAQUECETUBA", "POA"]
-                ),
-                cidade.isin(
-                    [
-                        "SANTO ANDRE",
-                        "SAO BERNARDO DO CAMPO",
-                        "SAO CAETANO DO SUL",
-                        "DIADEMA",
-                        "MAUA",
-                    ]
-                ),
-            ],
-            ["LESTE", "GRU", "ABCDM"],
-            default="OUTRAS",
-        )
-
-        # 9. Status Contrato
-        col_status_os = Utils.buscar_coluna(
-            df, ["STATUS DA O.S 1", "STATUS OS 1", "STATUS CONTRATO"]
-        )
-        df["Status Contrato"] = (
-            Utils.classificar_status(df[col_status_os]) if col_status_os else "Pendente"
-        )
-
-        # 10. ✅ CLASSIFICAÇÃO OFICIAL DE SEGMENTOS (criterios.py)
-        df, _ = classificar_tipo_servico(df)
-        df = df.drop(columns=["_TIPOS_OS_SET"], errors="ignore")
-
-        # 11. Motivo de Baixa
-        col_cod = Utils.buscar_coluna(
-            df, ["CÓD DE BAIXA 1", "MOTIVO DE BAIXA", "COD DE BAIXA 1", "MOTIVO BAIXA"]
-        )
-        df["_COL_BAIXA"] = df[col_cod].astype(str) if col_cod else ""
-
-        df.attrs["diag_importado"] = total_importado
-        df.attrs["diag_susp"] = n_susp
-        df.attrs["diag_inv"] = n_inv
-        df.attrs["diag_final"] = len(df)
-        return df
+        Mantém os ``attrs`` de diagnóstico usados pelas abas da página.
+        """
+        return bo.preparar_base_quebra(df, df_gs, fonte_ativos, erro_ativos)
 
 
 # ═══════════════════════════════════════════════════════
@@ -512,18 +313,17 @@ class Analise:
             return pd.DataFrame()
 
         grp = (
-            df_valid.groupby(["MONITOR", "TIPO_SERVICO"])
-            .apply(
-                lambda x: pd.Series(
-                    {
-                        "executados": x.loc[
-                            x["Status Contrato"] == "Executada", "TOTAL DE TAREFAS"
-                        ].sum(),
-                        "nao_executados": x.loc[
-                            x["Status Contrato"] == "Não Executada", "TOTAL DE TAREFAS"
-                        ].sum(),
-                    }
-                )
+            df_valid.groupby(["MONITOR", "TIPO_SERVICO", "Status Contrato"])[
+                "TOTAL DE TAREFAS"
+            ]
+            .sum()
+            .unstack("Status Contrato", fill_value=0)
+            .reindex(columns=["Executada", "Não Executada"], fill_value=0)
+            .rename(
+                columns={
+                    "Executada": "executados",
+                    "Não Executada": "nao_executados",
+                }
             )
             .reset_index()
         )
@@ -571,7 +371,7 @@ class Analise:
         )
         pivot = pivot.reset_index().rename(columns={"MONITOR": "Monitor"})
 
-        total_row: Dict[str, Any] = {"Monitor": "Total Geral"}
+        total_row: dict[str, Any] = {"Monitor": "Total Geral"}
         for tipo in Config.ORDEM_TIPOS:
             sub = df_valid[df_valid["TIPO_SERVICO"] == tipo]
             ex = sub.loc[
@@ -594,7 +394,7 @@ class Analise:
         return pd.concat([pivot, pd.DataFrame([total_row])], ignore_index=True)
 
     @staticmethod
-    def metricas_segmento(df_seg: pd.DataFrame) -> Dict[str, Any]:
+    def metricas_segmento(df_seg: pd.DataFrame) -> dict[str, Any]:
         aloc = float(df_seg["TOTAL DE TAREFAS"].sum())
         exe = float(
             df_seg.loc[
@@ -687,31 +487,37 @@ def view_executiva(df: pd.DataFrame, meta_pct: float):
     st.markdown("<br>", unsafe_allow_html=True)
     render_section_header("grid_view", "Matriz de Desempenho (Monitor × Segmento)")
 
-    # Aplicação de estilo condicional na matriz para o componente render_dataframe
+    # Mesmo visual das outras tabelas, com sinalização das quebras acima da meta.
     def _cor_celula(val):
-        if isinstance(val, (int, float)):
-            return f"color: {'#D13438' if val > meta_pct else '#0D9668'}; font-weight: 700;"
+        if pd.notna(val):
+            if val > meta_pct:
+                return (
+                    "background-color: #FEF2F2; color: #B4232E; "
+                    "font-weight: 700; text-align: center;"
+                )
+            return (
+                "background-color: #ECFDF5; color: #087A55; "
+                "font-weight: 700; text-align: center;"
+            )
         return ""
 
-    df_render = df_matriz.copy()
-    try:
-        # cast() resolve o erro de tipagem do Pylance no subset
-        cols_pct = cast(Any, Config.ORDEM_TIPOS + ["Quebra Geral"])
-
-        sty = df_render.style.format({
-            "Novos Domicílios": "{:.1%}", "Migração": "{:.1%}", "PME": "{:.1%}",
-            "Quebra Geral": "{:.1%}", "Total Tarefas": "{:,}",
-        })
-
-        # pandas >= 2.1 usa .map(); versões antigas usam .applymap()
-        if hasattr(sty, "map"):
-            sty = sty.map(_cor_celula, subset=cols_pct)
-        else:
-            sty = sty.applymap(_cor_celula, subset=cols_pct)  # type: ignore[attr-defined]
-
-        st.dataframe(sty, use_container_width=True, hide_index=True, height=178)
-    except Exception:
-        render_dataframe(df_render, titulo="Resumo por Monitor", icone="table_view")
+    formatos: dict[str, Any] = {
+        **{c: "{:.1%}" for c in Config.ORDEM_TIPOS},
+        "Quebra Geral": "{:.1%}",
+        "Total Tarefas": "{:,.0f}",
+    }
+    sty = estilizar_dataframe(df_matriz, formatos)
+    cols_pct = Config.ORDEM_TIPOS + ["Quebra Geral"]
+    if hasattr(sty, "map"):
+        sty = sty.map(_cor_celula, subset=pd.Index(cols_pct))
+    else:
+        sty = sty.applymap(_cor_celula, subset=cols_pct)  # type: ignore[attr-defined]
+    st.dataframe(
+        sty,
+        use_container_width=True,
+        hide_index=True,
+        height=min(520, 40 + 36 * len(df_matriz)),
+    )
 
     st.markdown("<br>", unsafe_allow_html=True)
     render_section_header("show_chart", "Distribuição Visual por Segmento")
@@ -832,12 +638,14 @@ def view_segmento(df: pd.DataFrame, segmento: str, meta: float):
             df_tec,
             titulo="Ranking de Quebra por Técnico",
             icone="person",
+            badge=f"{len(df_tec)} técnicos",
             height=450,
             fmt={
                 "Quebra Atual": "{:.1%}",
                 "Alocado": "{:,}",
                 "Executadas": "{:,}",
                 "Nao_Executadas": "{:,}",
+                "Considerado": "{:,}",
             },
         )
 
@@ -856,6 +664,7 @@ def view_segmento(df: pd.DataFrame, segmento: str, meta: float):
             df_pend[cols],
             titulo="Fila de Ordens Pendentes",
             icone="list_alt",
+            badge=f"{len(df_pend)} pendentes",
             height=450,
         )
 
@@ -863,6 +672,26 @@ def view_segmento(df: pd.DataFrame, segmento: str, meta: float):
 def view_criterios(df: pd.DataFrame):
     render_section_header("target", "Critérios de Classificação", "Regras Oficiais")
     render_painel_criterios(df)
+
+
+def _filtrar_base_analitica(
+    df: pd.DataFrame, colunas: list[str], busca: str = ""
+) -> pd.DataFrame:
+    """Seleciona colunas e aplica uma busca literal, sem alterar a base original."""
+    resultado = df.loc[:, colunas].copy()
+    termo = busca.strip().upper()
+    if not termo:
+        return resultado
+
+    corresponde = pd.Series(False, index=resultado.index)
+    for coluna in resultado.columns:
+        corresponde |= (
+            resultado[coluna]
+            .astype(str)
+            .str.upper()
+            .str.contains(termo, na=False, regex=False)
+        )
+    return resultado.loc[corresponde]
 
 
 def view_base_completa(df: pd.DataFrame, df_full: pd.DataFrame):
@@ -892,7 +721,7 @@ def view_base_completa(df: pd.DataFrame, df_full: pd.DataFrame):
         c2,
         "Via Merge Sheets",
         _fmt_int(via_merge),
-        f"{(via_merge/total_reg if total_reg else 0):.1%}",
+        f"{(via_merge / total_reg if total_reg else 0):.1%}",
         tema="verde",
     )
     render_kpi(
@@ -941,21 +770,20 @@ def view_base_completa(df: pd.DataFrame, df_full: pd.DataFrame):
         st.info("Selecione ao menos uma coluna para visualizar.")
         return
 
-    df_view = df[cols_sel].copy()
-
-    if busca.strip():
-        termo = busca.strip().upper()
-        mask = pd.Series(False, index=df_view.index)
-        for c in df_view.columns:
-            mask |= (
-                df_view[c]
-                .astype(str)
-                .str.upper()
-                .str.contains(termo, na=False, regex=False)
-            )
-        df_view = df_view[mask]
-
-    render_dataframe(df_view, height=420, icone="")
+    df_view = _filtrar_base_analitica(df, cols_sel, busca)
+    limite_linhas = int(n_linhas)
+    if len(df_view) > limite_linhas:
+        st.caption(
+            f"Exibindo {limite_linhas:,} de {len(df_view):,} registros filtrados. "
+            "A exportação inclui todos os resultados da busca."
+        )
+    render_dataframe(
+        df_view.head(limite_linhas),
+        titulo="Registros da Base Analítica",
+        icone="table_view",
+        badge=f"{len(df_view):,} filtrados".replace(",", "."),
+        height=420,
+    )
 
     # ── Exportações ──
     st.markdown("<br>", unsafe_allow_html=True)
@@ -966,7 +794,7 @@ def view_base_completa(df: pd.DataFrame, df_full: pd.DataFrame):
     with e1:
         st.download_button(
             "📥 Base Filtrada (Excel)",
-            Utils.gerar_excel(df[cols_sel], "Filtrada"),
+            Utils.gerar_excel(df_view, "Filtrada"),
             f"base_filtrada_{stamp}.xlsx",
             use_container_width=True,
         )
@@ -1008,30 +836,66 @@ def main():
     aplicar_estilo()
 
     if "df_memoria" not in st.session_state or st.session_state["df_memoria"] is None:
+        # ── BASE AUTOMÁTICA (ROBÔ) ──────────────────────────────
+        with st.spinner("🤖 Buscando a base gerada pelo robô ..."):
+            base_auto = DataLoader.carregar_base_automatica()
+        if base_auto is not None and not base_auto.empty:
+            st.session_state["df_memoria"] = base_auto
+            st.rerun()
+        # Sem arquivo agora: limpa o cache para a próxima tentativa já encontrar
+        # um arquivo novo chegado na pasta monitorada.
+        DataLoader.carregar_base_automatica.clear()
+
+    if "df_memoria" not in st.session_state or st.session_state["df_memoria"] is None:
         render_hero(
             titulo="Gestão de Quebra de Agenda",
             subtitulo="Importe a base operacional para gerar o Super Relatório Consolidado",
             badge="SISTEMA TOTALE",
         )
         render_section_header("folder_open", "Carregar Base de Dados", "CSV / XLSX")
-        arq = st.file_uploader("", type=["xlsx", "csv"], key="uploader_principal")
+        st.caption(
+            "O robô lê automaticamente o arquivo mais recente de "
+            f"`{bo.config().pasta_entrada}`. "
+            "Use o upload apenas quando quiser analisar outro arquivo."
+        )
+        arq = st.file_uploader(
+            "Base operacional",
+            type=["xlsx", "csv"],
+            key="uploader_principal",
+            label_visibility="collapsed",
+        )
 
         if arq:
             with st.spinner(
                 "🔄 Processando base, classificando segmentos e sincronizando monitores..."
             ):
-                raw = DataLoader.ler_arquivo(arq.getvalue(), arq.name)
+                conteudo = arq.getvalue()
+                raw = DataLoader.ler_arquivo(conteudo, arq.name)
+                if raw.empty:
+                    return
                 gs = DataLoader.buscar_gsheets()
-                df_proc = DataLoader.preparar_base(raw, gs)
+                df_proc = DataLoader.preparar_base(
+                    raw,
+                    gs,
+                    gs.attrs.get("fonte_ativos", ""),
+                    gs.attrs.get("erro_ativos", ""),
+                )
+                st.session_state["quebra_arquivo"] = (conteudo, arq.name)
                 st.session_state["df_memoria"] = df_proc
                 st.rerun()
         return
 
     df_full = st.session_state["df_memoria"]
+    if not isinstance(df_full, pd.DataFrame):
+        st.error("A base carregada não é válida. Troque ou envie a base novamente.")
+        return
+
+    df_full = DataLoader.compatibilizar_base(df_full)
+    monitor_disponivel = not bool(df_full.attrs.get("coluna_monitor_ausente", False))
     # 🛡️ Garante que TIPO_SERVICO exista mesmo com cache antigo em sessão
     if "TIPO_SERVICO" not in df_full.columns:
         df_full, _ = classificar_tipo_servico(df_full)
-        st.session_state["df_memoria"] = df_full
+    st.session_state["df_memoria"] = df_full
 
     # ── SIDEBAR ──
     with st.sidebar:
@@ -1059,10 +923,68 @@ def main():
             if sel_reg != "Todas":
                 df = df[df[Config.COL_REGIAO] == sel_reg]
 
-        st.divider()
-        if st.button("🔄 Trocar Base de Dados", use_container_width=True):
+        st.header("⚙️ Configurações")
+
+        c_atualizar, c_reiniciar = st.columns(2)
+        with c_atualizar:
+            atualizar = st.button(
+                "🤖 Atualizar base",
+                use_container_width=True,
+                help="Roda o robô: relê o arquivo mais recente da pasta monitorada e refaz o cache.",
+            )
+        with c_reiniciar:
+            reiniciar = st.button("🧹 Reiniciar", use_container_width=True)
+
+        if atualizar:
+            with st.spinner("🤖 Robô processando a base ..."):
+                base = DataLoader.recarregar_base_automatica()
+            if base is not None and not base.empty:
+                st.session_state["df_memoria"] = base
+                st.session_state.pop("quebra_arquivo", None)
+                st.rerun()
+            st.warning(
+                "O robô não encontrou uma base em "
+                f"`{bo.config().pasta_entrada}` — envie o arquivo manualmente."
+            )
+
+        if reiniciar:
             st.session_state["df_memoria"] = None
+            st.session_state.pop("quebra_arquivo", None)
             st.rerun()
+
+        st.divider()
+        bo.render_status_base()
+
+        with st.expander("Opções avançadas", expanded=False):
+            if st.button("🔗 Atualizar Lista de Ativos", use_container_width=True):
+                arquivo = st.session_state.get("quebra_arquivo")
+                if arquivo:
+                    DataLoader.buscar_gsheets.clear()
+                    gs = DataLoader.buscar_gsheets()
+                    raw = DataLoader.ler_arquivo(*arquivo)
+                    st.session_state["df_memoria"] = DataLoader.preparar_base(
+                        raw,
+                        gs,
+                        gs.attrs.get("fonte_ativos", ""),
+                        gs.attrs.get("erro_ativos", ""),
+                    )
+                    st.rerun()
+                else:
+                    with st.spinner(
+                        "🔗 Atualizando a lista de ativos na base automática..."
+                    ):
+                        base = DataLoader.recarregar_base_automatica()
+                    if base is not None and not base.empty:
+                        st.session_state["df_memoria"] = base
+                        st.rerun()
+                    st.warning(
+                        "Não foi possível atualizar a lista de ativos. Verifique se a "
+                        "base original do robô ainda está disponível ou envie o arquivo."
+                    )
+            if st.button("🔄 Trocar Base de Dados", use_container_width=True):
+                st.session_state["df_memoria"] = None
+                st.session_state.pop("quebra_arquivo", None)
+                st.rerun()
 
     # ── HERO TOPO ──
     render_hero(
@@ -1088,10 +1010,44 @@ def main():
         tipo="info" if n_mon > 0 else "alerta",
     )
 
+    # Nunca apresentar "SEM MONITOR" como se fosse um resultado válido do Sheets.
+    erro_ativos = df_full.attrs.get("erro_ativos", "")
+    vinculados = df_full.attrs.get("diag_vinculados", 0)
+    if not monitor_disponivel:
+        st.warning(
+            "⚠️ A base carregada não contém uma coluna de monitor. "
+            "Os registros foram mantidos como SEM MONITOR; atualize ou reenvie "
+            "uma base com essa informação."
+        )
+    elif erro_ativos:
+        st.warning(
+            f"⚠️ {erro_ativos} Os dados da matriz podem usar apenas o arquivo enviado."
+        )
+    elif not vinculados:
+        st.warning(
+            "⚠️ Nenhum login da base corresponde à lista_ativos. "
+            "Confira a coluna de login no arquivo e na planilha "
+            f"(coluna detectada: {df_full.attrs.get('diag_login') or 'nenhuma'}). "
+            "Se a planilha foi ajustada há pouco, use **🔗 Atualizar Lista de "
+            "Ativos** na barra lateral para refazer o vínculo."
+        )
+    elif n_mon == 0:
+        st.warning(
+            "⚠️ Logins vinculados, mas nenhum monitor preenchido. "
+            "Confira a coluna Monitor na lista_ativos."
+        )
+    else:
+        st.caption(
+            f"🔗 Lista de Ativos: {df_full.attrs.get('fonte_ativos', 'Google Sheets')} · "
+            f"{_fmt_int(vinculados)} de {_fmt_int(len(df_full))} registros vinculados "
+            f"({_fmt_int(df_full.attrs.get('diag_ativos', 0))} logins na lista)."
+        )
+
     # ── ABAS PRINCIPAIS ──
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         [
             "🏢 Visão Executiva",
+            "🏠 Novos Domicílios",
             "🔄 Migração",
             "🏢 PME",
             "🎯 Critérios",
@@ -1102,12 +1058,14 @@ def main():
     with tab1:
         view_executiva(df, Config.SLA_GERAL)
     with tab2:
-        view_segmento(df, "Migração", Config.SLA_MIGRACAO)
+        view_segmento(df, "Novos Domicílios", Config.SLA_GERAL)
     with tab3:
-        view_segmento(df, "PME", Config.SLA_PME)
+        view_segmento(df, "Migração", Config.SLA_MIGRACAO)
     with tab4:
-        view_criterios(df)
+        view_segmento(df, "PME", Config.SLA_PME)
     with tab5:
+        view_criterios(df)
+    with tab6:
         view_base_completa(df, df_full)
 
 

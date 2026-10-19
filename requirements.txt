@@ -1,19 +1,12 @@
-streamlit
+# Runtime dependencies
+streamlit>=1.55,<2
 pandas
-openpyxl
-plotly
-streamlit-carousel
 numpy
-st-gsheets-connection
-chardet
-pytz
-duckdb
-streamlit-autorefresh
+plotly
+openpyxl
+xlrd
+requests
 gspread
-gspread-dataframe
-gspread-formatting
-gspread-pandas
-google-api-python-client
 google-auth
 google-auth-oauthlib
 altair

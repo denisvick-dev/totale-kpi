@@ -2,20 +2,25 @@
 Central de Performance | Painel de Consultivos e Produtos
 Arquivo: pages/consultivo.py
 """
+
 from __future__ import annotations
+
+from io import BytesIO
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 import streamlit as st
-from io import BytesIO
-from typing import Any, Optional, cast
 from streamlit_gsheets import GSheetsConnection
 
 # ====================================================
 # IMPORTAÇÃO DOS COMPONENTES CORPORATIVOS
 # ====================================================
+from components.calendario import InfoCalendario, fator_projecao
 from components.componentes import (
     aplicar_estilo,
+    estilizar_dataframe,
+    render_dataframe,
     render_hero,
     render_insight,
     render_kpi,
@@ -41,23 +46,22 @@ class Calculos:
 
     @staticmethod
     def fator_projecao(df: pd.DataFrame) -> tuple[float, int]:
+        """
+        Projeção de fim de mês pelo calendário operacional.
+
+        Segunda a sábado, **sem domingos e sem feriados**
+        (``components.calendario`` — mesma regra das projeções).
+        """
         if df.empty or "DATA" not in df.columns or df["DATA"].isna().all():
             return 1.0, 0
-            
+
         hoje = pd.Timestamp.today().normalize()
         if df["DATA"].max().month != hoje.month or df["DATA"].max().year != hoje.year:
             return 1.0, 0
 
-        inicio_mes = hoje.replace(day=1)
-        prox_mes = inicio_mes.replace(day=28) + pd.Timedelta(days=4)
-        fim_mes = prox_mes - pd.Timedelta(days=prox_mes.day)
-
-        dias_uteis_total = len([d for d in pd.date_range(inicio_mes, fim_mes) if d.dayofweek < 6])
-        dias_decorridos = len([d for d in pd.date_range(inicio_mes, hoje) if d.dayofweek < 6])
-        faltantes = dias_uteis_total - dias_decorridos
-
-        fator = dias_uteis_total / dias_decorridos if dias_decorridos > 0 and faltantes > 0 else 1.0
-        return fator, faltantes
+        calendario = InfoCalendario.calcular(hoje.date())
+        fator = fator_projecao(calendario.total_dias_uteis, calendario.dias_passados)
+        return fator, calendario.dias_faltantes
 
 
 class EstiloTabela:
@@ -69,7 +73,10 @@ class EstiloTabela:
         try:
             numero = pd.to_numeric(valor, errors="coerce")
             if pd.notna(numero) and numero > 350:
-                return "background-color: #ECFDF5; color: #065F46; font-weight: bold;"
+                return (
+                    "background-color: #ECFDF5; color: #065F46; font-weight: 700; "
+                    "border-left: 3px solid #0D9668; text-align: center;"
+                )
         except (TypeError, ValueError):
             pass
         return ""
@@ -86,8 +93,16 @@ def carregar_hierarquia() -> pd.DataFrame:
     return df[["Login", "Técnico", "Monitor", "Base"]].drop_duplicates(subset=["Login"])
 
 
-def preparar_ranking(df: pd.DataFrame, colunas_grupo: list, fator_proj: float = 1.0) -> pd.DataFrame:
-    colunas_soma = ["Qtde. Cons.", "Qtde. Prod.", "Qtde. Mesh", "Qtde. TV", "Qtde. Virtua"]
+def preparar_ranking(
+    df: pd.DataFrame, colunas_grupo: list, fator_proj: float = 1.0
+) -> pd.DataFrame:
+    colunas_soma = [
+        "Qtde. Cons.",
+        "Qtde. Prod.",
+        "Qtde. Mesh",
+        "Qtde. TV",
+        "Qtde. Virtua",
+    ]
     colunas_soma = [c for c in colunas_soma if c in df.columns]
 
     res = df.groupby(colunas_grupo, dropna=False)[colunas_soma].sum().reset_index()
@@ -100,7 +115,9 @@ def preparar_ranking(df: pd.DataFrame, colunas_grupo: list, fator_proj: float = 
     }
     res = res.rename(columns=renomeios).fillna(0)
 
-    col_sort = "Total Consultivos" if "Total Consultivos" in res.columns else "Total Produtos"
+    col_sort = (
+        "Total Consultivos" if "Total Consultivos" in res.columns else "Total Produtos"
+    )
     res = res.sort_values(col_sort, ascending=False)
     res.insert(0, "Posição", range(1, len(res) + 1))
 
@@ -137,11 +154,14 @@ def main():
     render_hero(
         titulo="Painel de Consultivos e Produtos",
         subtitulo="Análise de mix de produtos, consultivos realizados e oportunidades comerciais.",
-        badge="Performance"
+        badge="Performance",
     )
 
     # ── Validação Inicial ────────────────────────────────────────────
-    if "dados_cons" not in st.session_state or "Consultivo" not in st.session_state["dados_cons"]:
+    if (
+        "dados_cons" not in st.session_state
+        or "Consultivo" not in st.session_state["dados_cons"]
+    ):
         st.warning("⚠️ Carregue os dados na aba principal primeiro.")
         st.stop()
 
@@ -165,7 +185,9 @@ def main():
         df_ativos = carregar_hierarquia()
         df["LOGIN NETSALES"] = df.get("LOGIN NETSALES", "").astype(str).str.strip()
         df = df.drop(columns=["Monitor", "Base"], errors="ignore")
-        df = pd.merge(df, df_ativos, left_on="LOGIN NETSALES", right_on="Login", how="outer")
+        df = pd.merge(
+            df, df_ativos, left_on="LOGIN NETSALES", right_on="Login", how="outer"
+        )
     except Exception as e:
         st.error(f"Erro ao carregar hierarquia: {e}")
 
@@ -193,11 +215,14 @@ def main():
 
     # ── Filtros (Sidebar) ────────────────────────────────────────────
     st.sidebar.markdown("### 🎯 Filtros Avançados")
-    base_sel = st.sidebar.selectbox("Base:", ["Todas"] + sorted(df["Base"].dropna().unique().tolist()))
-    
+    base_sel = st.sidebar.selectbox(
+        "Base:", ["Todas"] + sorted(df["Base"].dropna().unique().tolist())
+    )
+
     monitor_opts = ["Todos"] + sorted(
         df[df["Base"] == base_sel]["Monitor"].dropna().unique().tolist()
-        if base_sel != "Todas" else df["Monitor"].dropna().unique().tolist()
+        if base_sel != "Todas"
+        else df["Monitor"].dropna().unique().tolist()
     )
     monitor_sel = st.sidebar.selectbox("Monitor:", monitor_opts)
 
@@ -208,8 +233,12 @@ def main():
 
     # ── Cálculos Filtrados ───────────────────────────────────────────
     f_cons, f_prod = df["Qtde. Cons."].sum(), df["Qtde. Prod."].sum()
-    f_mesh, f_tv, f_vir = df["Qtde. Mesh"].sum(), df["Qtde. TV"].sum(), df["Qtde. Virtua"].sum()
-    
+    f_mesh, f_tv, f_vir = (
+        df["Qtde. Mesh"].sum(),
+        df["Qtde. TV"].sum(),
+        df["Qtde. Virtua"].sum(),
+    )
+
     eq_ativas = df.groupby("LOGIN NETSALES")["Qtde. Cons."].sum()
     eq_total, eq_produtivas = len(eq_ativas), len(eq_ativas[eq_ativas > 0])
     eficiencia = (eq_produtivas / eq_total) if eq_total > 0 else 0
@@ -221,14 +250,28 @@ def main():
     c1, c2, c3, c4 = st.columns(4)
     render_kpi(c1, "Total Equipes", f"{eq_total:,.0f}", tema="azul")
     render_kpi(c2, "Equipes Produtivas", f"{eq_produtivas:,.0f}", tema="verde")
-    render_kpi(c3, "Técnicos Zerados", f"{eq_total - eq_produtivas:,.0f}", tema="vermelho")
+    render_kpi(
+        c3, "Técnicos Zerados", f"{eq_total - eq_produtivas:,.0f}", tema="vermelho"
+    )
     render_kpi(c4, "Eficiência (Conversão)", f"{eficiencia:.2%}", tema="cinza")
 
     # ── UI: Resultados Realizados ────────────────────────────────────
     render_section_header("bar_chart", "Resultado Realizado (Até o momento)")
     c5, c6, c7, c8, c9 = st.columns(5)
-    render_kpi(c5, "Tot. Consultivos", f"{f_cons:,.0f}", sub=Calculos.share(f_cons, t_cons), tema="laranja")
-    render_kpi(c6, "Tot. Produtos", f"{f_prod:,.0f}", sub=Calculos.share(f_prod, t_prod), tema="azul")
+    render_kpi(
+        c5,
+        "Tot. Consultivos",
+        f"{f_cons:,.0f}",
+        sub=Calculos.share(f_cons, t_cons),
+        tema="laranja",
+    )
+    render_kpi(
+        c6,
+        "Tot. Produtos",
+        f"{f_prod:,.0f}",
+        sub=Calculos.share(f_prod, t_prod),
+        tema="azul",
+    )
     render_kpi(c7, "Total Mesh", f"{f_mesh:,.0f}", tema="cinza")
     render_kpi(c8, "Total TV Box", f"{f_tv:,.0f}", tema="cinza")
     render_kpi(c9, "Total Virtua", f"{f_vir:,.0f}", tema="cinza")
@@ -236,16 +279,32 @@ def main():
     # ── UI: Projeções ────────────────────────────────────────────────
     if falt_dias > 0:
         st.markdown("<br>", unsafe_allow_html=True)
-        render_insight(f"Faltam **{falt_dias} dias úteis** para o fechamento do mês.", tipo="info")
-        
+        render_insight(
+            f"Faltam **{falt_dias} dias úteis** para o fechamento do mês "
+            "(segunda a sábado, sem domingos nem feriados).",
+            tipo="info",
+        )
+
         render_section_header("trending_up", "Projeção Fim do Mês")
         p1, p2, _ = st.columns([1, 1, 3])
-        
+
         proj_cons = int(f_cons * fator_proj)
         proj_prod = int(f_prod * fator_proj)
-        
-        render_kpi(p1, "Proj. Consultivos", f"{proj_cons:,}", sub=f"+ {proj_cons - f_cons} est.", tema="laranja")
-        render_kpi(p2, "Proj. Produtos", f"{proj_prod:,}", sub=f"+ {proj_prod - f_prod} est.", tema="laranja")
+
+        render_kpi(
+            p1,
+            "Proj. Consultivos",
+            f"{proj_cons:,}",
+            sub=f"+ {proj_cons - f_cons} est.",
+            tema="laranja",
+        )
+        render_kpi(
+            p2,
+            "Proj. Produtos",
+            f"{proj_prod:,}",
+            sub=f"+ {proj_prod - f_prod} est.",
+            tema="laranja",
+        )
 
     st.divider()
 
@@ -254,45 +313,78 @@ def main():
     with col_tit:
         render_section_header("table_view", "Visão Consolidada")
     with col_tog:
-        st.markdown("<br>", unsafe_allow_html=True) # Espaçamento para alinhar
+        st.markdown("<br>", unsafe_allow_html=True)  # Espaçamento para alinhar
         detalhar_tec = st.toggle("Detalhar por Técnico")
 
-    grupo = ["LOGIN NETSALES", "VENDEDOR", "Monitor", "Base"] if detalhar_tec else ["Monitor"]
+    grupo = (
+        ["LOGIN NETSALES", "VENDEDOR", "Monitor", "Base"]
+        if detalhar_tec
+        else ["Monitor"]
+    )
     df_exibir = preparar_ranking(df, grupo, fator_proj)
 
     colunas_proj = [c for c in df_exibir.columns if "Proj." in str(c)]
-    colunas_reais = [c for c in ["Total Consultivos", "Total Produtos"] if c in df_exibir.columns]
+    colunas_reais = [
+        c for c in ["Total Consultivos", "Total Produtos"] if c in df_exibir.columns
+    ]
     todas_num = [c for c in df_exibir.columns if c not in ["Posição"] + grupo]
 
     # Formatação Styler do Pandas
-    style_df = df_exibir.style.format(formatter=cast(Any, {c: "{:,}" for c in todas_num}))
+    style_df = estilizar_dataframe(df_exibir, {c: "{:,}" for c in todas_num})
 
     if colunas_reais:
         style_df = style_df.set_properties(
-            **{"background-color": "#F8FAFC", "font-weight": "bold"},
+            **{
+                "background-color": "#EAF2FC",
+                "color": "#0A2F6B",
+                "font-weight": "700",
+                "border-left": "3px solid #0A2F6B",
+                "text-align": "center",
+            },
             subset=cast(Any, colunas_reais),
         )
     if colunas_proj:
         style_df = style_df.set_properties(
-            **{"background-color": "#FFF7ED", "color": "#C2410C", "font-weight": "bold"},
+            **{
+                "background-color": "#FFF7ED",
+                "color": "#C2410C",
+                "font-weight": "700",
+                "border-left": "3px solid #E8700A",
+                "text-align": "center",
+            },
             subset=cast(Any, colunas_proj),
         )
 
     if colunas_reais:
-        style_df = style_df.map(EstiloTabela.colorir_metas, subset=cast(Any, colunas_reais))
+        style_df = style_df.map(
+            EstiloTabela.colorir_metas, subset=cast(Any, colunas_reais)
+        )
 
     st.dataframe(style_df, use_container_width=True, height=450, hide_index=True)
 
     # ── UI: Alerta de Equipes Zeradas ────────────────────────────────
     st.divider()
-    render_section_header("warning", "Equipes Zeradas (Sem Consultivos)")
-    
+    render_section_header(
+        "warning",
+        "Equipes Zeradas (Sem Consultivos)",
+        f"{len(df_exibir[df_exibir['Total Consultivos'] == 0])} zeradas",
+    )
+
     df_zerados = df_exibir[df_exibir["Total Consultivos"] == 0]
 
     if not df_zerados.empty:
-        st.dataframe(df_zerados, use_container_width=True, hide_index=True)
+        render_dataframe(
+            df_zerados,
+            titulo="Relação de Equipes Sem Consultivos",
+            icone="person_off",
+            fmt={c: "{:,}" for c in todas_num},
+            badge=f"{len(df_zerados)} equipes",
+        )
     else:
-        render_insight("✅ Excelente! 100% da operação possui pelo menos um consultivo registrado.", tipo="ok")
+        render_insight(
+            "✅ Excelente! 100% da operação possui pelo menos um consultivo registrado.",
+            tipo="ok",
+        )
 
     # ── Exportação ───────────────────────────────────────────────────
     st.divider()
