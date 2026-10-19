@@ -144,8 +144,6 @@ def _nomes_colunas_unicos(nomes: Iterable[object]) -> list[str]:
             f"col_{i}" if not nome or nome.lower().startswith("unnamed") else nome
         )
 
-    # Reservar as grafias originais impede que uma duplicata de "A" vire "A.1"
-    # quando já existe uma coluna chamada "A.1" no arquivo.
     reservados = set(limpos)
     usados: set[str] = set()
     contadores: dict[str, int] = {}
@@ -164,18 +162,10 @@ def _nomes_colunas_unicos(nomes: Iterable[object]) -> list[str]:
 
 
 def _padronizar_coluna_texto(serie: pd.Series) -> pd.Series:
-    """Converte uma coluna para texto limpo, de forma **vetorial**.
-
-    Equivalente a aplicar :func:`_celula_para_texto` célula a célula, porém sem
-    callback Python por valor. Em bases reais (120 mil linhas × 18 colunas) a
-    padronização caiu de ~0,82 s para ~0,13 s (**6× mais rápida**) com saída
-    idêntica — ver ``tests/test_performance_carga.py``.
-    """
     if pd.api.types.is_bool_dtype(serie):
         return serie.map({True: "True", False: "False"}).astype("string")
 
     if pd.api.types.is_datetime64_any_dtype(serie):
-        # str(Timestamp) → "AAAA-MM-DD HH:MM:SS"; mantém o formato anterior.
         return serie.dt.strftime("%Y-%m-%d %H:%M:%S").astype("string")
 
     if pd.api.types.is_numeric_dtype(serie):
@@ -183,8 +173,6 @@ def _padronizar_coluna_texto(serie: pd.Series) -> pd.Series:
         texto = numerica.astype("string")
         inteiros = numerica.notna() & (numerica == numerica.round())
         if inteiros.any():
-            # Não converte a coluna inteira para Int64: isso estoura para valores
-            # integrais > 2**63-1, apesar de haver floats perfeitamente válidos.
             com_decimal_zero = inteiros & texto.str.fullmatch(r"-?\d+\.0+", na=False)
             texto = texto.mask(
                 com_decimal_zero, texto.str.replace(r"\.0+$", "", regex=True)
@@ -194,10 +182,7 @@ def _padronizar_coluna_texto(serie: pd.Series) -> pd.Series:
                 texto.loc[notacao_cientifica] = numerica.loc[notacao_cientifica].map(
                     _celula_para_texto
                 )
-        # "-0.0" também é zero para ``_celula_para_texto``; alinhe as duas rotas.
         texto = texto.mask(numerica == 0, "0")
-        # Decimais em notação científica seguem o ``str(float)`` da rota célula a
-        # célula; o dtype string do pandas usa outra precisão em alguns casos.
         nao_inteiros = numerica.notna() & ~inteiros
         cientificos = nao_inteiros & texto.str.contains(r"[eE]", na=False)
         if cientificos.any():
@@ -321,7 +306,6 @@ def _aplicar_base_no_dataframe(df: pd.DataFrame, base: str) -> pd.DataFrame:
 
 
 def _unificar_nomes_colunas(frames: list[pd.DataFrame]) -> list[pd.DataFrame]:
-    """Uma grafia por coluna na junção. O primeiro arquivo define o nome."""
     canonico: dict[str, str] = {}
     unificados: list[pd.DataFrame] = []
     for df in frames:
@@ -339,7 +323,6 @@ def _unificar_nomes_colunas(frames: list[pd.DataFrame]) -> list[pd.DataFrame]:
 
 # ── Descoberta e Metadados de Arquivos ──────────────────────────────
 def _obter_pasta_downloads_windows() -> Path | None:
-    """Downloads real do Windows (pode estar em outro drive/OneDrive)."""
     if sys.platform != "win32":
         return None
 
@@ -356,16 +339,10 @@ def _obter_pasta_downloads_windows() -> Path | None:
                 ctypes.byref(folder_id), 0, None, ctypes.byref(caminho)
             )
         except (AttributeError, OSError) as exc:
-            logger.warning(
-                "Não foi possível localizar a pasta Downloads do Windows: %s", exc
-            )
+            logger.warning("Falha Downloads Windows: %s", exc)
             return None
 
         if resultado != 0 or not caminho.value:
-            logger.warning(
-                "Não foi possível localizar a pasta Downloads do Windows (HRESULT %s).",
-                resultado,
-            )
             return None
 
         return Path(caminho.value)
@@ -375,10 +352,10 @@ def _obter_pasta_downloads_windows() -> Path | None:
 
 
 def obter_pasta_robo_padrao() -> str:
-    # 1ª tentativa: API do Windows (SHGetKnownFolderPath)
-    #    → retorna C:\Users\João\Downloads (exemplo)
-    robo = Path.home() / "Downloads"
-    #                 ↑ fallback: também resolve para o usuário logado
+    # No Windows tenta usar a API, senao vai pro default
+    robo = _obter_pasta_downloads_windows()
+    if not robo:
+        robo = Path.home() / "Downloads"
     robo.mkdir(parents=True, exist_ok=True)
     return str(robo.resolve())
 
@@ -459,8 +436,6 @@ def _listar_candidatos_com_stat(
     arquivos = [
         arq for arq in _listar_arquivos(p, recursivo) if not _arquivo_ignorado(arq.name)
     ]
-    # A preferência pelo padrão não pode esconder um arquivo mais recente com
-    # nome alternativo (p.ex. GRS.csv ao lado de Atividades-SPO.csv).
     marcadores = tuple(m.lower() for m in MAPA_BASES_ARQUIVO)
     encontrados = [
         arq
@@ -487,7 +462,6 @@ def buscar_arquivo_mais_recente(
     pasta: str,
     padroes: tuple[str, ...] = PADROES_TOTALE,
 ) -> tuple[str | None, float | None, int | None]:
-    """Retorna o arquivo mais novo; mantém mtime em segundos na API pública."""
     candidatos = _listar_candidatos_com_stat(pasta, padroes)
     if not candidatos:
         return None, None, None
@@ -510,7 +484,6 @@ def selecionar_arquivos(
     candidatos: Sequence[Candidato],
     modo: ModoLeitura = "ultimo",
 ) -> list[Candidato]:
-    """Seleciona somente o arquivo de maior mtime, sem separar por base."""
     del modo
     if not candidatos:
         return []
@@ -724,7 +697,6 @@ _SEPARADORES_CSV: tuple[str, ...] = (";", ",", "\t", "|")
 
 
 def _quantidade_campos_csv(cabecalho: str, separador: str) -> int:
-    """Conta apenas delimitadores fora de aspas (CSV pode contê-los em nomes)."""
     try:
         return len(next(csv.reader([cabecalho], delimiter=separador)))
     except (csv.Error, StopIteration):
@@ -732,11 +704,6 @@ def _quantidade_campos_csv(cabecalho: str, separador: str) -> int:
 
 
 def _ordem_tentativas_csv(raw: bytes) -> list[tuple[str, str]]:
-    """Tenta primeiro o charset e separador mais prováveis, sem parses extras.
-
-    Decodifica a linha de cabeçalho completa (não a corta no meio de um caractere
-    UTF-8) e ignora delimitadores dentro de campos entre aspas.
-    """
     cabecalho_bytes = raw.split(b"\n", 1)[0]
     primeira_linha = ""
     enc_inicial = _ENCODINGS_CSV[0]
@@ -769,8 +736,6 @@ def _ler_csv_de_bytes(raw: bytes, nome: str) -> tuple[pd.DataFrame | None, str |
     for enc, sep in _ordem_tentativas_csv(raw):
         try:
             with warnings.catch_warnings():
-                # Pandas pode transformar uma coluna excedente em índice ou
-                # descartá-la com index_col=False. Nenhum dos dois é aceitável.
                 warnings.simplefilter("error", pd.errors.ParserWarning)
                 df = pd.read_csv(
                     BytesIO(raw),
@@ -785,8 +750,6 @@ def _ler_csv_de_bytes(raw: bytes, nome: str) -> tuple[pd.DataFrame | None, str |
             ultimo = e
             continue
         if df.shape[1] == 1:
-            # Uma coluna é válida; não aceitar um separador errado que deixou
-            # intacto um cabeçalho com duas ou mais colunas reais.
             cabecalho = cabecalho_bytes.decode(enc)
             if any(
                 _quantidade_campos_csv(cabecalho, outro) > 1
@@ -943,8 +906,6 @@ def processar_candidatos(
 
 # ── Fachada OO (Compatibilidade com TotaleRoboEngine) ───────────────
 class TotaleRoboEngine:
-    """Fachada unificada de detecção e leitura de exportações TOTALE."""
-
     PADROES = PADROES_TOTALE
     MAPA_BASES = MAPA_BASES_ARQUIVO
 
@@ -1073,7 +1034,7 @@ class TotaleRoboEngine:
 
 try:
     import streamlit as st
-except ImportError:  # o motor e a CLI também funcionam sem Streamlit
+except ImportError:
     st = None  # type: ignore[assignment]
 
 _LOCK_STALE_SEGUNDOS: int = 180
@@ -1135,7 +1096,6 @@ def _estado_bool(chave: str, padrao: bool) -> bool:
 
 
 def _modo_atual() -> ModoLeitura:
-    """O modo é fixo: somente o arquivo de maior mtime entra no pipeline."""
     return "ultimo"
 
 
@@ -1242,8 +1202,6 @@ def _executar_verificacao_robo(
             _toast_dedup("Arquivos mudaram durante a leitura. Aguardando...", icon="⚠️")
             return
 
-        # Executa o ETL antes de publicar a nova assinatura e os dados. Uma falha
-        # não deve marcar o arquivo como processado nem substituir a base anterior.
         bruto = resultado.df
         processado = bruto
         if callable(etl_fn):
@@ -1301,6 +1259,123 @@ if st is not None and hasattr(st, "fragment"):
     _executar_verificacao_robo = st.fragment(run_every="5s")(_executar_verificacao_robo)
 
 
+# ── NOVA INTEGRAÇÃO: DETECÇÃO NUVEM VS LOCAL ─────────────────────────
+def _rodando_na_nuvem() -> bool:
+    """Verifica se está rodando no Streamlit Cloud (Linux) ou Local (Windows)."""
+    return sys.platform != "win32"
+
+
+def _processar_arquivo_upload(
+    arquivo_enviado, etl_fn, gsheets_fn, colunas_esperadas, sheet_name
+):
+    """Reaproveita o motor do robô para arquivos enviados manualmente pelo navegador."""
+    if st is None:
+        raise RuntimeError(
+            "Streamlit não está instalado. A interface do robô só roda no app."
+        )
+
+    ext = Path(arquivo_enviado.name).suffix
+    # Salva o arquivo temporariamente para que ler_arquivo_detalhado (que usa path) funcione.
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+        tmp.write(arquivo_enviado.getvalue())
+        caminho_tmp = tmp.name
+
+    try:
+        leitura = ler_arquivo_detalhado(
+            caminho_tmp, colunas_esperadas=colunas_esperadas, sheet_name=sheet_name
+        )
+
+        if leitura is None:
+            st.error("Erro ao ler arquivo: nenhum resultado de leitura foi retornado.")
+            return
+
+        if leitura.erro or leitura.df is None:
+            st.error(f"Erro ao ler arquivo: {leitura.erro}")
+            return
+
+        bruto = leitura.df
+        base_detectada = detectar_base_arquivo(arquivo_enviado.name)
+
+        if base_detectada:
+            bruto = _aplicar_base_no_dataframe(bruto, base_detectada)
+
+        processado = bruto
+        if callable(etl_fn):
+            transformado = etl_fn(bruto.copy(deep=True), _obter_gsheets(gsheets_fn))
+            if transformado is not None:
+                if not isinstance(transformado, pd.DataFrame):
+                    st.error("Erro interno: ETL não retornou um DataFrame.")
+                    return
+                processado = transformado
+
+        # Atualiza o session_state com os mesmos dados que o Robô Local faria
+        st.session_state["df_memoria_raw"] = bruto
+        st.session_state["df_memoria"] = processado
+        st.session_state["robo_base_detectada"] = base_detectada
+        st.session_state["origem_dados"] = f"Upload Nuvem ({arquivo_enviado.name})"
+        st.session_state["robo_hora_sucesso"] = datetime.now()
+
+        # Limpa erros anteriores, se houver
+        st.session_state.pop("robo_erro", None)
+
+        st.success(
+            f"✅ Arquivo `{arquivo_enviado.name}` carregado e processado com sucesso!"
+        )
+        _rerun_aplicacao()
+
+    except Exception as e:
+        st.error(f"Erro inesperado no pipeline de Nuvem: {e}")
+    finally:
+        # Limpa o arquivo temporário do servidor
+        try:
+            os.remove(caminho_tmp)
+        except OSError:
+            pass
+
+
+def _renderizar_interface_nuvem(
+    etl_fn: EtlFn | None,
+    gsheets_fn: FonteSheets,
+    colunas_esperadas: list[str] | None,
+    sheet_name: str | int | None,
+):
+    """Interface mostrada apenas quando o script roda pelo Link Web."""
+    if st is None:
+        raise RuntimeError(
+            "Streamlit não está instalado. A interface do robô só roda no app."
+        )
+
+    st.markdown(
+        """
+        <div style='font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;
+        letter-spacing:0.8px;margin:14px 0 6px;padding-left:4px;'>
+            Envio de Arquivo (Modo Nuvem)
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.info(
+        "🌐 O aplicativo está rodando na **Nuvem**. O Robô de Auto-Sincronismo com "
+        "suas pastas do computador está desativado. Por favor, **faça o upload** do arquivo abaixo."
+    )
+
+    arquivo_enviado = st.file_uploader(
+        "Selecione a exportação CSV ou Excel",
+        type=["csv", "xlsx", "xlsm", "xls"],
+        key="upload_nuvem",
+    )
+
+    # Se a pessoa enviou o arquivo e ele for diferente do já processado (evita loops)
+    if arquivo_enviado is not None:
+        assinatura_upload = (arquivo_enviado.name, arquivo_enviado.size)
+        if st.session_state.get("_robo_ultima_assinatura_upload") != assinatura_upload:
+            st.session_state["_robo_ultima_assinatura_upload"] = assinatura_upload
+            _processar_arquivo_upload(
+                arquivo_enviado, etl_fn, gsheets_fn, colunas_esperadas, sheet_name
+            )
+
+
 def renderizar_robo_local(
     etl_fn: EtlFn | None = None,
     gsheets_fn: FonteSheets = None,
@@ -1311,8 +1386,20 @@ def renderizar_robo_local(
     mostrar_toggle: bool = True,
     mostrar_config: bool = True,
 ) -> None:
-    """Renderiza os controles no contêiner atual da página de envio de Excel."""
+    """Função Wrapper que decide se exibe a interface Local (Robô) ou Nuvem (Upload)."""
     _exigir_streamlit()
+
+    # ROTEAMENTO HÍBRIDO (LOCAL vs STREAMLIT.APP)
+    if _rodando_na_nuvem():
+        _renderizar_interface_nuvem(
+            etl_fn=etl_fn,
+            gsheets_fn=gsheets_fn,
+            colunas_esperadas=colunas_esperadas,
+            sheet_name=sheet_name,
+        )
+        return
+
+    # ------------ MODO LOCAL (ROBÔ ORIGINAL) ------------
     assert st is not None
 
     if "robo_ativo" not in st.session_state:
@@ -1335,7 +1422,7 @@ def renderizar_robo_local(
         """
         <div style='font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;
         letter-spacing:0.8px;margin:14px 0 6px;padding-left:4px;'>
-            Robô de Sincronismo
+            Robô de Sincronismo (Local)
         </div>
         """,
         unsafe_allow_html=True,
