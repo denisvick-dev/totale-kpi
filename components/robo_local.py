@@ -1392,6 +1392,14 @@ def renderizar_robo_local(
 
     # ROTEAMENTO HÍBRIDO (LOCAL vs STREAMLIT.APP)
     if _rodando_na_nuvem():
+        if mostrar_toggle_sidebar:
+            st.sidebar.toggle(
+                "⚡ Auto-Sincronizar",
+                value=False,
+                key="robo_toggle_ui",
+                help="Auto-Sincronismo indisponível na Nuvem.",
+                disabled=True,
+            )
         _renderizar_interface_nuvem(
             etl_fn=etl_fn,
             gsheets_fn=gsheets_fn,

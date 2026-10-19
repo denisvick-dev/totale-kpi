@@ -1076,10 +1076,12 @@ class _ColunaStub:
 class _SidebarStub:
     def __init__(self, streamlit: StreamlitStub) -> None:
         self.streamlit = streamlit
-        self.toggles: list[str] = []
+        self.toggles: list[tuple[str, dict[str, object]]] = []
 
-    def toggle(self, rotulo: str, value: bool = False, key: str = "", **_kw) -> bool:
-        self.toggles.append(rotulo)
+    def toggle(
+        self, rotulo: str, value: bool = False, key: str = "", **kwargs: object
+    ) -> bool:
+        self.toggles.append((rotulo, kwargs))
         return bool(self.streamlit.session_state.get(key, value))
 
 
@@ -1596,9 +1598,27 @@ def test_renderizar_toggle_auto_sincronizar_no_sidebar(
         mostrar_toggle_sidebar=True,
     )
 
-    assert st_stub.sidebar.toggles == ["⚡ Auto-Sincronizar"]
+    assert st_stub.sidebar.toggles == [("⚡ Auto-Sincronizar", {"help": (
+        "Monitora a pasta a cada 5s enquanto esta sessão estiver aberta. "
+        "SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM."
+    )})]
     assert ("toggle", "⚡ Auto-Sincronizar") not in st_stub.mensagens
     assert st_stub.session_state["robo_ativo"] is True
+
+
+def test_renderizar_toggle_sidebar_desabilitado_na_nuvem(
+    st_stub, monkeypatch
+) -> None:
+    monkeypatch.setattr(robo, "_rodando_na_nuvem", lambda: True)
+
+    robo.renderizar_robo_local(mostrar_toggle_sidebar=True)
+
+    assert st_stub.sidebar.toggles == [
+        (
+            "⚡ Auto-Sincronizar",
+            {"help": "Auto-Sincronismo indisponível na Nuvem.", "disabled": True},
+        )
+    ]
 
 
 def test_renderizar_pasta_vazia_mostra_monitorando(
