@@ -11,7 +11,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from io import BytesIO
-from typing import Any
+from typing import Any, Literal, cast
 
 import gspread
 import numpy as np
@@ -20,6 +20,7 @@ import plotly.express as px
 import streamlit as st
 from google.oauth2.service_account import Credentials
 
+from components.base_operacional import normalizar_erro_worksheet, resolver_sheet_id
 from components.componentes import (
     aplicar_estilo,
     estilizar_dataframe,
@@ -118,12 +119,14 @@ def _gspread_client() -> gspread.Client:
     Cria cliente gspread usando as mesmas credenciais do secrets.toml.
     cache_resource → instância reutilizada em toda a sessão.
     """
-    info = dict(st.secrets["gcp_service_account"])
+    info = st.secrets.get("gcp_service_account", {})
+    if not info:
+        raise RuntimeError("Credenciais [gcp_service_account] ausentes no secrets.toml.")
     scopes = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
-    creds = Credentials.from_service_account_info(info, scopes=scopes)
+    creds = Credentials.from_service_account_info(dict(info), scopes=scopes)
     return gspread.authorize(creds)
 
 
@@ -200,7 +203,7 @@ class Config:
     APP_NOME = "Gestão de Ativos TOTALE"
     APP_ICONE = "👷"
     APP_VERSAO = "4.0.0"
-    SHEET_ID = "1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg"
+    SHEET_ID = resolver_sheet_id(default="1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg")
 
     ABAS = {
         "ativos": "lista_ativos",
@@ -323,7 +326,8 @@ def _fetch(chave: str, colunas: tuple[str, ...]) -> pd.DataFrame:
         return empty
 
     except Exception as exc:
-        st.warning(f"⚠️ Erro leitura '{worksheet_name}': {exc}")
+        mensagem = normalizar_erro_worksheet(exc, worksheet_name)
+        st.warning(f"⚠️ Erro leitura '{worksheet_name}': {mensagem}")
         return empty
 
 
@@ -570,7 +574,10 @@ class DS:
             label,
             value,
             subtitle,
-            {"v": "verde", "a": "vermelho", "av": "laranja"}.get(tema, "azul"),
+            cast(
+                Literal["azul", "verde", "vermelho", "laranja", "cinza"],
+                {"v": "verde", "a": "vermelho", "av": "laranja"}.get(tema, "azul"),
+            ),
         )
 
     @staticmethod

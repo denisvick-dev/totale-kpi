@@ -52,8 +52,13 @@ class Config:
     SLA_MIGRACAO = 0.25
     SLA_PME = 0.20
 
-    URL_LISTA_ATIVOS = "https://docs.google.com/spreadsheets/d/1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg/edit"
-    SHEET_ID_ATIVOS = "1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg"
+    URL_LISTA_ATIVOS = (
+        "https://docs.google.com/spreadsheets/d/"
+        f"{bo.resolver_sheet_id(default='1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg')}/edit"
+    )
+    SHEET_ID_ATIVOS = bo.resolver_sheet_id(
+        default="1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg"
+    )
     WORKSHEET_ATIVOS = "lista_ativos"
 
     COL_REGIAO = "REGIÃO"

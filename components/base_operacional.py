@@ -34,6 +34,7 @@ import io
 import json
 import logging
 import os
+import re
 import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -549,7 +550,14 @@ def carregar_lista_ativos(
     Ordem: conta de serviço (gspread) → conexão nativa configurada → CSV público.
     As dependências podem ser injetadas (páginas passam ``st`` e ``gspread``).
     """
-    sheet_id = sheet_id or "1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg"
+    default_sheet = "1LQKDcLshC6XSXLBVWaEYSpxrro6uydyU9pwDLc38pEg"
+    sheet_id = resolver_sheet_id(sheet_id, default=default_sheet)
+    if not sheet_id:
+        vazia = pd.DataFrame()
+        vazia.attrs["erro_ativos"] = (
+            "Nenhum ID da planilha foi configurado. Defina SHEET_ID/GSHEETS_ID ou TOTALE_SHEET_ID."
+        )
+        return vazia
     url = url or f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
 
     def validar(raw: pd.DataFrame, fonte: str) -> pd.DataFrame:
@@ -578,7 +586,7 @@ def carregar_lista_ativos(
             registros = pd.DataFrame(planilha.get_all_records(default_blank=""))
             return validar(registros, "Google Sheets (autenticado)")
     except Exception as exc:
-        logger.warning("Falha na leitura autenticada da lista_ativos: %s", exc)
+        logger.warning("Falha na leitura autenticada da lista_ativos: %s", normalizar_erro_worksheet(exc, worksheet))
 
     # O modo público do conector exige o GID numérico da aba; sem uma conexão
     # configurada, use o CSV público, que aceita o nome da aba.
@@ -596,7 +604,7 @@ def carregar_lista_ativos(
             raw = conn.read(spreadsheet=url, worksheet=worksheet, ttl=0)
             return validar(pd.DataFrame(raw), "Google Sheets (conexão)")
         except Exception as exc:
-            logger.warning("Falha na conexão da lista_ativos: %s", exc)
+            logger.warning("Falha na conexão da lista_ativos: %s", normalizar_erro_worksheet(exc, worksheet))
 
     # 3) CSV público
     try:
@@ -607,7 +615,7 @@ def carregar_lista_ativos(
         )
         return validar(leitor(csv_url), "Google Sheets (CSV público)")
     except Exception as exc:
-        logger.warning("Falha na leitura pública da lista_ativos: %s", exc)
+        logger.warning("Falha na leitura pública da lista_ativos: %s", normalizar_erro_worksheet(exc, worksheet))
 
     vazia = pd.DataFrame()
     vazia.attrs["erro_ativos"] = (
@@ -615,6 +623,81 @@ def carregar_lista_ativos(
         "o compartilhamento da planilha e a coluna Login."
     )
     return vazia
+
+
+def resolver_sheet_id(
+    sheet_id: str | None = None,
+    *aliases: str,
+    default: str | None = None,
+) -> str:
+    """Resolve o ID da planilha a partir de secrets/ambiente ou de uma URL."""
+    candidates: list[str] = []
+    if sheet_id:
+        candidates.append(str(sheet_id))
+
+    for alias in aliases:
+        if alias:
+            candidates.append(alias)
+
+    for key in (
+        "TOTALE_SHEET_ID",
+        "GSHEETS_ID",
+        "SHEET_ID",
+        "SHEET_ID_ATIVOS",
+        "SHEET_ID_PROD",
+    ):
+        value = os.getenv(key, "")
+        if value:
+            candidates.append(value)
+
+    try:
+        import streamlit as st
+
+        for key in ("SHEET_ID", "GSHEETS_ID", "SHEET_ID_ATIVOS", "SHEET_ID_PROD"):
+            value = st.secrets.get(key, "")
+            if value:
+                candidates.append(str(value))
+    except Exception:
+        pass
+
+    for value in candidates:
+        texto = str(value).strip()
+        if not texto:
+            continue
+        if texto.startswith("http://") or texto.startswith("https://"):
+            match = re.search(r"/d/([A-Za-z0-9_-]+)", texto)
+            if match:
+                return match.group(1)
+            continue
+        if texto.startswith("{"):
+            continue
+        return texto
+
+    return default or ""
+
+
+def normalizar_erro_worksheet(exc: Exception, worksheet_name: str) -> str:
+    """Remove HTML bruto do Google e converte 404/403/400 em mensagem útil."""
+    texto = str(exc).strip().replace("\n", " ")
+    texto = re.sub(r"\s+", " ", texto)
+    texto_norm = texto.lower()
+
+    if "<!DOCTYPE html>" in texto or "404 (not found)" in texto_norm or "error 404" in texto_norm or "not found" in texto_norm:
+        return (
+            f"Planilha ou aba '{worksheet_name}' não encontrada (HTTP 404). "
+            "Verifique o ID da planilha, o nome da aba e o compartilhamento com a conta de serviço."
+        )
+    if "403" in texto or "forbidden" in texto_norm:
+        return (
+            f"Sem permissão para acessar '{worksheet_name}' (HTTP 403). "
+            "Compartilhe a planilha com a conta de serviço e confirme as permissões do Google Drive."
+        )
+    if "400" in texto or "bad request" in texto_norm:
+        return (
+            f"A aba '{worksheet_name}' não pôde ser lida (HTTP 400). "
+            "Verifique se o nome da aba coincide com o configurado no código."
+        )
+    return texto[:500] if texto else "Erro desconhecido ao ler a aba."
 
 
 def _segredos_padrao() -> dict[str, Any]:
@@ -898,13 +981,13 @@ def preparar_base_quebra(
         mon_gs.fillna(pd.NA)
         .astype("string")
         .str.strip()
-        .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
+        .replace(["", "nan", "None", "NAN", "NULL"], None)
     )
     mon_file_c = (
         mon_file.fillna(pd.NA)
         .astype("string")
         .str.strip()
-        .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
+        .replace(["", "nan", "None", "NAN", "NULL"], None)
     )
 
     df["ORIGEM_MAPEAMENTO"] = np.where(
@@ -942,13 +1025,13 @@ def preparar_base_quebra(
         tec_gs.fillna(pd.NA)
         .astype("string")
         .str.strip()
-        .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
+        .replace(["", "nan", "None", "NAN", "NULL"], None)
     )
     tec_file_c = (
         tec_file.fillna(pd.NA)
         .astype("string")
         .str.strip()
-        .replace(["", "nan", "None", "NAN", "NULL"], pd.NA)
+        .replace(["", "nan", "None", "NAN", "NULL"], None)
     )
 
     df[COL_TECNICO] = (
