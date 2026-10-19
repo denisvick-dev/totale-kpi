@@ -18,3 +18,4 @@ reportlab
 xlsxwriter
 fastapi
 starlette<1.7.0
+st-gsheets-connection
