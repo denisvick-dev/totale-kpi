@@ -351,32 +351,33 @@ def _obter_pasta_downloads_windows() -> Path | None:
     )
     caminho = ctypes.c_wchar_p()
     try:
-        resultado = ctypes.windll.shell32.SHGetKnownFolderPath(
-            ctypes.byref(folder_id), 0, None, ctypes.byref(caminho)
-        )
-    except (AttributeError, OSError) as exc:
-        logger.warning(
-            "Não foi possível localizar a pasta Downloads do Windows: %s", exc
-        )
-        return None
+        try:
+            resultado = ctypes.windll.shell32.SHGetKnownFolderPath(
+                ctypes.byref(folder_id), 0, None, ctypes.byref(caminho)
+            )
+        except (AttributeError, OSError) as exc:
+            logger.warning(
+                "Não foi possível localizar a pasta Downloads do Windows: %s", exc
+            )
+            return None
 
-    if resultado != 0 or not caminho.value:
-        logger.warning(
-            "Não foi possível localizar a pasta Downloads do Windows (HRESULT %s).",
-            resultado,
-        )
-        return None
+        if resultado != 0 or not caminho.value:
+            logger.warning(
+                "Não foi possível localizar a pasta Downloads do Windows (HRESULT %s).",
+                resultado,
+            )
+            return None
 
-    try:
         return Path(caminho.value)
     finally:
-        ctypes.windll.ole32.CoTaskMemFree(ctypes.cast(caminho, ctypes.c_void_p))
+        if caminho.value:
+            ctypes.windll.ole32.CoTaskMemFree(ctypes.cast(caminho, ctypes.c_void_p))
 
 
 def obter_pasta_robo_padrao() -> str:
     # 1ª tentativa: API do Windows (SHGetKnownFolderPath)
     #    → retorna C:\Users\João\Downloads (exemplo)
-    robo = _obter_pasta_downloads_windows() or Path.home() / "Downloads"
+    robo = Path.home() / "Downloads"
     #                 ↑ fallback: também resolve para o usuário logado
     robo.mkdir(parents=True, exist_ok=True)
     return str(robo.resolve())
@@ -570,7 +571,7 @@ def _validar_xlsx(raw: bytes, nome: str) -> None:
             f"'{nome}' não é um Excel ZIP válido (zip corrompido ou extensão errada)."
         )
     bio.seek(0)
-    with zipfile.ZipFile(bio) as zf:
+    with zipfile.ZipFile(bio, mode="r") as zf:
         ruim = zf.testzip()
     if ruim is not None:
         raise ValueError(f"'{nome}' está corrompido no membro interno: {ruim}")

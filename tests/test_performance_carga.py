@@ -366,7 +366,9 @@ def test_pasta_downloads_windows_fora_do_windows(monkeypatch) -> None:
     assert robo._obter_pasta_downloads_windows() is None
 
 
-def test_pasta_downloads_windows_hresult_invalido(monkeypatch) -> None:
+def test_pasta_downloads_windows_hresult_invalido_libera_caminho(
+    monkeypatch,
+) -> None:
     class _CUByte:
         def __mul__(self, outro: int) -> type:
             class _Vetor:
@@ -376,19 +378,24 @@ def test_pasta_downloads_windows_hresult_invalido(monkeypatch) -> None:
 
             return _Vetor
 
+    caminho_alocado = types.SimpleNamespace(value="C:\\Users\\teste\\Downloads")
+    caminhos_liberados = []
     ctypes_falso = types.SimpleNamespace(
         c_ubyte=_CUByte(),
-        c_wchar_p=lambda: types.SimpleNamespace(value=None),
+        c_wchar_p=lambda: caminho_alocado,
         byref=lambda x: x,
         cast=lambda x, _t: x,
         windll=types.SimpleNamespace(
             shell32=types.SimpleNamespace(SHGetKnownFolderPath=lambda *_: 1),
-            ole32=types.SimpleNamespace(CoTaskMemFree=lambda *_: None),
+            ole32=types.SimpleNamespace(
+                CoTaskMemFree=lambda caminho: caminhos_liberados.append(caminho)
+            ),
         ),
     )
     monkeypatch.setitem(sys.modules, "ctypes", ctypes_falso)
     monkeypatch.setattr(robo.sys, "platform", "win32")
     assert robo._obter_pasta_downloads_windows() is None
+    assert caminhos_liberados == [caminho_alocado]
 
 
 # ── Descoberta de candidatos ────────────────────────────────────────
