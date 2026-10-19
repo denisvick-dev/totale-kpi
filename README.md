@@ -123,6 +123,9 @@ python scripts/robot_base.py --pasta-entrada "C:/caminho/das/bases"
 A página **Atualização de Dados** também hospeda o painel do robô local:
 
 - monitora a pasta **Downloads** (ou o caminho configurado) a cada 5 s;
+- para monitorar o Downloads do seu computador, execute o Streamlit localmente
+  nesse computador; no app publicado, o caminho pertence ao servidor e não pode
+  acessar os arquivos do seu Windows;
 - aceita somente arquivos iniciados com `Atividades-` (`*.csv`, `.xlsx`, `.xlsm`, `.xls`);
 - ignora temporários (`~$`, `.tmp`, `.crdownload`) e arquivos em gravação;
 - valida o ZIP do Excel, o encoding/separador do CSV e a estabilidade do arquivo;
@@ -146,6 +149,10 @@ python components/robo_local.py "C:/bases" "dados/cache/robo.csv"
 ```
 
 Para usar uma pasta diferente na interface, abra **⚙️ Pasta monitorada** no painel.
+No Windows, execute `streamlit run streamlit_app.py` na raiz do projeto e abra
+`http://localhost:8501`. Deixe o app aberto para ele detectar automaticamente
+novas exportações na pasta Downloads local. O app hospedado não consegue ler essa
+pasta; nele, use o campo de envio de arquivo.
 
 ### 🗓️ Projeções em dias úteis (Seg–Sáb)
 - A semana útil é de **segunda a sábado** — **domingos não contam**

@@ -1504,7 +1504,8 @@ def _html_painel_robo(
     elif n_candidatos == 0:
         resumo = (
             "Nenhuma exportação TOTALE encontrada. Envie o arquivo pelo campo acima "
-            "ou salve-o na pasta monitorada do servidor."
+            "ou salve-o na pasta monitorada do servidor; o caminho abaixo não é o "
+            "Downloads do seu computador."
         )
     elif sig_ok:
         resumo = (
@@ -1530,8 +1531,8 @@ def _html_painel_robo(
         f'<span class="robo-dot" aria-hidden="true"></span>{escape(status_texto)}</div>'
         "</div>"
         '<div class="robo-stats">'
-        f'<div class="robo-stat"><span>Pasta monitorada</span><strong>{escape(pasta_nome)}</strong>'
-        f"<small>{escape(pasta)}</small></div>"
+        f'<div class="robo-stat"><span>Pasta monitorada no servidor</span><strong>{escape(pasta_nome)}</strong>'
+        f"<small>{escape(pasta)} · use o envio acima para carregar do seu computador</small></div>"
         f'<div class="robo-stat"><span>Arquivos na pasta</span><strong>{n_candidatos}</strong>'
         f"<small>{n_fila} no pipeline agora</small></div>"
         f'<div class="robo-stat"><span>Bases detectadas</span><strong>{n_bases}/3</strong>'
@@ -1635,7 +1636,8 @@ def _html_pasta_vazia(pasta: str, ativo: bool) -> str:
         titulo = "Monitorando novas exportações"
         detalhe = (
             "Nenhum arquivo TOTALE nesta pasta ainda. Envie a exportação pelo campo "
-            f"acima ou salve-a na pasta monitorada do servidor: {pasta}."
+            "acima. O caminho mostrado é do servidor, não do Downloads do seu "
+            f"computador: {pasta}."
         )
     else:
         titulo = "Sincronização pausada"
@@ -1954,10 +1956,14 @@ def renderizar_robo_local(
     if mostrar_config:
         with st.expander("⚙️ Pasta monitorada", expanded=False):
             pasta_input = st.text_input(
-                "Caminho do disco",
+                "Pasta monitorada no servidor",
                 value=pasta_alvo,
                 key="input_pasta_robo",
-                help="A pasta em que o TOTALE salva as exportações (normalmente Downloads).",
+                help=(
+                    "Este caminho existe no servidor onde o app está rodando, "
+                    "não no seu computador. Use o campo de envio para carregar "
+                    "arquivos do seu Downloads."
+                ),
             )
             if pasta_input != pasta_alvo:
                 st.session_state["_robo_pasta_user_set"] = True
