@@ -353,22 +353,6 @@ def _etl_base_local(bruto: pd.DataFrame, ativos: pd.DataFrame) -> pd.DataFrame |
         return bruto
 
 
-with st.expander("Conectar o Downloads deste computador", expanded=False):
-    st.info(
-        "Por segurança, o navegador não permite que o app publicado leia pastas "
-        "do seu computador. O agente local monitora o Downloads no Windows e "
-        "envia a exportação para esta Central."
-    )
-    st.markdown(
-        "**Configuração inicial (uma vez):** instale o projeto no computador, "
-        "instale `requirements-agent.txt` e o Chromium do Playwright conforme o "
-        "guia `docs/AGENTE_DOWNLOADS.md`.\n\n"
-        "**Para iniciar o monitoramento:** execute "
-        "`scripts\\iniciar_agente_downloads.bat` e mantenha a janela do agente "
-        "aberta. Entre no app na janela do navegador que abrir; os arquivos "
-        "`Atividades-*.csv` ou Excel serão enviados quando estiverem completos."
-    )
-
 renderizar_robo_local(
     etl_fn=_etl_base_local,
     gsheets_fn=_lista_ativos_para_etl,
