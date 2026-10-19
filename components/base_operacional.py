@@ -1,35 +1,26 @@
 """
 components/base_operacional.py
 ==============================
-Fonte única dos dados operacionais compartilhados por **volumetria.py**,
-**quebra.py** e pelo **robô** (``scripts/robot_base.py``).
+Fonte única do tratamento da base operacional (exportação "Atividades")
+compartilhada por **quebra.py**, **volumetria.py** e **rota_inicial.py**.
 
-Fluxo do robô:
-    1. localiza o arquivo mais recente na pasta monitorada
-       (por padrão a pasta **Downloads** do usuário);
-    2. lê e trata a base bruta (Excel/CSV);
-    3. gera as bases prontas de Volumetria e de Quebra de Agenda;
-    4. grava o cache em ``dados/cache/`` + ``manifesto.json``;
-    5. as páginas leem esse cache automaticamente (sem upload manual).
+Fluxo (upload manual):
+    1. o usuário envia o arquivo (.xlsx/.xls/.csv) na Central de
+       Atualização (``envio_excel.py``) ou direto em um dos painéis;
+    2. :func:`gerar_bases_upload` lê o arquivo uma única vez e gera as
+       três bases tratadas, vinculadas à aba ``lista_ativos``;
+    3. ``components/upload_base.py`` publica cada base na sessão, na
+       chave que o respectivo painel já consome.
 
-O módulo roda **com ou sem Streamlit** — nenhuma função de UI é obrigatória.
-Quando o Streamlit está disponível, a leitura da lista de ativos tenta a conta
-de serviço, depois a conexão nativa e, por fim, o CSV público da planilha.
-
-Configuração (ordem de precedência):
-    secrets ``[base_operacional]``  →  variáveis de ambiente  →  padrões
-
-    pasta_entrada   TOTALE_BASE_ENTRADA    Downloads do usuário
-    pasta_cache     TOTALE_BASE_CACHE      dados/cache
-    arquivo_glob    TOTALE_BASE_ARQUIVO    "" (qualquer .xlsx/.xls/.csv)
-    ttl_minutos     TOTALE_BASE_TTL         0 (sem expiração)
-    recursivo       TOTALE_BASE_RECURSIVO  1
+O módulo não depende de Streamlit para ler/tratar dados — a interface
+de upload vive em ``components/upload_base.py``. Quando o Streamlit
+está disponível, a leitura da lista de ativos tenta a conta de serviço,
+depois a conexão nativa e, por fim, o CSV público da planilha.
 """
 
 from __future__ import annotations
 
 import csv
-import hashlib
 import io
 import json
 import logging
@@ -37,8 +28,6 @@ import os
 import re
 import unicodedata
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +57,6 @@ COL_LOGIN = "LOGIN"
 STATUS_ORDEM: list[str] = ["Executada", "Não Executada", "Pendente"]
 
 EXTENSOES_ACEITAS: tuple[str, ...] = (".xlsx", ".xls", ".csv")
-ARQUIVO_GLOB_PADRAO = "Atividades-*.csv;Atividades-*.xlsx"
 
 CIDADES_POR_REGIAO: dict[str, tuple[str, ...]] = {
     "LESTE": ("SAO PAULO",),
@@ -92,131 +80,6 @@ CIDADES_POR_REGIAO: dict[str, tuple[str, ...]] = {
         "RIO GRANDE DA SERRA",
     ),
 }
-
-#: Opções aceitas para a leitura da lista de ativos (repasse às páginas).
-_OPCOES_ATIVOS: tuple[str, ...] = (
-    "sheet_id",
-    "worksheet",
-    "url",
-    "segredos",
-    "credenciais",
-    "autorizar",
-    "conexao",
-    "read_csv",
-)
-
-_ARQUIVO_VOLUMETRIA = "volumetria.pkl"
-_ARQUIVO_QUEBRA = "quebra.pkl"
-_ARQUIVO_MANIFESTO = "manifesto.json"
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# CONFIGURAÇÃO
-# ═══════════════════════════════════════════════════════════════════════
-def _caminho_downloads(sistema: str | None = None, home: Path | None = None) -> str:
-    """
-    Caminho (string) da pasta Downloads — isolado para facilitar os testes.
-
-    ``sistema`` e ``home`` existem só para injeção em testes; em produção usa
-    ``os.name`` e ``Path.home()``.
-    """
-    sistema = sistema or os.name
-    home = Path(home) if home else Path.home()
-
-    if sistema == "nt":
-        perfil = os.getenv("USERPROFILE") or str(home)
-        return os.path.join(perfil, "Downloads")
-
-    xdg = home / ".config" / "user-dirs.dirs"
-    if xdg.is_file():
-        try:
-            for linha in xdg.read_text(encoding="utf-8", errors="ignore").splitlines():
-                if not linha.strip().startswith("XDG_DOWNLOAD_DIR"):
-                    continue
-                valor = linha.split("=", 1)[-1].strip().strip('"').strip("'")
-                valor = os.path.expandvars(
-                    valor.replace("$HOME", str(home)).replace("${HOME}", str(home))
-                )
-                if valor:
-                    return os.path.expanduser(valor)
-        except OSError:
-            pass
-
-    return str(home / "Downloads")
-
-
-def pasta_downloads() -> Path:
-    """
-    Pasta de **Downloads** do usuário — origem padrão das bases do robô.
-
-    - Windows: ``%USERPROFILE%\\Downloads``
-    - Linux: respeita ``XDG_DOWNLOAD_DIR`` (``~/.config/user-dirs.dirs``)
-    - macOS: ``~/Downloads``
-    """
-    return Path(_caminho_downloads())
-
-
-@dataclass(frozen=True)
-class ConfigBase:
-    pasta_entrada: Path
-    pasta_cache: Path
-    arquivo_glob: str = ARQUIVO_GLOB_PADRAO
-    ttl_minutos: int = 0
-    #: Varre também as subpastas. Desligado por padrão porque a pasta
-    #: Downloads costuma ser grande e cheia de arquivos temporários.
-    recursivo: bool = False
-
-
-def _secrets_base() -> dict[str, Any]:
-    try:
-        import streamlit as st  # import local: o robô roda sem Streamlit
-
-        secao = st.secrets.get("base_operacional", {})
-        return {str(k): v for k, v in dict(secao).items()}
-    except Exception:
-        return {}
-
-
-def _como_bool(valor: Any, padrao: bool) -> bool:
-    if valor is None:
-        return padrao
-    if isinstance(valor, bool):
-        return valor
-    return str(valor).strip().lower() in {"1", "true", "sim", "yes", "on"}
-
-
-def config(**sobreescrever: Any) -> ConfigBase:
-    """Configuração do robô (secrets → ambiente → padrões)."""
-    segredos = _secrets_base()
-    ambiente = os.environ
-
-    def valor(chave: str, env: str, padrao: Any) -> Any:
-        if chave in segredos and segredos[chave] not in (None, ""):
-            return segredos[chave]
-        if ambiente.get(env):
-            return ambiente[env]
-        return padrao
-
-    cfg = ConfigBase(
-        pasta_entrada=Path(
-            str(valor("pasta_entrada", "TOTALE_BASE_ENTRADA", pasta_downloads()))
-        ),
-        pasta_cache=Path(str(valor("pasta_cache", "TOTALE_BASE_CACHE", "dados/cache"))),
-        arquivo_glob=str(
-            valor("arquivo_glob", "TOTALE_BASE_ARQUIVO", ARQUIVO_GLOB_PADRAO)
-        ).strip(),
-        ttl_minutos=int(valor("ttl_minutos", "TOTALE_BASE_TTL", 0) or 0),
-        recursivo=_como_bool(valor("recursivo", "TOTALE_BASE_RECURSIVO", False), False),
-    )
-
-    dados = {k: v for k, v in sobreescrever.items() if v is not None}
-    if not dados:
-        return cfg
-
-    for chave in ("pasta_entrada", "pasta_cache"):
-        if chave in dados:
-            dados[chave] = Path(str(dados[chave]))
-    return ConfigBase(**{**cfg.__dict__, **dados})
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -326,7 +189,7 @@ class Utils:
 def ler_arquivo_bytes(
     conteudo: bytes, nome: str, dtype: Any | None = None
 ) -> pd.DataFrame:
-    """Lê Excel/CSV a partir de bytes (usado pelo upload e pelo robô)."""
+    """Lê Excel/CSV a partir de bytes (upload manual)."""
     if not conteudo:
         raise ValueError("O arquivo enviado está vazio.")
 
@@ -381,80 +244,6 @@ def _ler_csv(buffer: io.BytesIO, dtype: Any | None = None) -> pd.DataFrame:
     raise ValueError(
         f"Não foi possível interpretar o CSV: {erros[-1] if erros else 'erro desconhecido'}"
     )
-
-
-def ler_arquivo_caminho(
-    caminho: os.PathLike | str, dtype: Any | None = None
-) -> pd.DataFrame:
-    """Lê a base direto do disco (robô)."""
-    caminho = Path(caminho)
-    if not caminho.exists():
-        raise FileNotFoundError(f"Base não encontrada: {caminho}")
-    return ler_arquivo_bytes(caminho.read_bytes(), caminho.name, dtype=dtype)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# LOCALIZAÇÃO DA BASE NA PASTA MONITORADA
-# ═══════════════════════════════════════════════════════════════════════
-def localizar_base(
-    pasta: os.PathLike | str | None = None,
-    arquivo_glob: str = "",
-    recursivo: bool | None = None,
-    extensoes: Sequence[str] = EXTENSOES_ACEITAS,
-) -> Path | None:
-    """
-    Retorna o arquivo de base **mais recente** da pasta monitorada.
-
-    Considera apenas os arquivos diretamente na pasta (a não ser que
-    ``recursivo`` esteja ligado), ignorando temporários do Excel (``~$``) e
-    arquivos ocultos. Critério: maior ``mtime``; em caso de empate, o nome.
-    """
-    cfg = config(recursivo=recursivo)
-    pasta_path = Path(pasta) if pasta else cfg.pasta_entrada
-    if not pasta_path.exists():
-        return None
-
-    padrao = (arquivo_glob or cfg.arquivo_glob or "").strip()
-    extensoes = tuple(e.lower() for e in extensoes)
-
-    if padrao:
-        candidatos = []
-        for padrao_individual in padrao.split(";"):
-            padrao_individual = padrao_individual.strip()
-            if not padrao_individual:
-                continue
-            candidatos.extend(
-                pasta_path.rglob(padrao_individual)
-                if cfg.recursivo
-                else pasta_path.glob(padrao_individual)
-            )
-    else:
-        candidatos = [
-            p
-            for p in (pasta_path.rglob("*") if cfg.recursivo else pasta_path.glob("*"))
-            if p.is_file() and p.suffix.lower() in extensoes
-        ]
-
-    candidatos = [
-        p
-        for p in candidatos
-        if p.is_file()
-        and p.suffix.lower() in extensoes
-        and not p.name.startswith(("~$", "."))
-    ]
-    if not candidatos:
-        return None
-
-    return max(candidatos, key=lambda p: (p.stat().st_mtime, p.name.lower()))
-
-
-def calcular_hash(caminho: os.PathLike | str) -> str:
-    """Hash SHA-256 (por blocos) do arquivo — usado para saber se a base mudou."""
-    h = hashlib.sha256()
-    with open(caminho, "rb") as arquivo:
-        for bloco in iter(lambda: arquivo.read(1024 * 1024), b""):
-            h.update(bloco)
-    return h.hexdigest()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -545,7 +334,7 @@ def carregar_lista_ativos(
     read_csv: Callable[..., pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """
-    Carrega a ``lista_ativos`` (mesma aba da Gestão de Ativos).
+    Carrega a aba ``lista_ativos`` da planilha de ativos.
 
     Ordem: conta de serviço (gspread) → conexão nativa configurada → CSV público.
     As dependências podem ser injetadas (páginas passam ``st`` e ``gspread``).
@@ -736,6 +525,28 @@ def carregar_hierarquia(**kwargs: Any) -> pd.DataFrame:
     ).drop_duplicates("__LOGIN_KEY")
 
 
+def hierarquia_de(ativos: pd.DataFrame) -> pd.DataFrame:
+    """
+    Converte uma lista de ativos já carregada no formato usado pela
+    Volumetria (``__LOGIN_KEY``, ``__TEC_GS``, ``__MON_GS``).
+
+    Aceita a lista bruta ou normalizada — a normalização é reaplicada
+    para o vínculo não depender da fonte (sessão, Sheets ou CSV).
+    """
+    if ativos is None or not isinstance(ativos, pd.DataFrame) or ativos.empty:
+        return pd.DataFrame()
+    norm = normalizar_lista_ativos(ativos)
+    if norm.empty or "Login" not in norm.columns:
+        return pd.DataFrame()
+    return pd.DataFrame(
+        {
+            "__LOGIN_KEY": Utils.normalizar_login(norm["Login"]),
+            "__TEC_GS": norm["Técnico"] if "Técnico" in norm.columns else "",
+            "__MON_GS": norm["Monitor"] if "Monitor" in norm.columns else "",
+        }
+    ).drop_duplicates("__LOGIN_KEY")
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # PREPARAÇÃO — VOLUMETRIA
 # ═══════════════════════════════════════════════════════════════════════
@@ -746,7 +557,7 @@ def preparar_base_volumetria(
     Trata a base bruta para o painel de Volumetria.
 
     Retorna o DataFrame com ``attrs["diagnostico"]`` (avisos e erros) para a
-    página decidir como exibir — nada de ``st.stop`` aqui, o robô depende disto.
+    página decidir como exibir — nada de ``st.stop`` aqui.
     """
     df = raw.copy()
     df.columns = df.columns.astype(str).str.strip()
@@ -843,7 +654,7 @@ def preparar_base_volumetria(
     diag["Final"] = len(df)
     diag["avisos"] = avisos
     diag["erros"] = erros
-    diag["Fonte"] = "Robô (pasta monitorada)"
+    diag["Fonte"] = "Upload manual"
 
     df.attrs["diagnostico"] = diag
     return df
@@ -1091,388 +902,282 @@ def preparar_base_quebra(
     return df
 
 
+
 # ═══════════════════════════════════════════════════════════════════════
-# CACHE EM DISCO + MANIFESTO
+# PREPARAÇÃO — ROTA INICIAL
 # ═══════════════════════════════════════════════════════════════════════
-@dataclass
-class ResultadoBase:
-    """Resultado de uma execução do robô."""
+#: Intervalo da exportação → turno exibido no painel de Rota Inicial.
+MAPEAMENTO_PERIODOS: dict[str, str] = {
+    "08:00 - 10:00": "Manhã",
+    "08:00 - 11:00": "Manhã",
+    "08:00 - 12:00": "Manhã",
+    "10:00 - 12:00": "Manhã",
+    "11:00 - 14:00": "Manhã",
+    "12:00 - 14:00": "Tarde I",
+    "12:00 - 15:00": "Tarde I",
+    "12:00 - 18:00": "Tarde II",
+    "14:00 - 16:00": "Tarde II",
+    "14:00 - 17:00": "Tarde II",
+    "15:00 - 18:00": "Tarde II",
+    "16:00 - 18:00": "Tarde II",
+    "17:00 - 20:00": "Tarde II",
+    "Imediata": "Imediata",
+}
 
-    caminho: Path | None
-    hash_arquivo: str = ""
-    volumetria: pd.DataFrame | None = None
-    quebra: pd.DataFrame | None = None
-    manifesto: dict[str, Any] = field(default_factory=dict)
-    do_cache: bool = False
-
-    @property
-    def ok(self) -> bool:
-        return bool(self.manifesto.get("status") == "ok")
-
-
-def caminho_cache(pasta: os.PathLike | str | None = None) -> Path:
-    return Path(pasta) if pasta else config().pasta_cache
-
-
-def _caminho_manifesto(pasta: os.PathLike | str | None = None) -> Path:
-    return caminho_cache(pasta) / _ARQUIVO_MANIFESTO
+_VAZIOS_CONTRATO_ROTA = {"", "NAN", "NONE", "N/A", "NA", "-", "0", "NULL", "<NA>"}
 
 
-def salvar_cache(
-    df: pd.DataFrame, nome: str, pasta: os.PathLike | str | None = None
-) -> Path:
-    destino = caminho_cache(pasta)
-    destino.mkdir(parents=True, exist_ok=True)
-    arquivo = destino / nome
-    df.to_pickle(arquivo)
-    return arquivo
+def preparar_base_rota_inicial(
+    df_bruto: pd.DataFrame, df_ativos: pd.DataFrame
+) -> pd.DataFrame:
+    if not isinstance(df_bruto, pd.DataFrame) or df_bruto.empty:
+        return pd.DataFrame()
 
+    _RE_REMOVER_FID = re.compile(r"\bFID\s*(12M|24M)\b", re.IGNORECASE)
 
-def ler_cache(nome: str, pasta: os.PathLike | str | None = None) -> pd.DataFrame | None:
-    arquivo = caminho_cache(pasta) / nome
-    if not arquivo.exists():
-        return None
-    try:
-        df = pd.read_pickle(arquivo)
-    except Exception as exc:
-        logger.warning("Cache %s ilegível (%s). Será recalculado.", arquivo, exc)
-        return None
+    df = df_bruto.copy()
+    df.columns = df.columns.astype(str).str.strip().str.upper()
 
-    meta = manifesto(pasta).get("arquivos", {}).get(nome, {})
-    for chave, valor in (meta.get("attrs") or {}).items():
-        df.attrs[chave] = valor
+    mapa = {
+        "CONTRATO": ["CONTRATO"],
+        "LOGIN_TECNICO": ["LOGIN DO TÉCNICO", "LOGIN DO TECNICO"],
+        "STATUS_ATIVIDADE": ["STATUS DA ATIVIDADE"],
+        "STATUS_PRODUTO": [
+            "STATUS DO PRODUTO",
+            "STATUS PRODUTO",
+            "SITUACAO DO PRODUTO",
+            "SITUAÇÃO DO PRODUTO",
+            "STATUS_ITEM",
+        ],
+        "TOTAL_TAREFAS": ["TOTAL DE TAREFAS"],
+        "TIPO_OS": ["TIPO O.S 1"],
+        "HABILIDADE": ["HABILIDADE DE TRABALHO"],
+        "PRODUTO": ["PRODUTO"],
+        "INTERVALO": ["INTERVALO DE TEMPO", "INTERVALO"],
+        "CIDADE": ["CIDADE"],
+        "COORD_X": ["COORDENADA X", "LONGITUDE", "LON"],
+        "COORD_Y": ["COORDENADA Y", "LATITUDE", "LAT"],
+    }
+    for padrao, variacoes in mapa.items():
+        col = next((c for c in df.columns if c in variacoes), None)
+        if col:
+            df = df.rename(columns={col: padrao})
+        else:
+            df[padrao] = np.nan
+
+    contrato = (
+        df["CONTRATO"]
+        .astype("string")
+        .str.replace("\u00a0", " ", regex=False)
+        .str.strip()
+    )
+    mask_vazio = (
+        contrato.isna()
+        | contrato.eq("")
+        | contrato.str.upper().isin(_VAZIOS_CONTRATO_ROTA)
+    )
+    removidos = int(mask_vazio.sum())
+    df = df.loc[~mask_vazio].copy()
+    df["CONTRATO"] = contrato.loc[df.index].str.upper()
+
+    if df.empty:
+        return pd.DataFrame()
+
+    df["LOGIN_TECNICO"] = (
+        df["LOGIN_TECNICO"]
+        .astype(str)
+        .str.replace(r"\.0$", "", regex=True)
+        .str.strip()
+        .str.upper()
+    )
+    df["TOTAL_TAREFAS"] = (
+        pd.to_numeric(
+            df["TOTAL_TAREFAS"].astype(str).str.replace(",", "."), errors="coerce"
+        )
+        .fillna(1)
+        .astype(int)
+    )
+    df["STATUS_ATIVIDADE"] = df["STATUS_ATIVIDADE"].astype(str).str.strip().str.upper()
+    if "STATUS_PRODUTO" in df.columns:
+        df["STATUS_PRODUTO"] = df["STATUS_PRODUTO"].astype(str).str.strip().str.upper()
+
+    if isinstance(df_ativos, pd.DataFrame) and not df_ativos.empty:
+        df = df.drop(
+            columns=[
+                c for c in ["Técnico", "Monitor", "Base"] if c.upper() in df.columns
+            ],
+            errors="ignore",
+        )
+        df = df.merge(df_ativos, left_on="LOGIN_TECNICO", right_on="Login", how="left")
+        df = df.rename(columns={"Técnico": "NOME_OFICIAL"})
+
+    df["NOME_OFICIAL"] = df.get("NOME_OFICIAL", df["LOGIN_TECNICO"]).fillna(
+        df["LOGIN_TECNICO"]
+    )
+    df["Monitor"] = df.get("Monitor", pd.Series(dtype=str)).fillna("SEM MONITOR")
+
+    hab = df["HABILIDADE"].astype(str).str.upper()
+    tipo = df["TIPO_OS"].astype(str).str.upper()
+
+    prod = df["PRODUTO"].astype(str).str.upper()
+    prod = prod.str.replace(_RE_REMOVER_FID, "", regex=True)
+    prod = prod.str.replace(r"\s{2,}", " ", regex=True).str.strip()
+    df["PRODUTO"] = prod
+
+    df["Check_GPON"] = hab.str.contains(r"PON\(1/100\)", regex=True, na=False)
+    df["Check_ND"] = tipo.str.contains("ADESAO", na=False)
+    df["Check_Migracao"] = (tipo.str.strip() == "24 - MUDANCA DE PACOTE") & df[
+        "Check_GPON"
+    ]
+    df["Check_PME"] = df["Check_ND"] & hab.str.contains("PME", na=False)
+    df["Check_Streaming"] = hab.str.contains("TV VAS(1/100)", na=False)
+    df["Check_Ponto_Ultra"] = hab.str.contains("NETLAR", na=False)
+    df["Check_4K"] = prod.str.contains("4K", na=False)
+    df["Check_Soundbox"] = prod.str.contains("SOUND", na=False)
+
+    df["PERIODO_TRATADO"] = (
+        df["INTERVALO"]
+        .astype(str)
+        .str.strip()
+        .map(MAPEAMENTO_PERIODOS)
+        .fillna("Outros/Sem Período")
+    )
+
+    cidade = (
+        df["CIDADE"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .apply(
+            lambda v: (
+                unicodedata.normalize("NFKD", v).encode("ASCII", "ignore").decode()
+            )
+        )
+    )
+    df["REGIÃO"] = np.select(
+        [
+            cidade.isin(["SAO PAULO"]),
+            cidade.isin(
+                [
+                    "GUARULHOS",
+                    "ARUJA",
+                    "MOGI DAS CRUZES",
+                    "SUZANO",
+                    "ITAQUAQUECETUBA",
+                    "FERRAZ DE VASCONCELOS",
+                    "POA",
+                ]
+            ),
+            cidade.isin(
+                [
+                    "SANTO ANDRE",
+                    "SAO BERNARDO DO CAMPO",
+                    "SAO CAETANO DO SUL",
+                    "DIADEMA",
+                    "MAUA",
+                    "RIBEIRAO PIRES",
+                    "RIO GRANDE DA SERRA",
+                ]
+            ),
+        ],
+        ["LESTE", "GRU", "ABCDM"],
+        default="OUTRAS",
+    )
+
+    df.attrs["diagnostico"] = {"contrato_vazio": removidos}
     return df
 
 
-def manifesto(pasta: os.PathLike | str | None = None) -> dict[str, Any]:
-    caminho = _caminho_manifesto(pasta)
-    if not caminho.exists():
-        return {}
-    try:
-        return json.loads(caminho.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-
-
-def _gravar_manifesto(
-    dados: dict[str, Any], pasta: os.PathLike | str | None = None
-) -> Path:
-    destino = caminho_cache(pasta)
-    destino.mkdir(parents=True, exist_ok=True)
-    caminho = destino / _ARQUIVO_MANIFESTO
-    caminho.write_text(
-        json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    return caminho
-
-
-def _cache_expirado(dados: dict[str, Any], ttl_minutos: int | None = None) -> bool:
-    ttl = config().ttl_minutos if ttl_minutos is None else int(ttl_minutos or 0)
-    if ttl <= 0:
-        return False
-    atualizado = dados.get("atualizado_em")
-    if not atualizado:
-        return True
-    try:
-        momento = datetime.fromisoformat(atualizado)
-    except ValueError:
-        return True
-    return (datetime.now() - momento).total_seconds() > ttl * 60
-
-
-def status_base(pasta: os.PathLike | str | None = None) -> dict[str, Any]:
-    """Resumo do estado atual da base (para UI e para o robô)."""
-    dados = manifesto(pasta)
-    if not dados:
-        return {
-            "status": "sem_cache",
-            "mensagem": "Nenhuma base processada ainda. Rode o robô ou envie o arquivo.",
-        }
-    resultado = dict(dados)
-    resultado["expirado"] = _cache_expirado(dados)
-    return resultado
-
 
 # ═══════════════════════════════════════════════════════════════════════
-# PIPELINA DO ROBÔ
+# UPLOAD MANUAL — UM ARQUIVO, TRÊS BASES
 # ═══════════════════════════════════════════════════════════════════════
-def gerar_bases(
-    caminho: os.PathLike | str | None = None,
-    forcar: bool = False,
-    usar_cache: bool = True,
-    somente: Sequence[str] = ("volumetria", "quebra"),
-    pasta_entrada: os.PathLike | str | None = None,
-    pasta_cache: os.PathLike | str | None = None,
-    registrar_log: Callable[[str], None] | None = None,
-    arquivo_glob: str | None = None,
-    **ativos_opcoes: Any,
-) -> ResultadoBase:
+def gerar_bases_upload(
+    conteudo: bytes, nome_arquivo: str, lista_ativos: pd.DataFrame
+) -> dict[str, Any]:
     """
-    Executa o pipeline completo e atualiza o cache:
+    Gera as bases de Quebra, Volumetria e Rota Inicial de um único upload.
 
-        localizar → ler → vincular ativos → preparar (volumetria/quebra) → gravar
-
-    ``somente`` permite processar apenas um dos painéis.
+    Cada painel é processado de forma independente: a falha de um deles
+    (ex.: coluna de status ausente para a Volumetria) não bloqueia os
+    demais. Retorna ``{"quebra", "volumetria", "rota_inicial", "erros",
+    "linhas_brutas"}`` — base ausente (``None``) sempre acompanhada da
+    mensagem em ``erros``.
     """
-    log = registrar_log or (lambda msg: logger.info("%s", msg))
-    cfg = config(
-        pasta_entrada=pasta_entrada,
-        pasta_cache=pasta_cache,
-        arquivo_glob=arquivo_glob,
+    resultado: dict[str, Any] = {
+        "quebra": None,
+        "volumetria": None,
+        "rota_inicial": None,
+        "erros": {},
+        "linhas_brutas": 0,
+    }
+    erros: dict[str, str] = resultado["erros"]
+
+    ativos = (
+        lista_ativos
+        if isinstance(lista_ativos, pd.DataFrame)
+        else pd.DataFrame()
     )
+    fonte_ativos = str(ativos.attrs.get("fonte_ativos", "") or "")
+    erro_ativos = str(ativos.attrs.get("erro_ativos", "") or "")
+    ativos_norm = normalizar_lista_ativos(ativos) if not ativos.empty else ativos
 
-    arquivo = (
-        Path(caminho)
-        if caminho
-        else localizar_base(cfg.pasta_entrada, arquivo_glob=cfg.arquivo_glob)
-    )
-    if arquivo is None or not arquivo.exists():
-        return ResultadoBase(
-            caminho=None,
-            manifesto={
-                "status": "sem_arquivo",
-                "mensagem": f"Nenhuma base encontrada em {cfg.pasta_entrada}.",
-                "pasta_entrada": str(cfg.pasta_entrada),
-            },
-        )
-
-    hash_arquivo = calcular_hash(arquivo)
-    anteriores = manifesto(cfg.pasta_cache)
-    if (
-        usar_cache
-        and not forcar
-        and anteriores.get("hash") == hash_arquivo
-        and anteriores.get("status") == "ok"
-        and not _cache_expirado(anteriores)
-    ):
-        log(f"Base inalterada ({arquivo.name}) — reaproveitando o cache.")
-        return ResultadoBase(
-            caminho=arquivo,
-            hash_arquivo=hash_arquivo,
-            volumetria=ler_cache(_ARQUIVO_VOLUMETRIA, cfg.pasta_cache),
-            quebra=ler_cache(_ARQUIVO_QUEBRA, cfg.pasta_cache),
-            manifesto=anteriores,
-            do_cache=True,
-        )
-
-    log(f"Lendo base {arquivo.name} ...")
-    bruta_volumetria = ler_arquivo_caminho(arquivo)
-    if bruta_volumetria.empty:
-        return ResultadoBase(
-            caminho=arquivo,
-            hash_arquivo=hash_arquivo,
-            manifesto={
-                "status": "vazia",
-                "mensagem": f"A base {arquivo.name} não possui registros.",
-            },
-        )
-
-    if "volumetria" in somente and _coluna_status_volumetria(bruta_volumetria) is None:
-        mensagem = (
-            f"O arquivo '{arquivo.name}' não é uma base de volumetria: "
-            "coluna de status ausente. Esperado: 'STATUS DA O.S 1', "
-            "'STATUS OS 1', 'STATUS DA OS 1' ou 'STATUS CONTRATO'."
-        )
-        dados = {
-            "status": "base_invalida",
-            "atualizado_em": datetime.now().isoformat(timespec="seconds"),
-            "origem": str(arquivo),
-            "arquivo": arquivo.name,
-            "hash": hash_arquivo,
-            "mensagem": mensagem,
-        }
-        _gravar_manifesto(dados, cfg.pasta_cache)
-        return ResultadoBase(
-            caminho=arquivo,
-            hash_arquivo=hash_arquivo,
-            manifesto=dados,
-        )
-
-    # A Quebra lê tudo como texto (como no upload da página).
-    bruta_quebra = ler_arquivo_caminho(arquivo, dtype=str)
-
-    log("Vinculando lista de ativos ...")
     try:
-        ativos = carregar_lista_ativos(
-            **{k: v for k, v in ativos_opcoes.items() if k in _OPCOES_ATIVOS}
-        )
-    except Exception as exc:  # rede indisponível não pode derrubar o robô
-        logger.warning("Falha ao carregar a lista de ativos: %s", exc)
-        ativos = pd.DataFrame()
-    hierarquia = _hierarquia_de(ativos)
+        bruta = ler_arquivo_bytes(conteudo, nome_arquivo)
+    except Exception as exc:
+        erros["leitura"] = str(exc)
+        return resultado
+    resultado["linhas_brutas"] = len(bruta)
+    if bruta.empty:
+        erros["leitura"] = "O arquivo enviado não possui registros."
+        return resultado
 
-    fonte_ativos = ativos.attrs.get("fonte_ativos", "")
-    erro_ativos = ativos.attrs.get("erro_ativos", "")
+    # Quebra e Rota tratam a base como texto (mesmo comportamento dos
+    # uploads que existiam nas páginas).
+    try:
+        bruta_txt = ler_arquivo_bytes(conteudo, nome_arquivo, dtype=str)
+    except Exception as exc:
+        logger.warning("Falha na leitura como texto do upload: %s", exc)
+        bruta_txt = bruta
 
-    volumetria_df: pd.DataFrame | None = None
-    quebra_df: pd.DataFrame | None = None
+    try:
+        volumetria_df = preparar_base_volumetria(bruta, hierarquia_de(ativos))
+        erros_vol = volumetria_df.attrs.get("diagnostico", {}).get("erros", [])
+        if erros_vol:
+            erros["volumetria"] = "; ".join(str(e) for e in erros_vol)
+        else:
+            resultado["volumetria"] = volumetria_df
+    except Exception as exc:
+        logger.exception("Falha ao preparar a base de Volumetria do upload.")
+        erros["volumetria"] = str(exc)
 
-    if "volumetria" in somente:
-        log("Gerando base de Volumetria ...")
-        volumetria_df = preparar_base_volumetria(bruta_volumetria, hierarquia)
-        salvar_cache(volumetria_df, _ARQUIVO_VOLUMETRIA, cfg.pasta_cache)
-
-    if "quebra" in somente:
-        log("Gerando base de Quebra de Agenda ...")
+    try:
         quebra_df = preparar_base_quebra(
-            bruta_quebra, ativos, fonte_ativos, erro_ativos
+            bruta_txt, ativos, fonte_ativos, erro_ativos
         )
-        salvar_cache(quebra_df, _ARQUIVO_QUEBRA, cfg.pasta_cache)
+        if quebra_df is None or quebra_df.empty:
+            erros["quebra"] = "Nenhum registro válido para a Quebra de Agenda."
+        else:
+            resultado["quebra"] = quebra_df
+    except Exception as exc:
+        logger.exception("Falha ao preparar a base de Quebra do upload.")
+        erros["quebra"] = str(exc)
 
-    dados = {
-        "status": "ok",
-        "atualizado_em": datetime.now().isoformat(timespec="seconds"),
-        "origem": str(arquivo),
-        "arquivo": arquivo.name,
-        "hash": hash_arquivo,
-        "modificado_em": datetime.fromtimestamp(arquivo.stat().st_mtime).isoformat(
-            timespec="seconds"
-        ),
-        "fonte_ativos": fonte_ativos,
-        "erro_ativos": erro_ativos,
-        "registros_ativos": len(ativos),
-        "arquivos": {
-            _ARQUIVO_VOLUMETRIA: _meta_cache(volumetria_df, bruta_volumetria),
-            _ARQUIVO_QUEBRA: _meta_cache(quebra_df, bruta_quebra),
-        },
-    }
-    _gravar_manifesto(dados, cfg.pasta_cache)
-    log(f"Cache atualizado: {cfg.pasta_cache}")
-
-    return ResultadoBase(
-        caminho=arquivo,
-        hash_arquivo=hash_arquivo,
-        volumetria=volumetria_df,
-        quebra=quebra_df,
-        manifesto=dados,
-    )
-
-
-def _hierarquia_de(ativos: pd.DataFrame) -> pd.DataFrame:
-    """Converte a lista de ativos no formato usado pela Volumetria."""
-    if ativos is None or ativos.empty or "Login" not in ativos.columns:
-        return pd.DataFrame()
-    return pd.DataFrame(
-        {
-            "__LOGIN_KEY": Utils.normalizar_login(ativos["Login"]),
-            "__TEC_GS": ativos["Técnico"] if "Técnico" in ativos.columns else "",
-            "__MON_GS": ativos["Monitor"] if "Monitor" in ativos.columns else "",
-        }
-    ).drop_duplicates("__LOGIN_KEY")
-
-
-def _meta_cache(df: pd.DataFrame | None, bruta: pd.DataFrame) -> dict[str, Any]:
-    if df is None:
-        return {}
-    return {
-        "registros": len(df),
-        "colunas": len(df.columns),
-        "registros_brutos": len(bruta),
-        "attrs": {
-            k: v for k, v in df.attrs.items() if isinstance(v, (str, int, float, bool))
-        },
-    }
-
-
-def carregar_base_volumetria(
-    forcar: bool = False,
-    usar_cache: bool = True,
-    **kwargs: Any,
-) -> pd.DataFrame | None:
-    """Base de Volumetria pronta (cache do robô, recalculando quando necessário)."""
-    cache_invalido = False
-    if usar_cache and not forcar:
-        dados = manifesto(kwargs.get("pasta_cache"))
-        if dados.get("status") == "ok" and not _cache_expirado(dados):
-            cache = ler_cache(_ARQUIVO_VOLUMETRIA, kwargs.get("pasta_cache"))
-            if cache is not None and not _colunas_volumetria_ausentes(cache):
-                return cache
-            cache_invalido = True
-
-    resultado = gerar_bases(
-        forcar=forcar or cache_invalido,
-        usar_cache=usar_cache,
-        somente=("volumetria",),
-        **kwargs,
-    )
-    if resultado.manifesto.get("status") == "base_invalida":
-        raise ValueError(resultado.manifesto["mensagem"])
-
-    base = resultado.volumetria
-    if base is None:
-        return None
-
-    ausentes = _colunas_volumetria_ausentes(base)
-    if ausentes:
-        raise ValueError(
-            "Base de volumetria inválida. Colunas obrigatórias ausentes: "
-            + ", ".join(ausentes)
-        )
-    erros = base.attrs.get("diagnostico", {}).get("erros", [])
-    if erros:
-        raise ValueError("Base de volumetria inválida: " + "; ".join(erros))
-    return base
-
-
-def _colunas_volumetria_ausentes(df: pd.DataFrame) -> list[str]:
-    """Colunas consumidas pela página de Volumetria."""
-    obrigatorias = (COL_STATUS, COL_TOTAL, COL_TECNICO, COL_MONITOR, COL_REGIAO)
-    return [coluna for coluna in obrigatorias if coluna not in df.columns]
-
-
-def carregar_base_quebra(
-    forcar: bool = False,
-    usar_cache: bool = True,
-    **kwargs: Any,
-) -> pd.DataFrame | None:
-    """Base de Quebra de Agenda pronta (cache do robô, recalculando quando necessário)."""
-    if usar_cache and not forcar:
-        dados = manifesto(kwargs.get("pasta_cache"))
-        if dados.get("status") == "ok" and not _cache_expirado(dados):
-            cache = ler_cache(_ARQUIVO_QUEBRA, kwargs.get("pasta_cache"))
-            if cache is not None:
-                return cache
-    return gerar_bases(
-        forcar=forcar, usar_cache=usar_cache, somente=("quebra",), **kwargs
-    ).quebra
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# APOIO À INTERFACE (opcional — só é chamado pelas páginas)
-# ═══════════════════════════════════════════════════════════════════════
-def render_status_base(
-    dados: dict[str, Any] | None = None,
-    *,
-    titulo: str = "🤖 Base automática (robô)",
-) -> None:
-    """Mostra a situação da base gerada pelo robô na barra lateral."""
-    import streamlit as st
-
-    dados = dados if dados is not None else status_base()
-    status = dados.get("status")
-
-    if status != "ok":
-        st.caption(f"🤖 {dados.get('mensagem', 'Base automática indisponível.')}")
-        return
-
-    with st.container():
-        st.markdown(f"**{titulo}**")
-        st.caption(
-            f"📄 `{dados.get('arquivo', '—')}`  \n"
-            f"🕒 {_formatar_data(dados.get('atualizado_em'))}  \n"
-            f"📦 Volumetria: {dados.get('arquivos', {}).get(_ARQUIVO_VOLUMETRIA, {}).get('registros', 0):,} registros".replace(
-                ",", "."
-            )
-        )
-
-
-def _formatar_data(valor: str | None) -> str:
-    if not valor:
-        return "—"
     try:
-        return datetime.fromisoformat(valor).strftime("%d/%m/%Y %H:%M:%S")
-    except ValueError:
-        return str(valor)
+        rota_df = preparar_base_rota_inicial(bruta_txt, ativos_norm)
+        if rota_df is None or rota_df.empty:
+            erros["rota_inicial"] = (
+                "Nenhum registro válido para a Rota Inicial "
+                "(verifique a coluna de contrato)."
+            )
+        else:
+            resultado["rota_inicial"] = rota_df
+    except Exception as exc:
+        logger.exception("Falha ao preparar a base de Rota Inicial do upload.")
+        erros["rota_inicial"] = str(exc)
+
+    return resultado
 
 
 __all__ = [
@@ -1485,26 +1190,18 @@ __all__ = [
     "COL_TECNICO",
     "COL_TOTAL",
     "EXTENSOES_ACEITAS",
+    "MAPEAMENTO_PERIODOS",
     "STATUS_ORDEM",
-    "ConfigBase",
-    "ResultadoBase",
     "Utils",
-    "calcular_hash",
-    "carregar_base_quebra",
-    "carregar_base_volumetria",
     "carregar_hierarquia",
     "carregar_lista_ativos",
-    "config",
-    "gerar_bases",
+    "gerar_bases_upload",
+    "hierarquia_de",
     "ler_arquivo_bytes",
-    "ler_arquivo_caminho",
-    "ler_cache",
-    "localizar_base",
-    "manifesto",
+    "normalizar_erro_worksheet",
     "normalizar_lista_ativos",
     "preparar_base_quebra",
+    "preparar_base_rota_inicial",
     "preparar_base_volumetria",
-    "render_status_base",
-    "salvar_cache",
-    "status_base",
+    "resolver_sheet_id",
 ]

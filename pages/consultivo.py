@@ -360,47 +360,52 @@ def main():
             EstiloTabela.colorir_metas, subset=cast(Any, colunas_reais)
         )
 
-    st.dataframe(style_df, use_container_width=True, height=450, hide_index=True)
-
-    # ── UI: Alerta de Equipes Zeradas ────────────────────────────────
-    st.divider()
-    render_section_header(
-        "warning",
-        "Equipes Zeradas (Sem Consultivos)",
-        f"{len(df_exibir[df_exibir['Total Consultivos'] == 0])} zeradas",
-    )
-
     df_zerados = df_exibir[df_exibir["Total Consultivos"] == 0]
 
-    if not df_zerados.empty:
-        render_dataframe(
-            df_zerados,
-            titulo="Relação de Equipes Sem Consultivos",
-            icone="person_off",
-            fmt={c: "{:,}" for c in todas_num},
-            badge=f"{len(df_zerados)} equipes",
-        )
-    else:
-        render_insight(
-            "✅ Excelente! 100% da operação possui pelo menos um consultivo registrado.",
-            tipo="ok",
-        )
-
-    # ── Exportação ───────────────────────────────────────────────────
-    st.divider()
-    render_section_header("download", "Exportar Relatório")
-
-    out = BytesIO()
-    with pd.ExcelWriter(out, engine="openpyxl") as w:
-        df_exibir.to_excel(w, index=False, sheet_name="Performance")
-
-    st.download_button(
-        label="📥 Baixar Dados em Excel (.xlsx)",
-        data=out.getvalue(),
-        file_name="relatorio_performance_consultivos.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
+    aba_consolidada, aba_zeradas = st.tabs(
+        ["📋 Visão Consolidada", f"⚠️ Equipes Zeradas ({len(df_zerados)})"]
     )
+
+    with aba_consolidada:
+        st.dataframe(style_df, use_container_width=True, height=450, hide_index=True)
+
+        # ── Exportação ───────────────────────────────────────────────────
+        st.divider()
+        render_section_header("download", "Exportar Relatório")
+
+        out = BytesIO()
+        with pd.ExcelWriter(out, engine="openpyxl") as w:
+            df_exibir.to_excel(w, index=False, sheet_name="Performance")
+
+        st.download_button(
+            label="📥 Baixar Dados em Excel (.xlsx)",
+            data=out.getvalue(),
+            file_name="relatorio_performance_consultivos.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+
+    with aba_zeradas:
+        # ── UI: Alerta de Equipes Zeradas ────────────────────────────────
+        render_section_header(
+            "warning",
+            "Equipes Zeradas (Sem Consultivos)",
+            f"{len(df_exibir[df_exibir['Total Consultivos'] == 0])} zeradas",
+        )
+
+        if not df_zerados.empty:
+            render_dataframe(
+                df_zerados,
+                titulo="Relação de Equipes Sem Consultivos",
+                icone="person_off",
+                fmt={c: "{:,}" for c in todas_num},
+                badge=f"{len(df_zerados)} equipes",
+            )
+        else:
+            render_insight(
+                "✅ Excelente! 100% da operação possui pelo menos um consultivo registrado.",
+                tipo="ok",
+            )
 
 
 if __name__ == "__main__":

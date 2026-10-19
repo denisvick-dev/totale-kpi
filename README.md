@@ -4,7 +4,7 @@
 
 # 📊 Totale KPI
 
-### Plataforma Corporativa de Gestão de Ativos e Indicadores
+### Plataforma Corporativa de Indicadores Operacionais
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
@@ -22,15 +22,14 @@
 
 ## 📖 Sobre o Projeto
 
-O **Totale KPI** é uma plataforma corporativa completa desenvolvida em **Streamlit** para gestão de ativos, técnicos de campo e indicadores operacionais da Totale Tecnologia. Integra-se diretamente ao Google Sheets como backend, oferecendo dashboards interativos, controle de acesso por perfis e ferramentas de produtividade.
+O **Totale KPI** é uma plataforma corporativa desenvolvida em **Streamlit** para indicadores operacionais e de técnicos de campo da Totale Tecnologia. Os painéis operacionais são alimentados pelo **upload manual** da base de atividades e as bases de produção/consultivos integram-se ao Google Sheets, com dashboards interativos de performance, volumetria, rotas e quebra de agenda.
 
 ### 🎯 Objetivos
 
 - ✅ Centralizar informações operacionais em uma única plataforma
 - ✅ Fornecer visão em tempo real de KPIs estratégicos
 - ✅ Automatizar processos manuais e reduzir erros
-- ✅ Garantir rastreabilidade com auditoria completa
-- ✅ Padronizar comunicações corporativas
+- ✅ Padronizar o tratamento das bases operacionais
 
 ---
 
@@ -55,8 +54,7 @@ Heros, cards de KPI, cabeçalhos, links de painéis e tabelas são reutilizados 
 `components/componentes.py` (`render_hero`, `render_kpi`,
 `render_section_header`, `render_painel_link`, `render_dataframe`). Evite CSS
 próprio para esses elementos: mantenha estilos específicos apenas quando a
-página precisar de uma visualização especial. A Gestão de Ativos preserva o
-modo escuro, mas reutiliza os mesmos componentes.
+página precisar de uma visualização especial.
 Para scripts independentes, importe `render_seletor_tema_sidebar` de
 `components.sidebar` e chame essa função após
 `st.set_page_config()` e antes de `aplicar_estilo()`.
@@ -69,118 +67,36 @@ python -m pytest -q
 ruff check .
 ```
 
-### 🤖 Robô de Bases (Volumetria + Quebra de Agenda)
-- **Execução local**: o robô CLI lê a pasta **Downloads** da máquina onde é executado e processa o arquivo mais recente (`.xlsx`, `.xls` ou `.csv`). No Streamlit publicado, use o agente Windows descrito em [Agente local de Downloads](docs/AGENTE_DOWNLOADS.md); o servidor não consegue acessar o computador do usuário.
-- **Atualiza os dois painéis de uma vez**: gera as bases prontas de `volumetria.py` e `quebra.py` com o mesmo pipeline (sem upload manual)
-- **Só reprocessa quando muda**: compara o hash SHA-256 do arquivo; base inalterada reaproveita o cache
-- **Modo contínuo ou agendado**: `--modo loop --intervalo 15`, cron (Linux/macOS) ou Agendador de Tarefas (Windows)
-- **Funciona offline da planilha**: se a `lista_ativos` não estiver acessível, o robô segue e avisa no painel
-- Botão **🤖 Atualizar base** na barra lateral das duas páginas roda o robô sob demanda
+### 📁 Upload manual da base operacional (Quebra + Volumetria + Rota Inicial)
 
-```bash
-# execução única
-python scripts/robot_base.py
+A base operacional entra **somente por upload manual** — sem pasta
+monitorada, sem agente local e sem cache em disco. O envio fica na página
+**Atualização de Dados** e, no estado vazio, também em cada um dos três
+painéis; nos dois casos é o mesmo componente
+(`components/upload_base.py`):
 
-# forçar reprocessamento
-python scripts/robot_base.py --forcar
+- **Um arquivo atualiza os três painéis de uma vez**: a exportação de
+  atividades (`.xlsx`, `.xls` ou `.csv`) é lida uma única vez e gera as
+  bases tratadas de `quebra.py`, `volumetria.py` e `rota_inicial.py`
+  (`components/base_operacional.gerar_bases_upload`), cada uma
+  publicada na sessão na chave que o painel consome.
+- **Falha isolada por painel**: se o arquivo não servir para um dos
+  painéis (ex.: sem a coluna de status exigida pela Volumetria), os
+  demais são publicados normalmente e a tela mostra o motivo.
+- **Vínculo com a `lista_ativos`**: técnico/monitor vêm da aba
+  `lista_ativos` da planilha de ativos (leitura apenas), normalizada
+  antes do merge — caixa, espaços, `.0`, duplicados e desligados não
+  quebram o vínculo. Se nenhum login coincidir, a tela avisa (o merge
+  vazio não passa despercebido como `SEM MONITOR`).
+- **Trocar de base**: o botão **📁 Trocar base**, na barra lateral dos
+  três painéis, limpa as bases da sessão e volta à tela de envio.
+  Enviar o mesmo arquivo de novo na mesma sessão não reprocessa
+  (comparação por hash SHA-256).
+- **Sem upload, sem dados**: nada é lido do computador do usuário nem
+  do servidor automaticamente; as bases vivem apenas na sessão atual.
 
-# vigiar a pasta a cada 15 minutos
-python scripts/robot_base.py --modo loop --intervalo 15
-
-# ver a situação do cache
-python scripts/robot_base.py --status
-```
-
-Configuração (`.streamlit/secrets.toml` ou variáveis de ambiente):
-
-| Chave | Variável | Padrão |
-|-------|----------|--------|
-| `pasta_entrada` | `TOTALE_BASE_ENTRADA` | `Downloads` do usuário |
-| `pasta_cache` | `TOTALE_BASE_CACHE` | `dados/cache` |
-| `arquivo_glob` | `TOTALE_BASE_ARQUIVO` | `Atividades-*.csv;Atividades-*.xlsx` |
-| `ttl_minutos` | `TOTALE_BASE_TTL` | `0` (sem expiração) |
-
-O arquivo automático precisa conter uma coluna de status operacional. São
-aceitos `STATUS DA O.S 1`, `STATUS OS 1`, `STATUS DA OS 1` e `STATUS CONTRATO`.
-Arquivos mais recentes de outros tipos são rejeitados sem substituir o cache de
-dados. Para monitorar apenas arquivos de exportação, configure `arquivo_glob`
-(por exemplo, `base_*.xlsx`; para vários padrões, separe-os com `;`).
-
-```toml
-[base_operacional]
-# Opcional: por padrão o robô já usa a pasta Downloads do usuário.
-# pasta_entrada = "C:/Users/denis/Downloads"
-pasta_cache   = "dados/cache"
-```
-
-Para apontar outra pasta na execução:
-```bash
-python scripts/robot_base.py --pasta-entrada "C:/caminho/das/bases"
-```
-
-### 🤖 Robô de Sincronismo local (Central de Atualização)
-
-A página **Atualização de Dados** hospeda o painel de processamento e upload.
-Em uma execução local do Streamlit, o robô pode monitorar a pasta Downloads
-acessível ao processo. No app publicado, use o agente Windows: ele observa o
-Downloads do computador e envia os arquivos ao app. Veja o [guia do agente](docs/AGENTE_DOWNLOADS.md).
-
-- monitora a pasta configurada a cada 5 s quando o caminho é acessível ao processo;
-- o app publicado não acessa arquivos locais diretamente;
-- aceita `*.csv`, `.xlsx`, `.xlsm` e `.xls` cujo nome siga `Atividades-*`, contenha
-  `atividades` ou traga o marcador da base (`SPO`, `GRS`, `ABCDM`);
-- ignora temporários (`~$`, `.tmp`, `.crdownload`) e arquivos em gravação;
-- valida o ZIP do Excel, o encoding/separador do CSV e a estabilidade do arquivo;
-- publica a base tratada em `df_memoria` para os painéis e mantém a versão bruta
-  em `df_memoria_raw`;
-- vincula a `lista_ativos` (mesma aba da Gestão de Ativos) **mesmo em sessão
-  nova**: reaproveita o download da sessão (`dados_ativos`) quando existe e,
-  caso contrário, busca a planilha com o mesmo cache de 5 min da Quebra de
-  Agenda; a lista é normalizada antes do merge (caixa, espaços, `.0`,
-  duplicados e desligados), então o vínculo não depende do formato da aba;
-- se a planilha estiver inacessível ou nenhum login coincidir, a prévia da
-  base publicada exibe um aviso — o merge vazio não passa mais despercebido;
-- entra no pipeline apenas o arquivo mais recente da pasta; os demais aparecem
-  como "fora do pipeline" no painel;
-- mostra o status de cada base (SPO→Leste, GRS→Guarulhos, ABCDM→ABCDM), a
-  contagem de candidatos/fila, a estabilidade do ciclo e o último erro, com os
-  botões **🧹 Limpar** e **🔄 Retentar**.
-
-Uso via terminal (sem Streamlit):
-
-```bash
-python components/robo_local.py "C:/Users/<usuario>/Downloads"
-python components/robo_local.py "C:/bases" "dados/cache/robo.csv"
-```
-
-Para usar uma pasta diferente na interface, abra **⚙️ Configurar Pasta** no painel.
-
-#### Agente Windows para o app publicado
-
-O agente monitora o Downloads configurado no Windows e envia cada nova
-exportação estável pelo campo de envio do app. Ele abre uma janela de navegador
-persistente; se o app pedir autenticação, entre nela normalmente. Mantenha a
-janela e o agente abertos para continuar o monitoramento. O agente envia somente
-arquivos cujo nome começa com `Atividades-` e com até 80 MB.
-
-Na raiz do projeto, instale o navegador do agente e inicie-o:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-agent.txt
-.\.venv\Scripts\python.exe -m playwright install chromium
-.\scripts\iniciar_agente_downloads.bat
-```
-
-O agente usa `https://totale-kpi.streamlit.app/envio_excel` por padrão. Para
-testar uma única vez ou apontar para outra pasta:
-
-```powershell
-.\.venv\Scripts\python.exe -m scripts.agente_downloads --uma-vez
-.\.venv\Scripts\python.exe -m scripts.agente_downloads --pasta "C:\bases"
-```
-
-Encerre com `Ctrl+C`. O perfil e a sessão autenticada do navegador ficam no
-`%LOCALAPPDATA%\TotaleKpi\agente-downloads\perfil`.
+Colunas de status aceitas no arquivo: `STATUS DA O.S 1`, `STATUS OS 1`,
+`STATUS DA OS 1` e `STATUS CONTRATO`.
 
 ### 🗓️ Projeções em dias úteis (Seg–Sáb)
 - A semana útil é de **segunda a sábado** — **domingos não contam**
@@ -194,35 +110,22 @@ Encerre com `Ctrl+C`. O perfil e a sessão autenticada do navegador ficam no
 - Gráficos interativos (pizza, barras, heatmap)
 - Exportação em Excel e CSV
 
-### 👥 Gestão de Técnicos
-- **Cadastro** de novos técnicos com validação
-- **Edição rápida** de campos individuais
-- **Importação em lote** via Excel/CSV
-- **Desligamento** com registro de motivo
-- **Histórico completo** de desligamentos
+### 🎯 Aderência à projeção (Ranking de Pontos)
+- Aba dedicada no painel de Produtividade: projeção de fechamento × meta por **monitor**, **projeto** ou **monitor × projeto**
+- Meta de referência selecionável (300/350/375/400 pts/equipe/mês), com gráfico de aderência, % de equipes aderentes, gap e ritmo necessário por dia útil
+- Detalhe das equipes de cada grupo e exportação em Excel; cálculo em `components/aderencia.py`
 
-### 🗂️ Hierarquia Organizacional
-- Visualização em treemap
-- Análise Base → Monitor → Técnico
-- Filtros multi-nível
+Os dashboards seguem um padrão único de leitura — hero, insight de
+status, KPIs e conteúdo em abas (Ranking/Aderência em Pontos;
+Supervisor/Projeto/Técnicos em Qtde. de O.S.; Consolidada/Zeradas em
+Consultivos; visões operacionais em Quebra, Volumetria e Rota). A
+página inicial mostra o status das duas frentes de dados
+(produção em nuvem e base operacional enviada).
 
-### 📑 Relatórios Avançados
-- Distribuição por Monitor
-- Comparativo Ativos × Desligados
-- Análise por Base
-- Timeline de desligamentos
-
-### 🔐 Segurança e Controle
-- **Autenticação** por usuário e senha
-- **Perfis de acesso**: Admin, Supervisor, Operador, Leitura
-- **Filtros por base** conforme permissão
-- **Auditoria completa** de todas as ações
-
-### ✉️ Gerador de Assinatura de E-mail
-- Template padronizado Totale
-- Personalização Nome, Cargo e Telefones
-- Exportação em PNG otimizado para e-mail
-- Ajustes finos de posicionamento
+### 👥 Vínculo com a lista de ativos
+- Técnico, monitor e base de cada registro vêm da aba `lista_ativos`
+- Somente leitura: o cadastro é mantido direto na planilha
+- Filtros por Base → Monitor → Técnico em todos os painéis operacionais
 
 ---
 
@@ -249,7 +152,6 @@ Regras oficiais implementadas em `components/criterios.py`:
 | **Backend** | Google Sheets API |
 | **Visualização** | Plotly, Pandas |
 | **Autenticação** | Service Account OAuth 2.0 |
-| **Processamento de Imagem** | Pillow |
 | **Exportação** | OpenPyXL |
 
 ---
@@ -308,11 +210,9 @@ Edite o `.streamlit/secrets.toml` com suas credenciais reais do Google Cloud e u
 6. Compartilhe sua planilha com o e-mail da service account
 7. Preencha os dados no `secrets.toml`
 
-Na página **Quebra de Agenda**, o vínculo de monitores usa a aba `lista_ativos` da mesma planilha da Gestão de Ativos. A aba deve conter `Login` e `Monitor` (e, opcionalmente, `Técnico`, `Base` e `Situação`). O login do arquivo operacional deve corresponder ao da lista. A leitura autenticada usa `[gcp_service_account]`; confira se a planilha foi compartilhada com o `client_email` dessa conta. Quando a base já estiver carregada, clique em **Atualizar Lista de Ativos** na barra lateral para refazer o vínculo sem enviar o arquivo novamente. Para base automática, o botão relê a lista e reprocessa o arquivo original do robô; para upload manual, refaz o vínculo com o arquivo enviado. A página mostra a quantidade de registros vinculados e alerta quando a aba não puder ser lida ou os logins não coincidirem.
+Nos painéis operacionais, o vínculo de monitores usa a aba `lista_ativos` da planilha de ativos. A aba deve conter `Login` e `Monitor` (e, opcionalmente, `Técnico`, `Base` e `Situação`). O login do arquivo operacional deve corresponder ao da lista. A leitura autenticada usa `[gcp_service_account]`; confira se a planilha foi compartilhada com o `client_email` dessa conta. Quando a base já estiver carregada, **🔗 Atualizar Lista de Ativos** (barra lateral da Quebra de Agenda) refaz o vínculo com o arquivo enviado, sem novo upload. As páginas mostram a quantidade de registros vinculados e alertam quando a aba não puder ser lida ou os logins não coincidirem.
 
-As páginas **Volumetria de O.S.** e **Quebra de Agenda** carregam sozinhas a base
-gerada pelo robô (`dados/cache`). O upload manual continua disponível como
-alternativa — veja a seção [🤖 Robô de Bases](#-robô-de-bases-volumetria--quebra-de-agenda).
+As páginas **Quebra de Agenda**, **Volumetria de O.S.** e **Rota Inicial** são alimentadas pelo upload manual descrito em [📁 Upload manual da base operacional](#-upload-manual-da-base-operacional-quebra--volumetria--rota-inicial).
 
 ### 6. Execute o Aplicativo
 ```bash
@@ -347,11 +247,10 @@ Acesse: **http://localhost:8501**
 ```text
 totale-kpi/
 ├── streamlit_app.py                 # Entrada e navegação
-├── components/                      # Design system, regras e robô local
-├── pages/                           # Painéis da aplicação
-├── scripts/                          # CLI, agente Downloads e utilitários
+├── components/                      # Design system, regras, tratamento e upload de bases
+├── pages/                           # Painéis da aplicação e Central de Atualização
+├── scripts/                          # Utilitários locais (fonte Oscine)
 ├── docs/                             # Guias operacionais e mapa do projeto
-├── dados/                           # Entrada, cache e logs locais (não versionados)
 ├── assets/
 │   ├── fonts/LEIA-ME.md             # Instruções sobre a fonte Oscine
 │   ├── icons/totale.ico             # Ícone do app
@@ -366,17 +265,6 @@ totale-kpi/
 ├── pyproject.toml                   # Configuração do pytest e Ruff
 └── README.md
 ```
-
----
-
-## 🔐 Perfis de Acesso
-
-| Perfil | Permissões |
-|--------|-----------|
-| 👑 **Admin** | Todas as funções + Auditoria |
-| 🎯 **Supervisor** | Cadastro, Edição, Desligamento, Importação |
-| ⚙️ **Operador** | Cadastro e Edição básica |
-| 👁️ **Leitura** | Apenas visualização de dados |
 
 ---
 
@@ -427,9 +315,7 @@ Detalhes em `assets/fonts/LEIA-ME.md`.
 ## 📊 Roadmap
 
 - [x] ✅ Dashboard Operacional
-- [x] ✅ Gestão de Técnicos completa
-- [x] ✅ Sistema de Auditoria
-- [x] ✅ Gerador de Assinatura
+- [x] ✅ Upload manual unificado da base operacional
 - [x] ✅ Integração Google Sheets
 - [ ] 🚧 Notificações via e-mail
 - [ ] 🚧 API REST para integrações

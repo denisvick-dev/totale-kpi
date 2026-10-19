@@ -58,11 +58,6 @@ def main() -> None:
         title="Quebra de Agenda",
         icon="📉",
     )
-    gestao_ativos = st.Page(
-        "pages/gestao_ativos.py",
-        title="Gestão de Ativos",
-        icon="👥",
-    )
     atualizacao = st.Page(
         "pages/envio_excel.py",
         title="Atualização de Dados",
@@ -75,7 +70,7 @@ def main() -> None:
         "INÍCIO": [home_page],
         "PERFORMANCE E METAS": [ranking_pontos, qtde_os, consultivos],
         "OPERAÇÃO DIÁRIA": [rota_inicial, volumetria, quebra],
-        "GESTÃO E DADOS": [gestao_ativos, atualizacao],
+        "DADOS": [atualizacao],
     }
 
     pagina = st.navigation(paginas_agrupadas)

@@ -1,8 +1,24 @@
+"""
+envio_excel.py — Central de Atualização de Dados
+================================================
+Ponto único de atualização das bases do portal, em duas frentes:
+
+1. **Base operacional (upload manual)** — o envio da exportação de
+   atividades alimenta, de uma só vez, os painéis de **Quebra de
+   Agenda**, **Volumetria de O.S.** e **Rota Inicial**
+   (``components/upload_base.py``). Os painéis também aceitam o envio
+   direto, no estado vazio, com o mesmo componente.
+
+2. **Bases compartilhadas (nuvem)** — download e tratamento das
+   planilhas de Produção e Consultivos do Google, publicados na sessão
+   (``dados_prod`` / ``dados_cons`` / ``dados_ativos``) para os painéis
+   de Produtividade, Quantidade de O.S. e Consultivos.
+"""
+
 import logging
 import time
 from datetime import datetime, timedelta, timezone
 from io import BytesIO, StringIO
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -16,21 +32,18 @@ from components.componentes import (
     render_kpi,
     render_section_header,
 )
-from components.robo_local import renderizar_robo_local
+from components.upload_base import render_upload_base_operacional
 
 logger = logging.getLogger(__name__)
 
-# ====================================================
-# BLOCO 1: CONFIGURAÇÕES GLOBAIS
-# ====================================================
-
-# ✅ set_page_config SEMPRE deve ser o primeiro comando Streamlit
+# set_page_config deve ser o primeiro comando Streamlit da página.
 st.set_page_config(page_title="Atualização de Dados", page_icon="🔁", layout="wide")
-
-# ✅ aplicar_estilo() DEPOIS do set_page_config
 aplicar_estilo()
 
 
+# ════════════════════════════════════════════════════
+# CONFIGURAÇÕES E PROCESSAMENTO (BASES EM NUVEM)
+# ════════════════════════════════════════════════════
 class Configuracoes:
     """Parâmetros e configurações gerais da aplicação."""
 
@@ -44,10 +57,6 @@ class Configuracoes:
     # Valores considerados "vazios" — centralizado aqui para ser usado em todo o projeto
     VAZIOS = {"-", "nan", "None", "", "NaN"}
 
-
-# ====================================================
-# BLOCO 3: PROCESSAMENTO DE DADOS (VETORIZADO)
-# ====================================================
 
 
 class ProcessadorDeDados:
@@ -291,116 +300,11 @@ class ProcessadorDeDados:
         return prod_raw, {"Consultivo": cons}, ativos
 
 
-# ====================================================
-# BLOCO 4: INTERFACE E LÓGICA DE ATUALIZAÇÃO
-# ====================================================
-render_hero(
-    "Central de Atualização de Dados",
-    "Sincronização e gestão de bases operacionais",
-    "Bases compartilhadas",
-)
-
-
-# ====================================================
-# BLOCO 4.1: ROBÔ LOCAL (PASTA MONITORADA)
-# ====================================================
-
-
-def _lista_ativos_para_etl() -> pd.DataFrame:
-    """Lista de ativos usada pelo ETL do robô — sessão primeiro, Sheets depois.
-
-    O robô publica ``df_memoria`` assim que a pasta monitorada muda, quase
-    sempre antes de qualquer download da nuvem nesta sessão. Quando a lista
-    vinha somente de ``session_state["dados_ativos"]``, o merge rodava vazio e
-    a base era publicada com ``SEM MONITOR``/``NÃO MAPEADO`` — e a Quebra de
-    Agenda reutilizava essa base sem vínculo. Com o fallback, o ETL busca a
-    mesma aba ``lista_ativos`` das demais páginas (cache de 5 min) e só
-    degrada quando a planilha está realmente inacessível.
-    """
-    ativos = st.session_state.get("dados_ativos")
-    if isinstance(ativos, pd.DataFrame) and not ativos.empty:
-        return ativos
-    try:
-        from pages.quebra import DataLoader as DataLoaderQuebra
-
-        buscados = DataLoaderQuebra.buscar_gsheets()
-    except Exception:
-        logger.exception("Falha ao buscar a lista_ativos para o ETL local.")
-        return pd.DataFrame()
-    return buscados if isinstance(buscados, pd.DataFrame) else pd.DataFrame()
-
-
-def _etl_base_local(bruto: pd.DataFrame, ativos: pd.DataFrame) -> pd.DataFrame | None:
-    """Reaproveita o pipeline da Quebra para publicar uma base pronta.
-
-    A base bruta continua disponível em ``df_memoria_raw``; ``df_memoria`` recebe
-    a versão tratada que os painéis operacionais consomem.
-    """
-    if bruto is None or bruto.empty:
-        return None
-    try:
-        from components import base_operacional as bo
-
-        return bo.preparar_base_quebra(
-            bruto,
-            ativos,
-            ativos.attrs.get("fonte_ativos", ""),
-            ativos.attrs.get("erro_ativos", ""),
-        )
-    except Exception:
-        # Nunca derrubar a Central por causa de uma base fora do layout da Quebra.
-        logger.exception("ETL local falhou; publicando a base bruta.")
-        return bruto
-
-
-renderizar_robo_local(
-    etl_fn=_etl_base_local,
-    gsheets_fn=_lista_ativos_para_etl,
-    ciclos_estabilidade=2,
-    mostrar_toggle_sidebar=True,
-)
-
-# Prévia imediata do que o robô publicou para os demais painéis.
-df_local = st.session_state.get("df_memoria")
-if (
-    isinstance(df_local, pd.DataFrame)
-    and not df_local.empty
-    and st.session_state.get("robo_ultimo_processado_path")
-):
-    caminho_local = Path(st.session_state["robo_ultimo_processado_path"])
-    render_section_header(
-        "table_view",
-        "Prévia da base local",
-        f"{len(df_local):,} linhas".replace(",", "."),
-    )
-    st.caption(
-        f"Última leitura: `{caminho_local.name}` · "
-        f"{len(df_local.columns)} coluna(s) · publicada em `df_memoria`."
-    )
-    # Vínculo vazio não pode passar despercebido: é exatamente o sintoma de
-    # "tudo SEM MONITOR" que o merge da lista_ativos produzia em silêncio.
-    if not int(df_local.attrs.get("diag_vinculados", 0) or 0):
-        erro_local = str(df_local.attrs.get("erro_ativos", "") or "").strip()
-        st.warning(
-            "⚠️ A base publicada não vinculou nenhum login à `lista_ativos`"
-            + (f" — {erro_local}" if erro_local else ".")
-            + " Monitores e técnicos aparecem como `SEM MONITOR`/`NÃO MAPEADO` "
-            "até o vínculo ser concluído; use **🔗 Atualizar Lista de Ativos** "
-            "na Quebra de Agenda ou refaça a sincronização."
-        )
-    render_dataframe(
-        df_local.head(50),
-        titulo="Amostra da Base Publicada pelo Robô",
-        icone="smart_toy",
-        badge=f"Top {min(50, len(df_local))} de {len(df_local):,}".replace(",", "."),
-        height=340,
-    )
-
-st.divider()
-render_section_header("cloud_sync", "Bases compartilhadas", "Google Sheets")
-
-
+# ════════════════════════════════════════════════════
+# SINCRONIZAÇÃO COM A NUVEM
+# ════════════════════════════════════════════════════
 def executar_atualizacao() -> bool:
+    """Baixa Produção/Consultivos/Ativos e publica o resultado na sessão."""
     status = st.empty()
     barra = st.progress(0)
 
@@ -430,90 +334,124 @@ def executar_atualizacao() -> bool:
         return False
 
 
-# Carrega automaticamente na primeira visita
-if "dados_cons" not in st.session_state:
-    executar_atualizacao()
+def _fmt_int(valor: int) -> str:
+    return f"{int(valor):,}".replace(",", ".")
 
-col_btn, _ = st.columns([1, 4])
-with col_btn:
-    if st.button("🔄 Atualizar Agora", use_container_width=True, type="primary"):
-        if executar_atualizacao():
-            st.success(
-                "✅ Dados atualizados com sucesso e disponíveis para todas as páginas!"
-            )
 
-st.divider()
-
-# ====================================================
-# BLOCO 5: EXIBIÇÃO EM TABS
-# ====================================================
-
-dados_prod = st.session_state.get("dados_prod", {})
-df_prod = (
-    dados_prod["Prod"]
-    if isinstance(dados_prod, dict) and "Prod" in dados_prod
-    else pd.DataFrame()
-)
-
-dados_cons = st.session_state.get("dados_cons", {})
-df_cons = (
-    dados_cons["Consultivo"]
-    if isinstance(dados_cons, dict) and "Consultivo" in dados_cons
-    else pd.DataFrame()
-)
-
-ultima_data = st.session_state.get("ultima_atualizacao")
-data_sync = (
-    ultima_data.strftime("%d/%m/%Y") if isinstance(ultima_data, datetime) else "—"
-)
-hora_sync = (
-    ultima_data.strftime("às %H:%M:%S")
-    if isinstance(ultima_data, datetime)
-    else "Ainda não atualizado"
-)
-
-aba1, aba2 = st.tabs(
-    ["📊 Pré-visualização: Produção", "📋 Pré-visualização: Consultivos"]
-)
-
-# ---------- Aba Produção ----------
-with aba1:
-    render_section_header("table_view", "Pré-visualização da Produção")
+def _render_previa(
+    df: pd.DataFrame,
+    *,
+    titulo: str,
+    icone: str,
+    data_sync: str,
+    hora_sync: str,
+    aviso_vazio: str,
+) -> None:
+    """KPIs + amostra de uma base em nuvem (mesmo layout das duas abas)."""
+    render_section_header("table_view", titulo)
     c1, c2, c3 = st.columns(3)
-    render_kpi(
-        c1, "Total Registros", f"{len(df_prod):,}".replace(",", "."), tema="azul"
-    )
-    render_kpi(c2, "Total Colunas", str(len(df_prod.columns)), tema="cinza")
+    render_kpi(c1, "Total Registros", _fmt_int(len(df)), tema="azul")
+    render_kpi(c2, "Total Colunas", str(len(df.columns)), tema="cinza")
     render_kpi(c3, "Última Sincronização", data_sync, hora_sync, tema="verde")
 
-    if not df_prod.empty:
-        render_dataframe(
-            df_prod.head(100),
-            titulo="Amostra da Base de Produção",
-            icone="precision_manufacturing",
-            badge=f"Top {min(100, len(df_prod))} de {len(df_prod):,}".replace(",", "."),
-            height=400,
-        )
-    else:
-        st.warning("⚠️ Nenhuma aba chamada 'Prod' encontrada.")
-
-# ---------- Aba Consultivo ----------
-with aba2:
-    render_section_header("table_view", "Pré-visualização de Consultivos")
-    c4, c5, c6 = st.columns(3)
-    render_kpi(
-        c4, "Total Registros", f"{len(df_cons):,}".replace(",", "."), tema="azul"
+    if df.empty:
+        st.warning(aviso_vazio)
+        return
+    render_dataframe(
+        df.head(100),
+        titulo=titulo.replace("Pré-visualização", "Amostra"),
+        icone=icone,
+        badge=f"Top {min(100, len(df))} de {_fmt_int(len(df))}",
+        height=400,
     )
-    render_kpi(c5, "Total Colunas", str(len(df_cons.columns)), tema="cinza")
-    render_kpi(c6, "Última Sincronização", data_sync, hora_sync, tema="verde")
 
-    if not df_cons.empty:
-        render_dataframe(
-            df_cons.head(100),
-            titulo="Amostra da Base de Consultivos",
-            icone="shopping_bag",
-            badge=f"Top {min(100, len(df_cons))} de {len(df_cons):,}".replace(",", "."),
-            height=400,
+
+def _render_secao_upload() -> None:
+    """Seção 1 — base operacional via upload manual (três painéis)."""
+    render_section_header(
+        "upload_file",
+        "Base operacional — upload manual",
+        "Quebra · Volumetria · Rota Inicial",
+    )
+    render_upload_base_operacional("central", titulo=None)
+
+
+def _render_secao_nuvem() -> None:
+    """Seção 2 — bases compartilhadas baixadas do Google (Produção/Consultivos)."""
+    render_section_header("cloud_sync", "Bases compartilhadas", "Google Sheets")
+
+    # Carrega automaticamente na primeira visita.
+    if "dados_cons" not in st.session_state:
+        executar_atualizacao()
+
+    col_btn, _ = st.columns([1, 4])
+    with col_btn:
+        if st.button("🔄 Atualizar Agora", use_container_width=True, type="primary"):
+            if executar_atualizacao():
+                st.success(
+                    "✅ Dados atualizados com sucesso e disponíveis "
+                    "para todas as páginas!"
+                )
+
+    dados_prod = st.session_state.get("dados_prod", {})
+    df_prod = (
+        dados_prod["Prod"]
+        if isinstance(dados_prod, dict) and "Prod" in dados_prod
+        else pd.DataFrame()
+    )
+
+    dados_cons = st.session_state.get("dados_cons", {})
+    df_cons = (
+        dados_cons["Consultivo"]
+        if isinstance(dados_cons, dict) and "Consultivo" in dados_cons
+        else pd.DataFrame()
+    )
+
+    ultima_data = st.session_state.get("ultima_atualizacao")
+    data_sync = (
+        ultima_data.strftime("%d/%m/%Y")
+        if isinstance(ultima_data, datetime)
+        else "—"
+    )
+    hora_sync = (
+        ultima_data.strftime("às %H:%M:%S")
+        if isinstance(ultima_data, datetime)
+        else "Ainda não atualizado"
+    )
+
+    aba_prod, aba_cons = st.tabs(
+        ["📊 Pré-visualização: Produção", "📋 Pré-visualização: Consultivos"]
+    )
+    with aba_prod:
+        _render_previa(
+            df_prod,
+            titulo="Pré-visualização da Produção",
+            icone="precision_manufacturing",
+            data_sync=data_sync,
+            hora_sync=hora_sync,
+            aviso_vazio="⚠️ Nenhuma aba chamada 'Prod' encontrada.",
         )
-    else:
-        st.warning("⚠️ Nenhuma aba encontrada ou o arquivo CSV está vazio.")
+    with aba_cons:
+        _render_previa(
+            df_cons,
+            titulo="Pré-visualização de Consultivos",
+            icone="shopping_bag",
+            data_sync=data_sync,
+            hora_sync=hora_sync,
+            aviso_vazio="⚠️ Nenhuma aba encontrada ou o arquivo CSV está vazio.",
+        )
+
+
+def main() -> None:
+    render_hero(
+        "Central de Atualização de Dados",
+        "Upload da base operacional e sincronização das bases compartilhadas",
+        "Bases compartilhadas",
+    )
+    _render_secao_upload()
+    st.divider()
+    _render_secao_nuvem()
+
+
+if __name__ == "__main__":
+    main()

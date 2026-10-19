@@ -15,6 +15,7 @@ from components.componentes import (
     render_painel_link,
     render_section_header,
 )
+from components.upload_base import metadados_upload
 
 VERSAO_SISTEMA = "2.2"
 AMBIENTE = "Produção"
@@ -25,7 +26,7 @@ PAINEIS_PERFORMANCE = [
     (
         "pages/pontos.py",
         "🏆 Ranking de Pontos",
-        "Acompanhe metas, desempenho e projeções por equipe.",
+        "Metas e projeções por equipe, com aderência por monitor e projeto.",
     ),
     (
         "pages/qtde_os.py",
@@ -57,19 +58,24 @@ PAINEIS_OPERACAO = [
     ),
 ]
 
-PAINEL_GESTAO = (
-    "pages/gestao_ativos.py",
-    "👥 Gestão de Ativos",
-    "Administre técnicos, hierarquia, cadastros e relatórios de ativos.",
-)
-
-
 def _status_base_producao() -> str:
     """Indica se as planilhas exigidas pelos painéis foram carregadas na sessão."""
     dados = st.session_state.get("dados_prod")
     if not isinstance(dados, dict) or "Prod" not in dados:
         return "Aguardando"
     return "Pronta" if "Gpon" in dados else "Parcial"
+
+
+def _status_base_operacional() -> tuple[str, str, str]:
+    """(status, arquivo, quando) da base operacional enviada nesta sessão."""
+    meta = metadados_upload()
+    if not meta or not meta.get("linhas"):
+        return "Aguardando", "", ""
+    quando = meta.get("quando")
+    texto_quando = (
+        quando.strftime("%d/%m/%Y às %H:%M") if hasattr(quando, "strftime") else ""
+    )
+    return "Pronta", str(meta.get("arquivo", "")), texto_quando
 
 
 def _texto_ultima_atualizacao() -> str:
@@ -108,10 +114,13 @@ def main() -> None:
     )
 
     status_base = _status_base_producao()
+    status_operacional, arquivo_operacional, quando_operacional = (
+        _status_base_operacional()
+    )
     hora_atualizacao = _texto_ultima_atualizacao()
 
     total_paineis = len(PAINEIS_PERFORMANCE) + len(PAINEIS_OPERACAO)
-    k1, k2, k3 = st.columns(3)
+    k1, k2, k3, k4 = st.columns(4)
     render_kpi(
         k1,
         "Painéis analíticos",
@@ -132,9 +141,20 @@ def main() -> None:
     )
     render_kpi(
         k3,
-        "Última atualização",
+        "Base operacional",
+        status_operacional,
+        (
+            f"{arquivo_operacional} · {quando_operacional}"
+            if status_operacional == "Pronta"
+            else "Envie a exportação de atividades"
+        ),
+        tema="verde" if status_operacional == "Pronta" else "laranja",
+    )
+    render_kpi(
+        k4,
+        "Última sincronização",
         hora_atualizacao,
-        "Horário de Brasília",
+        "Produção/Consultivos · Horário de Brasília",
         tema="cinza",
     )
 
@@ -156,12 +176,26 @@ def main() -> None:
             tipo="info",
         )
 
+    if status_operacional == "Pronta":
+        render_insight(
+            f"A base operacional **{arquivo_operacional}** foi enviada em "
+            f"{quando_operacional}. Quebra de Agenda, Volumetria e Rota "
+            "Inicial já podem ser consultados.",
+            tipo="ok",
+        )
+    else:
+        render_insight(
+            "A base operacional ainda não foi enviada nesta sessão. Envie a "
+            "exportação de atividades na Central de Atualização para liberar "
+            "Quebra de Agenda, Volumetria e Rota Inicial.",
+            tipo="info",
+        )
+
     render_section_header(
         "space_dashboard", "Explore os painéis", f"{total_paineis} análises"
     )
     _render_grupo_paineis("Performance e metas", "trending_up", PAINEIS_PERFORMANCE)
     _render_grupo_paineis("Operação diária", "engineering", PAINEIS_OPERACAO)
-    _render_grupo_paineis("Gestão de ativos", "groups", [PAINEL_GESTAO])
 
     render_section_header("sync", "Dados e atualização")
     with st.container(border=True):
@@ -169,7 +203,8 @@ def main() -> None:
         with col_info:
             st.markdown("#### 🔄 Atualizar as bases compartilhadas")
             st.caption(
-                "Sincronize os dados de produção e consultivos antes de iniciar "
+                "Envie a base operacional (Quebra, Volumetria e Rota Inicial) e "
+                "sincronize os dados de produção e consultivos antes de iniciar "
                 "a análise. A atualização fica disponível durante esta sessão."
             )
         with col_acao:

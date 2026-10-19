@@ -176,7 +176,7 @@ def _ler_env_extras() -> dict[date, str]:
 def _ler_secrets_extras() -> dict[date, str]:
     """Feriados extras vindos de ``.streamlit/secrets.toml`` (``[calendario]``)."""
     try:
-        import streamlit as st  # import local: o robô roda sem Streamlit
+        import streamlit as st  # import local: o módulo também roda sem Streamlit
 
         secao = st.secrets.get("calendario", {})
     except Exception:
