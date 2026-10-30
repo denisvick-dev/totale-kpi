@@ -1,17 +1,10 @@
 """
 envio_excel.py — Central de Atualização de Dados
 ================================================
-Ponto único de atualização das bases do portal, em duas frentes:
-
-1. **Base operacional (upload manual)** — o envio da exportação de
-   atividades alimenta o painel de **Rota Inicial**
-   (``components/upload_base.py``). O painel também aceita o envio
-   direto, no estado vazio, com o mesmo componente.
-
-2. **Bases compartilhadas (nuvem)** — download e tratamento das
-   planilhas de Produção e Consultivos do Google, publicados na sessão
-   (``dados_prod`` / ``dados_cons`` / ``dados_ativos``) para os painéis
-   de Produtividade, Quantidade de O.S. e Consultivos.
+Ponto único de atualização das bases do portal: download e tratamento
+das planilhas de Produção e Consultivos do Google, publicados na sessão
+(``dados_prod`` / ``dados_cons`` / ``dados_ativos``) para os painéis de
+Produtividade, Quantidade de O.S. e Consultivos.
 """
 
 import logging
@@ -30,11 +23,6 @@ from components.componentes import (
     render_hero,
     render_kpi,
     render_section_header,
-)
-from components.upload_base import (
-    metadados_upload,
-    render_upload_base_operacional,
-    reprocessar_vinculo_ativos,
 )
 
 logger = logging.getLogger(__name__)
@@ -369,39 +357,8 @@ def _render_previa(
     )
 
 
-def _render_secao_upload() -> None:
-    """Seção 1 — base operacional via upload manual."""
-    render_section_header(
-        "upload_file",
-        "Base operacional — upload manual",
-        "Rota Inicial",
-    )
-    render_upload_base_operacional("central", titulo=None)
-
-    # Refaz o vínculo com a lista_ativos reaproveitando o arquivo da sessão.
-    if metadados_upload().get("linhas"):
-        col_btn, _ = st.columns([1, 3])
-        with col_btn:
-            if st.button(
-                "🔗 Atualizar Lista de Ativos",
-                use_container_width=True,
-                help=(
-                    "Relê a aba lista_ativos da planilha e refaz o vínculo de "
-                    "monitores e técnicos sem precisar enviar o arquivo de novo."
-                ),
-            ):
-                if reprocessar_vinculo_ativos():
-                    st.success("✅ Vínculo com a lista de ativos atualizado.")
-                    st.rerun()
-                else:
-                    st.warning(
-                        "O arquivo original não está mais nesta sessão. "
-                        "Envie a base novamente."
-                    )
-
-
 def _render_secao_nuvem() -> None:
-    """Seção 2 — bases compartilhadas baixadas do Google (Produção/Consultivos)."""
+    """Bases compartilhadas baixadas do Google (Produção/Consultivos)."""
     render_section_header("cloud_sync", "Bases compartilhadas", "Google Sheets")
 
     # Carrega automaticamente na primeira visita.
@@ -469,11 +426,9 @@ def _render_secao_nuvem() -> None:
 def main() -> None:
     render_hero(
         "Central de Atualização de Dados",
-        "Upload da base operacional e sincronização das bases compartilhadas",
+        "Sincronização das bases compartilhadas de Produção e Consultivos",
         "Bases compartilhadas",
     )
-    _render_secao_upload()
-    st.divider()
     _render_secao_nuvem()
 
 

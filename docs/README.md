@@ -2,26 +2,19 @@
 
 ## Como os dados entram
 
-- **Base operacional** (Rota Inicial):
-  upload manual da exportação de atividades (`.xlsx`, `.xls` ou `.csv`)
-  na página **Atualização de Dados** ou direto no painel de Rota
-  Inicial. O envio gera a base tratada, com vínculo à aba
-  `lista_ativos` da planilha de ativos. A leitura e o tratamento ficam
-  em `components/base_operacional.py`; a interface de envio, em
-  `components/upload_base.py`.
 - **Produção e Consultivos**: sincronização com o Google Sheets/Drive
-  na mesma página **Atualização de Dados** (`pages/envio_excel.py`),
+  na página **Atualização de Dados** (`pages/envio_excel.py`),
   publicada na sessão para os painéis de performance.
 
 Nenhum arquivo é lido do disco do servidor nem do computador do
-usuário automaticamente: sem upload na sessão, os painéis
-operacionais exibem apenas a tela de envio.
+usuário automaticamente: sem a sincronização na sessão, os painéis
+exibem o aviso de dados ausentes.
 
 ## Organização do repositório
 
 | Diretório | Responsabilidade |
 |---|---|
-| `components/` | Design system, tratamento da base operacional, upload manual e regras compartilhadas |
+| `components/` | Design system, calendário e regras compartilhadas |
 | `pages/` | Painéis do portal e a Central de Atualização |
 | `scripts/` | Utilitários locais (instalação da fonte Oscine) |
 | `assets/` e `fonts/` | Identidade visual e tipografia |
