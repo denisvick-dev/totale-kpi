@@ -587,7 +587,9 @@ def preparar_base_volumetria(
     # 2. Remove suspensos
     col_atv = detectar_col_status_atividade(df)
     if col_atv:
-        susp = Utils.normalizar_chave(df[col_atv]).str.contains("SUSP", na=False)
+        susp = Utils.normalizar_chave(df[col_atv]).str.contains(
+            "SUSP", regex=False, na=False
+        )
         diag["Removidos por suspensão"] = int(susp.sum())
         df = df[~susp].copy()
 
@@ -700,7 +702,9 @@ def preparar_base_quebra(
     n_susp = 0
     if col_atv:
         serie_atv = df[col_atv].fillna("").astype(str).str.strip().str.upper()
-        mask_susp = serie_atv.str.contains("SUSP", na=False) | serie_atv.eq("SUSPENSO")
+        mask_susp = serie_atv.str.contains(
+            "SUSP", regex=False, na=False
+        ) | serie_atv.eq("SUSPENSO")
         n_susp = int(mask_susp.sum())
         df = df[~mask_susp].copy()
 
@@ -1024,16 +1028,22 @@ def preparar_base_rota_inicial(
     prod = prod.str.replace(r"\s{2,}", " ", regex=True).str.strip()
     df["PRODUTO"] = prod
 
-    df["Check_GPON"] = hab.str.contains(r"PON\(1/100\)", regex=True, na=False)
-    df["Check_ND"] = tipo.str.contains("ADESAO", na=False)
+    # Todas as buscas abaixo são literais (``regex=False``): as habilidades
+    # trazem parênteses — "TV VAS(1/100)", "PON(1/100)" — e, como regex, o
+    # parêntese viraria grupo, exigindo a grafia "TV VAS1/100" (que não existe
+    # na exportação) e zerando os filtros de Streaming/GPON da Rota Inicial.
+    df["Check_GPON"] = hab.str.contains("PON(1/100)", regex=False, na=False)
+    df["Check_ND"] = tipo.str.contains("ADESAO", regex=False, na=False)
     df["Check_Migracao"] = (tipo.str.strip() == "24 - MUDANCA DE PACOTE") & df[
         "Check_GPON"
     ]
-    df["Check_PME"] = df["Check_ND"] & hab.str.contains("PME", na=False)
-    df["Check_Streaming"] = hab.str.contains("TV VAS(1/100)", na=False)
-    df["Check_Ponto_Ultra"] = hab.str.contains("NETLAR", na=False)
-    df["Check_4K"] = prod.str.contains("4K", na=False)
-    df["Check_Soundbox"] = prod.str.contains("SOUND", na=False)
+    df["Check_PME"] = df["Check_ND"] & hab.str.contains(
+        "PME", regex=False, na=False
+    )
+    df["Check_Streaming"] = hab.str.contains("TV VAS(1/100)", regex=False, na=False)
+    df["Check_Ponto_Ultra"] = hab.str.contains("NETLAR", regex=False, na=False)
+    df["Check_4K"] = prod.str.contains("4K", regex=False, na=False)
+    df["Check_Soundbox"] = prod.str.contains("SOUND", regex=False, na=False)
 
     df["PERIODO_TRATADO"] = (
         df["INTERVALO"]

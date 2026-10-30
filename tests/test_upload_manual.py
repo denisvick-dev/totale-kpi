@@ -149,3 +149,27 @@ def test_hierarquia_de_aceita_lista_bruta():
     assert list(hierarquia["__LOGIN_KEY"]) == ["TEC1", "TEC2"]
     assert list(hierarquia["__MON_GS"]) == ["Monitor A", "Monitor B"]
     assert bo.hierarquia_de(pd.DataFrame()).empty
+
+
+# Habilidades trazem parênteses ("TV VAS(1/100)", "PON(1/100)"); as buscas
+# precisam ser literais, senão o parêntese vira grupo de regex e o termo só
+# casaria com a grafia sem parênteses — que não existe na exportação real.
+def test_flags_de_habilidade_casam_termos_com_parenteses():
+    linhas = [
+        "111;TEC1;EXECUTADA;ATIVA;1;01 - ADESAO;TV VAS(1/100);CLARO TV;"
+        "08:00 - 10:00;SAO PAULO",
+        "222;TEC2;EXECUTADA;ATIVA;1;01 - ADESAO;PON(1/100) NETLAR;INTERNET;"
+        "12:00 - 14:00;GUARULHOS",
+    ]
+    resultado = bo.gerar_bases_upload(_csv(linhas), "base.csv", ATIVOS)
+
+    assert resultado["erros"] == {}
+    rota = resultado["rota_inicial"].set_index("CONTRATO")
+
+    # Streaming só na primeira linha.
+    assert bool(rota.loc["111", "Check_Streaming"]) is True
+    assert bool(rota.loc["222", "Check_Streaming"]) is False
+    # GPON e Ponto Ultra apenas na segunda.
+    assert bool(rota.loc["111", "Check_GPON"]) is False
+    assert bool(rota.loc["222", "Check_GPON"]) is True
+    assert bool(rota.loc["222", "Check_Ponto_Ultra"]) is True
