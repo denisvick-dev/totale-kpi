@@ -22,6 +22,10 @@ exibem o aviso de dados ausentes.
 | `tests/` | Testes automatizados |
 | `.github/` | CI e automações do repositório |
 
+Operações pontuais ficam em `docs/`. A remoção das fontes licenciadas do
+histórico do Git — procedimento destrutivo, com os efeitos colaterais —
+está em [`limpeza-historico-fontes.md`](limpeza-historico-fontes.md).
+
 Mantenha credenciais e bases operacionais fora do Git. Consulte
 `.gitignore` antes de adicionar arquivos locais e prefira atualizar
 um guia em `docs/` quando um procedimento precisar ser documentado.
