@@ -49,7 +49,9 @@ Os temas, o seletor e o CSS da barra lateral ficam em `components/sidebar.py`.
 As cores compartilhadas ficam em `components/paleta.py`, evitando dependências
 circulares com `componentes.py`. O seletor é renderizado uma única vez em
 `streamlit_app.py`, antes de `aplicar_estilo()`. As páginas continuam chamando
-apenas `aplicar_estilo()`.
+apenas `aplicar_estilo()`: o entrypoint abre a execução com `nova_execucao()` e
+a função ignora chamadas repetidas no mesmo rerun, então o CSS (com as fontes
+em base64) entra uma única vez no DOM.
 Heros, cards de KPI, cabeçalhos, links de painéis e tabelas são reutilizados de
 `components/componentes.py` (`render_hero`, `render_kpi`,
 `render_section_header`, `render_painel_link`, `render_dataframe`). Evite CSS
@@ -188,10 +190,9 @@ totale-kpi/
 ├── streamlit_app.py                 # Entrada e navegação
 ├── components/                      # Design system, calendário e regras compartilhadas
 ├── pages/                           # Painéis da aplicação e Central de Atualização
-├── scripts/                          # Utilitários locais (fonte Oscine)
 ├── docs/                             # Guias operacionais e mapa do projeto
 ├── assets/
-│   ├── fonts/LEIA-ME.md             # Instruções sobre a fonte Oscine
+│   ├── fonts/                       # Fontes corporativas (SIL OFL) + licenças
 │   ├── icons/totale.ico             # Ícone do app
 │   └── images/novo-logo-totale.png  # Logo da navegação
 ├── tests/                           # Testes de interface e de dados
@@ -218,38 +219,30 @@ Cores oficiais Totale Tecnologia:
 | ⬜ Cinza Claro | `#F1F5F9` | Backgrounds secundários |
 
 **Tipografia**
-| Uso | Fonte |
-|-----|-------|
-| 🅰️ **Títulos** (heros, `h1`–`h6`, seções) | **Oscine** (heros em Regular; fallback para Manrope → Segoe UI) |
-| 🔢 Valores de KPI e métricas | Manrope |
-| Textos | Inter |
-| Tabelas e DataFrames | **Oscine** (fallback para Manrope → Segoe UI) |
-| Códigos | JetBrains Mono |
 
-A **Oscine** é uma fonte licenciada (Dalton Maag / Adobe Fonts) e vale para
-**heros, `h1`–`h6`, títulos de seção, tabelas e DataFrames**; valores de KPI
-seguem em Manrope. Os títulos dos heros usam o arquivo `Oscine-Regular.ttf`;
-tabelas e DataFrames também renderizam em Oscine — a família definida em
-`[theme] font` (`.streamlit/config.toml`) alimenta o canvas dos
-`st.dataframe`, enquanto o `@font-face` auto-hospedado (base64 a partir dos arquivos
-instalados localmente) disponibiliza os pesos Regular e Bold no documento.
-Nenhum arquivo da Oscine é versionado: a licença não permite redistribuí-la,
-então `fonts/` e `assets/fonts/*.ttf` ficam no `.gitignore`.
+Toda a interface usa somente fontes **SIL Open Font License**, versionadas
+no próprio repositório — sem CDN, sem kit web e sem fonte proprietária.
 
-Para instalá-la:
-```bash
-python scripts/instalar_fonte_hero.py ~/Downloads/Oscine   # normaliza os nomes
-python scripts/instalar_fonte_hero.py --listar              # confere sem copiar
-```
+| Uso | Fonte | Pesos |
+|-----|-------|-------|
+| 🅰️ **Títulos** (heros, `h1`–`h6`, seções) | **Manrope** | 800 / 700 |
+| 🔢 Valores de KPI e métricas | **Manrope** | 700 |
+| 📊 **Tabelas e DataFrames** | **Manrope** (Inter no fallback) | 400–700 |
+| Textos, rótulos e controles | **Inter** | 400–700 |
+| Códigos | JetBrains Mono | 400 / 500 |
 
-Os arquivos podem ficar em `assets/fonts/` ou em `fonts/` na raiz
-(ambas as pastas são lidas, e ambas são ignoradas pelo Git). Sem os arquivos,
-o app usa a Oscine
-se ela estiver ativa no computador (Adobe Creative Cloud) e cai no
-**Manrope** caso contrário — nada quebra.
-Para servir a todos os usuários (Streamlit Cloud), configure o kit web:
-`[tipografia] fonte_hero_url` nos secrets ou `TOTALE_FONTE_HERO_URL`.
-Detalhes em `assets/fonts/LEIA-ME.md`.
+As três famílias ficam em `assets/fonts/*.woff2` (subconjunto `latin`, que
+cobre os acentos do português) com as licenças ao lado. O app embute os
+arquivos em base64 no `@font-face` injetado no `<head>`, então a tipografia
+não depende de acesso do navegador ao Google Fonts.
+
+Duas definições precisam coincidir: `FONTE_TABELA` em
+`components/componentes.py` e `font` em `.streamlit/config.toml` — o canvas
+dos `st.dataframe` (glide-data-grid) ignora o `font-family` do `Styler` e
+usa a fonte do tema. Os testes cobrem essa coerência.
+
+Para trocar ou acrescentar um peso (inclusive `latin-ext`), siga
+`assets/fonts/LEIA-ME.md`.
 
 ---
 

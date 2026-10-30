@@ -1,6 +1,6 @@
 import streamlit as st
 
-from components.componentes import aplicar_estilo
+from components.componentes import aplicar_estilo, nova_execucao
 from components.sidebar import render_seletor_tema_sidebar
 
 # Configuração global da aplicação — deve ser a primeira chamada do Streamlit.
@@ -10,6 +10,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# Marca o início da execução: as páginas também chamam aplicar_estilo() e,
+# sem isso, o CSS (com as fontes em base64) seria injetado duas vezes.
+nova_execucao()
 
 # Seletor global: uma instância, compartilhada por todas as páginas.
 render_seletor_tema_sidebar()
