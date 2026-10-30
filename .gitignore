@@ -163,3 +163,15 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Fontes licenciadas (Oscine / Adobe Fonts) — instaladas localmente via
+# scripts/instalar_fonte_hero.py e nunca redistribuídas pelo repositório.
+fonts/
+assets/fonts/*.ttf
+assets/fonts/*.otf
+assets/fonts/*.woff
+assets/fonts/*.woff2
+
+# Cache de processamento da base operacional (gerado localmente, contém
+# dados de produção e caminho do computador de origem).
+dados/cache/

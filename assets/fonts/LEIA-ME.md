@@ -16,8 +16,9 @@ Como a licença não permite redistribuir os arquivos, a fonte é aplicada nesta
 
    ou na variável de ambiente `TOTALE_FONTE_HERO_URL`.
 
-2. **Arquivos auto-hospedados** nesta pasta ou em `fonts/` na raiz do
-   repositório (embutidos em base64 no CSS).
+2. **Arquivos auto-hospedados** nesta pasta ou em `fonts/` na raiz
+   (embutidos em base64 no CSS). Esses arquivos **não são versionados** —
+   `fonts/` e `assets/fonts/*.ttf|otf|woff|woff2` estão no `.gitignore`.
    O jeito mais fácil é deixar que o instalador normalize os nomes:
 
    ```bash

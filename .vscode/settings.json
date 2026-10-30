@@ -1,8 +1,11 @@
 {
   "editor.fontFamily": "Fira Mono",
   "editor.fontSize": 13,
-  "editor.defaultFormatter": "ms-python.black-formatter",
+  "editor.defaultFormatter": "charliermarsh.ruff",
   "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter"
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit"
+    }
   }
 }
