@@ -43,21 +43,6 @@ def main() -> None:
         title="Consultivos e Produtos",
         icon="🛍️",
     )
-    rota_inicial = st.Page(
-        "pages/rota_inicial.py",
-        title="Rota Inicial",
-        icon="🗺️",
-    )
-    volumetria = st.Page(
-        "pages/volumetria.py",
-        title="Volumetria de O.S.",
-        icon="📦",
-    )
-    quebra = st.Page(
-        "pages/quebra.py",
-        title="Quebra de Agenda",
-        icon="📉",
-    )
     atualizacao = st.Page(
         "pages/envio_excel.py",
         title="Atualização de Dados",
@@ -69,7 +54,6 @@ def main() -> None:
     paginas_agrupadas = {
         "INÍCIO": [home_page],
         "PERFORMANCE E METAS": [ranking_pontos, qtde_os, consultivos],
-        "OPERAÇÃO DIÁRIA": [rota_inicial, volumetria, quebra],
         "DADOS": [atualizacao],
     }
 

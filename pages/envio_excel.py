@@ -1,18 +1,10 @@
 """
 envio_excel.py — Central de Atualização de Dados
 ================================================
-Ponto único de atualização das bases do portal, em duas frentes:
-
-1. **Base operacional (upload manual)** — o envio da exportação de
-   atividades alimenta, de uma só vez, os painéis de **Quebra de
-   Agenda**, **Volumetria de O.S.** e **Rota Inicial**
-   (``components/upload_base.py``). Os painéis também aceitam o envio
-   direto, no estado vazio, com o mesmo componente.
-
-2. **Bases compartilhadas (nuvem)** — download e tratamento das
-   planilhas de Produção e Consultivos do Google, publicados na sessão
-   (``dados_prod`` / ``dados_cons`` / ``dados_ativos``) para os painéis
-   de Produtividade, Quantidade de O.S. e Consultivos.
+Ponto único de atualização das bases do portal: download e tratamento
+das planilhas de Produção e Consultivos do Google, publicados na sessão
+(``dados_prod`` / ``dados_cons`` / ``dados_ativos``) para os painéis de
+Produtividade, Quantidade de O.S. e Consultivos.
 """
 
 import logging
@@ -32,7 +24,6 @@ from components.componentes import (
     render_kpi,
     render_section_header,
 )
-from components.upload_base import render_upload_base_operacional
 
 logger = logging.getLogger(__name__)
 
@@ -366,18 +357,8 @@ def _render_previa(
     )
 
 
-def _render_secao_upload() -> None:
-    """Seção 1 — base operacional via upload manual (três painéis)."""
-    render_section_header(
-        "upload_file",
-        "Base operacional — upload manual",
-        "Quebra · Volumetria · Rota Inicial",
-    )
-    render_upload_base_operacional("central", titulo=None)
-
-
 def _render_secao_nuvem() -> None:
-    """Seção 2 — bases compartilhadas baixadas do Google (Produção/Consultivos)."""
+    """Bases compartilhadas baixadas do Google (Produção/Consultivos)."""
     render_section_header("cloud_sync", "Bases compartilhadas", "Google Sheets")
 
     # Carrega automaticamente na primeira visita.
@@ -445,11 +426,9 @@ def _render_secao_nuvem() -> None:
 def main() -> None:
     render_hero(
         "Central de Atualização de Dados",
-        "Upload da base operacional e sincronização das bases compartilhadas",
+        "Sincronização das bases compartilhadas de Produção e Consultivos",
         "Bases compartilhadas",
     )
-    _render_secao_upload()
-    st.divider()
     _render_secao_nuvem()
 
 

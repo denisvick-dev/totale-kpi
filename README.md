@@ -22,7 +22,7 @@
 
 ## 📖 Sobre o Projeto
 
-O **Totale KPI** é uma plataforma corporativa desenvolvida em **Streamlit** para indicadores operacionais e de técnicos de campo da Totale Tecnologia. Os painéis operacionais são alimentados pelo **upload manual** da base de atividades e as bases de produção/consultivos integram-se ao Google Sheets, com dashboards interativos de performance, volumetria, rotas e quebra de agenda.
+O **Totale KPI** é uma plataforma corporativa desenvolvida em **Streamlit** para indicadores de produtividade e de técnicos de campo da Totale Tecnologia. As bases de produção e consultivos integram-se ao Google Sheets, com dashboards interativos de performance, produtividade e conversão.
 
 ### 🎯 Objetivos
 
@@ -67,37 +67,6 @@ python -m pytest -q
 ruff check .
 ```
 
-### 📁 Upload manual da base operacional (Quebra + Volumetria + Rota Inicial)
-
-A base operacional entra **somente por upload manual** — sem pasta
-monitorada, sem agente local e sem cache em disco. O envio fica na página
-**Atualização de Dados** e, no estado vazio, também em cada um dos três
-painéis; nos dois casos é o mesmo componente
-(`components/upload_base.py`):
-
-- **Um arquivo atualiza os três painéis de uma vez**: a exportação de
-  atividades (`.xlsx`, `.xls` ou `.csv`) é lida uma única vez e gera as
-  bases tratadas de `quebra.py`, `volumetria.py` e `rota_inicial.py`
-  (`components/base_operacional.gerar_bases_upload`), cada uma
-  publicada na sessão na chave que o painel consome.
-- **Falha isolada por painel**: se o arquivo não servir para um dos
-  painéis (ex.: sem a coluna de status exigida pela Volumetria), os
-  demais são publicados normalmente e a tela mostra o motivo.
-- **Vínculo com a `lista_ativos`**: técnico/monitor vêm da aba
-  `lista_ativos` da planilha de ativos (leitura apenas), normalizada
-  antes do merge — caixa, espaços, `.0`, duplicados e desligados não
-  quebram o vínculo. Se nenhum login coincidir, a tela avisa (o merge
-  vazio não passa despercebido como `SEM MONITOR`).
-- **Trocar de base**: o botão **📁 Trocar base**, na barra lateral dos
-  três painéis, limpa as bases da sessão e volta à tela de envio.
-  Enviar o mesmo arquivo de novo na mesma sessão não reprocessa
-  (comparação por hash SHA-256).
-- **Sem upload, sem dados**: nada é lido do computador do usuário nem
-  do servidor automaticamente; as bases vivem apenas na sessão atual.
-
-Colunas de status aceitas no arquivo: `STATUS DA O.S 1`, `STATUS OS 1`,
-`STATUS DA OS 1` e `STATUS CONTRATO`.
-
 ### 🗓️ Projeções em dias úteis (Seg–Sáb)
 - A semana útil é de **segunda a sábado** — **domingos não contam**
 - **Feriados** também são descontados: nacionais (fixos e móveis: Carnaval, Paixão de Cristo, Corpus Christi) e **estaduais de SP** (09/07)
@@ -118,30 +87,8 @@ Colunas de status aceitas no arquivo: `STATUS DA O.S 1`, `STATUS OS 1`,
 Os dashboards seguem um padrão único de leitura — hero, insight de
 status, KPIs e conteúdo em abas (Ranking/Aderência em Pontos;
 Supervisor/Projeto/Técnicos em Qtde. de O.S.; Consolidada/Zeradas em
-Consultivos; visões operacionais em Quebra, Volumetria e Rota). A
-página inicial mostra o status das duas frentes de dados
-(produção em nuvem e base operacional enviada).
-
-### 👥 Vínculo com a lista de ativos
-- Técnico, monitor e base de cada registro vêm da aba `lista_ativos`
-- Somente leitura: o cadastro é mantido direto na planilha
-- Filtros por Base → Monitor → Técnico em todos os painéis operacionais
-
----
-
-## 🎯 Critérios de Classificação (Quebra de Agenda)
-
-Regras oficiais implementadas em `components/criterios.py`:
-
-| Segmento | Critério |
-|----------|----------|
-| 🏠 **Novos Domicílios** | `TIPO O.S 1` contém `ADESAO`, `ADESÃO`, `NOVO`, `NOVA`, `INSTALACAO`, `INSTALAÇÃO`, `INST`, `NOVO DOMICÍLIO`, `PRIMEIRA`, `1 VIA` ou `PRIMEIRO ACESSO` |
-| 🔄 **Migração** | `TIPO O.S 1` contém `MUDANCA DE PACOTE` **E** `HABILIDADE DE TRABALHO` contém `PON` |
-| 🏢 **PME** | É **Novos Domicílios** **E** `HABILIDADE DE TRABALHO` contém `PME` (sobrepõe ND) |
-| ⚪ **Outros** | Não atende a nenhum dos critérios acima |
-
-- 🔦 `FLAG_GPON` é derivada automaticamente: `HABILIDADE` contém `PON` → `Sim`
-- A detecção das colunas aceita variações de nome (`TIPO OS 1`, `tipo_os_1`, `HABILIDADES`, `SKILL`...)
+Consultivos). A página inicial mostra o status da base de produção
+carregada na sessão.
 
 ## 🛠️ Tecnologias
 
@@ -196,23 +143,15 @@ Copie o arquivo de exemplo:
 cp .streamlit/secrets.example.toml .streamlit/secrets.toml
 ```
 
-Edite o `.streamlit/secrets.toml` com suas credenciais reais do Google Cloud e usuários.
+O `secrets.toml` é opcional: sem ele o app usa apenas os valores padrão.
 
 ### 5. Configure o Google Sheets
 
-1. Acesse o [Google Cloud Console](https://console.cloud.google.com/)
-2. Crie um projeto ou selecione um existente
-3. Ative as APIs:
-   - Google Sheets API
-   - Google Drive API
-4. Crie uma **Service Account**
-5. Baixe a chave JSON
-6. Compartilhe sua planilha com o e-mail da service account
-7. Preencha os dados no `secrets.toml`
-
-Nos painéis operacionais, o vínculo de monitores usa a aba `lista_ativos` da planilha de ativos. A aba deve conter `Login` e `Monitor` (e, opcionalmente, `Técnico`, `Base` e `Situação`). O login do arquivo operacional deve corresponder ao da lista. A leitura autenticada usa `[gcp_service_account]`; confira se a planilha foi compartilhada com o `client_email` dessa conta. Quando a base já estiver carregada, **🔗 Atualizar Lista de Ativos** (barra lateral da Quebra de Agenda) refaz o vínculo com o arquivo enviado, sem novo upload. As páginas mostram a quantidade de registros vinculados e alertam quando a aba não puder ser lida ou os logins não coincidirem.
-
-As páginas **Quebra de Agenda**, **Volumetria de O.S.** e **Rota Inicial** são alimentadas pelo upload manual descrito em [📁 Upload manual da base operacional](#-upload-manual-da-base-operacional-quebra--volumetria--rota-inicial).
+As bases de **Produção** e **Consultivos** são lidas das planilhas por
+**exportação pública em CSV/XLSX** (`URL_PROD` e `URL_CONS` em
+`pages/envio_excel.py`). Basta que as planilhas estejam acessíveis por
+link para leitura; não há conta de serviço nem chave JSON para
+configurar. Para trocar de planilha, atualize as constantes de URL.
 
 ### 6. Execute o Aplicativo
 ```bash
@@ -247,7 +186,7 @@ Acesse: **http://localhost:8501**
 ```text
 totale-kpi/
 ├── streamlit_app.py                 # Entrada e navegação
-├── components/                      # Design system, regras, tratamento e upload de bases
+├── components/                      # Design system, calendário e regras compartilhadas
 ├── pages/                           # Painéis da aplicação e Central de Atualização
 ├── scripts/                          # Utilitários locais (fonte Oscine)
 ├── docs/                             # Guias operacionais e mapa do projeto
@@ -315,7 +254,6 @@ Detalhes em `assets/fonts/LEIA-ME.md`.
 ## 📊 Roadmap
 
 - [x] ✅ Dashboard Operacional
-- [x] ✅ Upload manual unificado da base operacional
 - [x] ✅ Integração Google Sheets
 - [ ] 🚧 Notificações via e-mail
 - [ ] 🚧 API REST para integrações
