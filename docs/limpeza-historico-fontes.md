@@ -1,5 +1,11 @@
 # Remover as fontes licenciadas do histórico do Git
 
+> **Situação atual:** o app não usa mais a Oscine. A tipografia passou a ser
+> Manrope, Inter e JetBrains Mono, todas SIL OFL e versionadas em
+> `assets/fonts` — nenhuma delas depende desta limpeza. Este documento fica
+> como registro histórico: os `.ttf` licenciados da Oscine ainda existem no
+> histórico do repositório.
+
 > **Operação destrutiva.** Reescreve o SHA de todos os commits. Leia a seção
 > [Efeitos colaterais](#efeitos-colaterais) antes de executar.
 

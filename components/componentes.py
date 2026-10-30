@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import os
 import re
 from collections.abc import Callable
 from html import escape
@@ -66,160 +65,134 @@ FmtDict = dict[str, BaseFormatter | None]
 # ====================================================
 # TIPOGRAFIA
 # ====================================================
+#: Títulos, valores de KPI e cabeçalhos: **Manrope** (SIL OFL).
 FONTE_TITULO = "'Manrope', 'Segoe UI', Arial, sans-serif"
+#: Corpo, rótulos e controles: **Inter** (SIL OFL).
 FONTE_TEXTO = "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+#: Blocos de código e atalhos: **JetBrains Mono** (SIL OFL).
 FONTE_CODIGO = "'JetBrains Mono', Consolas, 'Courier New', monospace"
 
-#: Fonte exclusiva dos títulos dos heros.
-#: Se a Oscine não estiver disponível — ativa no computador (Adobe Fonts /
-#: Creative Cloud), kit web configurado ou arquivo em ``assets/fonts`` —,
-#: a cadeia anterior (Manrope → Segoe UI) assume automaticamente.
-FONTE_HERO = "'Oscine', 'Oscine Trial', " + FONTE_TITULO
+#: Heros e h1: mesma família dos títulos, no peso 800.
+FONTE_HERO = FONTE_TITULO
 
-#: Fonte corporativa de todas as tabelas/dataframes: a mesma cadeia Oscine
-#: dos títulos, caindo na cadeia institucional (Manrope → Segoe UI) quando a
-#: Oscine não estiver disponível. O canvas dos ``st.dataframe`` herda a
-#: família via ``font`` em ``.streamlit/config.toml`` (o glide-data-grid não
-#: aplica ``font-family`` vindo do Styler); o ``@font-face`` auto-hospedado
-#: gerado a partir das fontes locais disponibiliza a família no documento.
-FONTE_TABELA = FONTE_HERO
+#: Tabelas e DataFrames: Manrope, que tem ``tnum`` (números tabulares) e
+#: mantém a leitura alinhada com os títulos; Inter cobre o resto.
+#: O canvas dos ``st.dataframe`` (glide-data-grid) não aceita ``font-family``
+#: vindo do Styler: ele herda a família de ``font`` em
+#: ``.streamlit/config.toml``, por isso as duas definições precisam coincidir.
+FONTE_TABELA = "'Manrope', 'Inter', 'Segoe UI', Arial, sans-serif"
 
-#: Pesos procurados em ``assets/fonts`` para auto-hospedar a Oscine.
-_PESOS_FONTE_HERO: tuple = (
-    (
-        400,
-        ("oscine-regular", "oscine_regular", "oscine", "oscine-book", "oscine-roman"),
-    ),
-    (500, ("oscine-medium", "oscine_medium")),
-    (700, ("oscine-bold", "oscine_bold", "oscine-semibold", "oscine-demi")),
-    (800, ("oscine-extrabold", "oscine_extrabold", "oscine-heavy", "oscine-black")),
-)
+#: Famílias auto-hospedadas em ``assets/fonts`` (SIL OFL — podem ser
+#: versionadas). ``slug`` casa com o prefixo do arquivo baixado do Google
+#: Fonts via ``@fontsource`` (``manrope-latin-400-normal.woff2``).
+_FAMILIAS_CORPORATIVAS: dict[str, dict[str, Any]] = {
+    "Manrope": {
+        "slug": "manrope",
+        "pesos": (400, 500, 600, 700, 800),
+        "licenca": "LICENSE-Manrope.txt",
+    },
+    "Inter": {
+        "slug": "inter",
+        "pesos": (400, 500, 600, 700),
+        "licenca": "LICENSE-Inter.txt",
+    },
+    "JetBrains Mono": {
+        "slug": "jetbrains-mono",
+        "pesos": (400, 500),
+        "licenca": "LICENSE-JetBrainsMono.txt",
+    },
+}
+_PASTA_FONTES = Path(__file__).resolve().parents[1] / "assets" / "fonts"
 _FORMATOS_FONTE = {
     ".woff2": "woff2",
     ".woff": "woff",
     ".otf": "opentype",
     ".ttf": "truetype",
 }
-_PASTA_FONTES = Path(__file__).resolve().parents[1] / "assets" / "fonts"
-# A pasta ``fonts`` na raiz também é aceita: alguns checkouts baixam o kit da
-# Oscine fora de ``assets`` (a licença não permite versionar os binários).
-_PASTA_FONTES_ALT = Path(__file__).resolve().parents[1] / "fonts"
+#: Subconjunto usado nos arquivos: ``latin`` cobre o português (acentos,
+#: cedilha e ordinais); ``latin-ext`` só é necessário para outros idiomas.
+_SUBCONJUNTO_FONTE = "latin"
 
+# Só os ícones continuam vindo do Google: as fontes de texto são
+# auto-hospedadas, então o app não depende de CDN para a tipografia.
 _GOOGLE_FONTS_URLS = (
     "https://fonts.googleapis.com/icon?family=Material+Icons",
     "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded"
     ":opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block",
     "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
     ":opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block",
-    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700"
-    "&family=Manrope:wght@400;500;600;700;800"
-    "&family=JetBrains+Mono:wght@400;500&display=swap",
 )
 
 
-def _url_kit_fonte_hero() -> str:
-    """
-    URL do kit da Oscine (Adobe Fonts/Typekit ou CDN própria).
-
-    Configure em ``.streamlit/secrets.toml``::
-
-        [tipografia]
-        fonte_hero_url = "https://use.typekit.net/XXXXXXX.css"
-
-    ou na variável de ambiente ``TOTALE_FONTE_HERO_URL``.
-    """
-    url = ""
-    try:
-        secao = st.secrets.get("tipografia", {})
-        url = str(secao.get("fonte_hero_url", "") or "")
-    except Exception:
-        url = ""
-    return (url or os.getenv("TOTALE_FONTE_HERO_URL", "")).strip()
-
-
-def _pastas_de_fontes() -> tuple[Path, ...]:
-    """Pastas procuradas para auto-hospedar a Oscine, em ordem de prioridade."""
-    return (_PASTA_FONTES, _PASTA_FONTES_ALT)
-
-
-def _normalizar_nome_fonte(nome: str) -> str:
-    """Compara nomes de fonte sem depender de caixa, espaços ou separadores.
-
-    Aceita tanto os nomes canônicos do instalador (``oscine-bold.woff2``)
-    quanto os arquivos originais do kit (``Oscine Bold.otf``).
-    """
-    return re.sub(r"[^a-z0-9]+", "-", str(nome).lower()).strip("-")
-
-
-def _localizar_arquivo_fonte(pastas_nomes: tuple) -> Path | None:
-    desejados = {_normalizar_nome_fonte(nome) for nome in pastas_nomes}
-    for pasta in _pastas_de_fontes():
-        if not pasta.is_dir():
-            continue
-        for extensao in _FORMATOS_FONTE:
-            for arquivo in sorted(pasta.iterdir()):
-                if (
-                    arquivo.is_file()
-                    and arquivo.suffix.lower() == extensao
-                    and _normalizar_nome_fonte(arquivo.stem) in desejados
-                ):
-                    return arquivo
+def arquivo_da_fonte(familia: str, peso: int) -> Path | None:
+    """Caminho do arquivo auto-hospedado de ``familia`` no ``peso`` dado."""
+    config = _FAMILIAS_CORPORATIVAS.get(familia)
+    if config is None or not _PASTA_FONTES.is_dir():
+        return None
+    for extensao in _FORMATOS_FONTE:
+        arquivo = _PASTA_FONTES / (
+            f"{config['slug']}-{_SUBCONJUNTO_FONTE}-{peso}-normal{extensao}"
+        )
+        if arquivo.is_file():
+            return arquivo
     return None
 
 
-@st.cache_data(show_spinner=False)
-def _css_fonte_hero_selfhosted(assinatura: str) -> str:
-    """
-    Gera os ``@font-face`` da Oscine a partir de ``assets/fonts``.
+def fontes_disponiveis() -> dict[str, list[int]]:
+    """Pesos presentes em ``assets/fonts`` para cada família corporativa."""
+    return {
+        familia: [peso for peso in config["pesos"] if arquivo_da_fonte(familia, peso)]
+        for familia, config in _FAMILIAS_CORPORATIVAS.items()
+    }
 
-    Os arquivos são embutidos em base64 (o Streamlit Cloud não serve arquivos
-    estáticos por padrão). Se a pasta estiver vazia, nada é gerado e a fonte
-    continua dependendo da instalação local/kit web.
+
+def _assinatura_fontes() -> str:
+    """Chave de cache: muda quando um arquivo de fonte é trocado."""
+    if not _PASTA_FONTES.is_dir():
+        return ""
+    return "|".join(
+        f"{arquivo.name}:{arquivo.stat().st_mtime_ns}"
+        for arquivo in sorted(_PASTA_FONTES.glob("*"))
+        if arquivo.is_file() and arquivo.suffix.lower() in _FORMATOS_FONTE
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _css_fontes_corporativas(assinatura: str) -> str:
+    """
+    Gera os ``@font-face`` das famílias corporativas em base64.
+
+    Embute os arquivos do próprio app (o Streamlit Cloud não serve arquivos
+    estáticos por padrão), então os DataFrames desenhados em canvas e o HTML
+    usam a mesma fonte, sem depender de CDN.
     """
     del assinatura  # usado apenas como chave de cache
-    pastas = [pasta for pasta in _pastas_de_fontes() if pasta.is_dir()]
-    if not pastas:
-        return ""
-
-    regras = []
-    for peso, nomes in _PESOS_FONTE_HERO:
-        arquivo = _localizar_arquivo_fonte(nomes)
-        if arquivo is None:
-            continue
-        formato = _FORMATOS_FONTE.get(arquivo.suffix.lower(), "woff2")
-        try:
-            dados = base64.b64encode(arquivo.read_bytes()).decode("ascii")
-        except OSError as exc:
-            logger.warning("Não foi possível ler a fonte %s: %s", arquivo, exc)
-            continue
-        regras.append(
-            "@font-face { font-family: 'Oscine'; font-style: normal; "
-            f"font-weight: {peso}; font-display: swap; "
-            f"src: url(data:font/{formato};base64,{dados}) "
-            f"format('{formato}'); }}"
-        )
+    regras: list[str] = []
+    for familia, config in _FAMILIAS_CORPORATIVAS.items():
+        for peso in config["pesos"]:
+            arquivo = arquivo_da_fonte(familia, peso)
+            if arquivo is None:
+                continue
+            formato = _FORMATOS_FONTE.get(arquivo.suffix.lower(), "woff2")
+            try:
+                dados = base64.b64encode(arquivo.read_bytes()).decode("ascii")
+            except OSError as exc:
+                logger.warning("Não foi possível ler a fonte %s: %s", arquivo, exc)
+                continue
+            regras.append(
+                f"@font-face {{ font-family: '{familia}'; font-style: normal; "
+                f"font-weight: {peso}; font-display: swap; "
+                f"src: url(data:font/{formato};base64,{dados}) format('{formato}'); }}"
+            )
     return "\n".join(regras)
 
 
-def _css_fonte_hero() -> str:
-    """CSS que disponibiliza a Oscine para os títulos dos heros."""
-    kit = _url_kit_fonte_hero()
-    if kit:
-        return f"@import url('{kit}');"
-
+def css_fontes_corporativas() -> str:
+    """CSS com todas as fontes corporativas (vazio só se a pasta não existir)."""
     try:
-        assinatura = "|".join(
-            sorted(
-                f"{pasta}:{p.name}:{p.stat().st_mtime_ns}"
-                for pasta in _pastas_de_fontes()
-                if pasta.is_dir()
-                for p in pasta.glob("*")
-                if p.is_file()
-            )
-        )
-        return _css_fonte_hero_selfhosted(assinatura)
+        return _css_fontes_corporativas(_assinatura_fontes())
     except Exception as exc:  # nunca derrubar a página por causa de fonte
-        logger.warning("Falha ao preparar a fonte dos heros: %s", exc)
+        logger.warning("Falha ao preparar as fontes corporativas: %s", exc)
         return ""
 
 
@@ -346,12 +319,16 @@ def _injetar_fontes_no_head_pai() -> None:
                 head.appendChild(link);
             }});
             // Os dataframes são desenhados em canvas (glide-data-grid) e não
-            // trocam de fonte sozinhos depois do carregamento: pré-carrega a
-            // Oscine (auto-hospedada via @font-face) para a primeira pintura
-            // do grid já sair na fonte corporativa.
+            // trocam de fonte sozinhos depois do carregamento: pré-carrega as
+            // fontes corporativas (auto-hospedadas via @font-face) para a
+            // primeira pintura do grid já sair na família certa.
             if (parentDoc.fonts && parentDoc.fonts.load) {{
-                parentDoc.fonts.load("13px Oscine");
-                parentDoc.fonts.load("700 13px Oscine");
+                ["13px Manrope", "600 13px Manrope", "700 13px Manrope",
+                 "13px Inter", "400 13px Inter", "600 13px Inter"].forEach(
+                    function (fonte) {{
+                        parentDoc.fonts.load(fonte).catch(function () {{}});
+                    }}
+                );
             }}
         }})();
         </script>
@@ -375,12 +352,12 @@ def _build_links_html() -> str:
 # ====================================================
 def _injetar_css_global() -> None:
     links_html = _build_links_html()
-    css_fonte_hero = _css_fonte_hero()
+    css_fontes = css_fontes_corporativas()
 
     css = f"""{links_html}
     <style>
-    /* ── Fonte dos títulos dos heros (Oscine) ── */
-    {css_fonte_hero}
+    /* ── Fontes corporativas auto-hospedadas (Manrope / Inter / JetBrains Mono) ── */
+    {css_fontes}
 
     /* ── Font-face fallback ── */
     @font-face {{
@@ -404,7 +381,6 @@ def _injetar_css_global() -> None:
         --font-titulo:    {FONTE_TITULO};
         --font-texto:     {FONTE_TEXTO};
         --font-codigo:    {FONTE_CODIGO};
-        --font-hero:      {FONTE_HERO};
         --font-tabela:    {FONTE_TABELA};
         --cor-primaria:   {COR_PRIMARIA};
         --cor-secundaria: {COR_SECUNDARIA};
@@ -436,10 +412,10 @@ def _injetar_css_global() -> None:
         font-family: var(--font-texto) !important;
     }}
 
-    /* ── Títulos (Oscine) ── */
+    /* ── Títulos (Manrope) ── */
     h1, h2, h3, h4, h5, h6,
     .hero-title, .section-title {{
-        font-family: var(--font-hero) !important;
+        font-family: var(--font-titulo) !important;
         font-weight: 700;
         letter-spacing: -0.2px;
     }}
@@ -550,7 +526,7 @@ def _injetar_css_global() -> None:
         font-size: 17px !important;
     }}
     .corp-table-title {{
-        font-family: var(--font-hero) !important;
+        font-family: var(--font-titulo) !important;
         font-size: 14.5px;
         font-weight: 700;
         color: var(--cor-texto);
@@ -645,9 +621,9 @@ def _injetar_css_global() -> None:
         margin-bottom: 14px;
     }}
     .hero-title {{
-        font-family: var(--font-hero) !important;
+        font-family: var(--font-titulo) !important;
         font-size: clamp(25px, 2.7vw, 38px);
-        font-weight: 400; letter-spacing: -.035em;
+        font-weight: 800; letter-spacing: -.035em;
         line-height: 1.18; margin: 0; color: #FFFFFF;
     }}
     .hero-subtitle {{
@@ -751,7 +727,7 @@ def _injetar_css_global() -> None:
         border-bottom: 1px solid var(--cor-borda);
     }}
     .section-title {{
-        font-family: var(--font-hero) !important;
+        font-family: var(--font-titulo) !important;
         font-size: 17px;
         font-weight: 700;
         color: var(--cor-texto);
@@ -804,11 +780,33 @@ def _injetar_css_global() -> None:
 # ====================================================
 # API PÚBLICA & HELPERS
 # ====================================================
+_CHAVE_EXECUCAO = "_totale_execucao"
+_CHAVE_ESTILO = "_totale_estilo_na_execucao"
+
+
+def nova_execucao() -> None:
+    """Marca o início de uma nova execução do script (chamado pelo entrypoint).
+
+    Sem isso, o entrypoint e a página executariam ``aplicar_estilo()`` duas
+    vezes no mesmo rerun, reenviando todo o CSS — incluindo as fontes em
+    base64 — em dobro.
+    """
+    st.session_state[_CHAVE_EXECUCAO] = (
+        int(st.session_state.get(_CHAVE_EXECUCAO, 0) or 0) + 1
+    )
+
+
 def aplicar_estilo() -> None:
     """Aplica fontes, Plotly e CSS respeitando a preferência da sessão.
 
-    Pode ser chamada pelas páginas sem duplicar o seletor de aparência.
+    Pode ser chamada pelo entrypoint e pelas páginas: dentro de uma mesma
+    execução a segunda chamada é ignorada, evitando CSS duplicado no DOM.
     """
+    execucao = int(st.session_state.get(_CHAVE_EXECUCAO, 0) or 0)
+    if st.session_state.get(_CHAVE_ESTILO) == execucao:
+        return
+    st.session_state[_CHAVE_ESTILO] = execucao
+
     _configurar_plotly_global()
     _injetar_fontes_no_head_pai()
     _injetar_css_global()

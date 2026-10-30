@@ -5,12 +5,13 @@ backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F8FAFC"
 textColor = "#1F2937"
 
-# Fonte corporativa (Oscine): alimenta o bodyFont do tema, que é a fonte
-# desenhada no canvas dos dataframes (o glide-data-grid ignora font-family
-# vindo do Styler). O @font-face Oscine é auto-hospedado pelo próprio app
-# em base64 a partir das fontes instaladas localmente (ver components/componentes.py),
-# dispensando static serving; sem os arquivos, cai no sans-serif do sistema.
-font = "Oscine, sans-serif"
+# Tipografia corporativa. Este `font` alimenta o bodyFont do tema, que é a
+# fonte desenhada no canvas dos dataframes — o glide-data-grid ignora o
+# font-family vindo do Styler, então esta linha e FONTE_TABELA em
+# components/componentes.py precisam apontar para a mesma família.
+# Manrope e Inter são SIL OFL e ficam auto-hospedadas em assets/fonts
+# (embutidas em base64 pelo app, sem depender de CDN).
+font = "Manrope, Inter, sans-serif"
 
 [server]
 enableStaticServing = false

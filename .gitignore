@@ -164,13 +164,9 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Fontes licenciadas (Oscine / Adobe Fonts) — instaladas localmente via
-# scripts/instalar_fonte_hero.py e nunca redistribuídas pelo repositório.
-fonts/
-assets/fonts/*.ttf
-assets/fonts/*.otf
-assets/fonts/*.woff
-assets/fonts/*.woff2
+# As fontes corporativas (Manrope, Inter, JetBrains Mono — SIL OFL) são
+# versionadas de propósito em assets/fonts: a licença permite redistribuir e
+# o app precisa delas para não depender de CDN. Não ignore esse diretório.
 
 # Cache de processamento da base operacional (gerado localmente, contém
 # dados de produção e caminho do computador de origem).
