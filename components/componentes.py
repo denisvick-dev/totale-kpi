@@ -81,7 +81,7 @@ FONTE_HERO = "'Oscine', 'Oscine Trial', " + FONTE_TITULO
 #: Oscine não estiver disponível. O canvas dos ``st.dataframe`` herda a
 #: família via ``font`` em ``.streamlit/config.toml`` (o glide-data-grid não
 #: aplica ``font-family`` vindo do Styler); o ``@font-face`` auto-hospedado
-#: gerado a partir de ``fonts/`` disponibiliza a família no documento.
+#: gerado a partir das fontes locais disponibiliza a família no documento.
 FONTE_TABELA = FONTE_HERO
 
 #: Pesos procurados em ``assets/fonts`` para auto-hospedar a Oscine.
@@ -709,9 +709,6 @@ def _injetar_css_global() -> None:
         color: var(--card-muted, {COR_TEXTO_2});
         margin-top: 6px;
     }}
-    .kpi-card--sm {{ min-height: 96px; padding: 12px 15px; margin-bottom: 6px; }}
-    .kpi-card--sm .kpi-value {{ font-size: 20px; margin-top: 5px; }}
-    .kpi-card--sm .kpi-icon {{ width: 27px; height: 27px; font-size: 16px !important; }}
     @media (max-width: 640px) {{
         .hero-corp {{ padding: 24px; border-radius: 14px; }}
         .kpi-card {{ min-height: 120px; }}
@@ -874,10 +871,6 @@ def render_hero(titulo: str, subtitulo: str = "", badge: str = "") -> None:
     )
 
 
-def render_section(titulo: str, divider: str = "gray") -> None:
-    st.subheader(titulo, divider=divider)  # type: ignore[arg-type]
-
-
 def render_section_header(icon: str, title: str, badge: str = "") -> None:
     """Cabeçalho de seção com Material Symbol ou emoji, conforme o ícone recebido."""
     if not title:
@@ -896,14 +889,13 @@ def render_section_header(icon: str, title: str, badge: str = "") -> None:
     )
 
 
-def _html_kpi(label: str, valor: object, sub: str, tema: TemaKPI, pequeno: bool) -> str:
+def _html_kpi(label: str, valor: object, sub: str, tema: TemaKPI) -> str:
     cor = _resolver_cor_tema(tema)
     tint = _TEMA_TINTS.get(tema, _TEMA_TINTS["azul"])
     icone = _TEMA_ICONES.get(tema, _TEMA_ICONES["azul"])
-    tamanho = " kpi-card--sm" if pequeno else ""
     sub_html = f'<div class="kpi-sub">{escape(str(sub))}</div>' if sub else ""
     return (
-        f'<div class="kpi-card{tamanho}" style="--kpi-accent:{cor};--kpi-tint:{tint};">'
+        f'<div class="kpi-card" style="--kpi-accent:{cor};--kpi-tint:{tint};">'
         f'<div class="kpi-top"><div class="kpi-label">{escape(str(label))}</div>'
         f'<span class="material-symbols-rounded kpi-icon" aria-hidden="true">{icone}</span></div>'
         f'<div class="kpi-value">{escape(str(valor))}</div>{sub_html}</div>'
@@ -917,21 +909,9 @@ def render_kpi(
     sub: str = "",
     tema: TemaKPI = "azul",
 ) -> None:
-    col.markdown(
-        _html_kpi(label, valor, sub, tema, pequeno=False), unsafe_allow_html=True
-    )
+    col.markdown(_html_kpi(label, valor, sub, tema), unsafe_allow_html=True)
 
 
-def render_kpi_sm(
-    container: Any,
-    label: str,
-    valor: str,
-    sub: str = "",
-    tema: TemaKPI = "azul",
-) -> None:
-    container.markdown(
-        _html_kpi(label, valor, sub, tema, pequeno=True), unsafe_allow_html=True
-    )
 
 
 def render_painel_link(caminho: str, titulo: str, descricao: str) -> None:

@@ -17,7 +17,7 @@ exibem o aviso de dados ausentes.
 | `components/` | Design system, calendário e regras compartilhadas |
 | `pages/` | Painéis do portal e a Central de Atualização |
 | `scripts/` | Utilitários locais (instalação da fonte Oscine) |
-| `assets/` e `fonts/` | Identidade visual e tipografia |
+| `assets/` | Identidade visual; as fontes licenciadas são instaladas localmente e ignoradas pelo Git |
 | `config/` | Configuração versionada da aplicação (feriados extras) |
 | `tests/` | Testes automatizados |
 | `.github/` | CI e automações do repositório |

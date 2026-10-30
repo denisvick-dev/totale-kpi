@@ -194,7 +194,6 @@ totale-kpi/
 │   ├── fonts/LEIA-ME.md             # Instruções sobre a fonte Oscine
 │   ├── icons/totale.ico             # Ícone do app
 │   └── images/novo-logo-totale.png  # Logo da navegação
-├── fonts/                           # Arquivos Oscine versionados
 ├── tests/                           # Testes de interface e de dados
 ├── .github/workflows/ci.yml         # Testes, compilação e lint
 ├── .devcontainer/                   # Ambiente Python 3.11
@@ -232,8 +231,10 @@ A **Oscine** é uma fonte licenciada (Dalton Maag / Adobe Fonts) e vale para
 seguem em Manrope. Os títulos dos heros usam o arquivo `Oscine-Regular.ttf`;
 tabelas e DataFrames também renderizam em Oscine — a família definida em
 `[theme] font` (`.streamlit/config.toml`) alimenta o canvas dos
-`st.dataframe`, enquanto o `@font-face` auto-hospedado (base64 a partir de
-`fonts/`) disponibiliza os pesos Regular e Bold no documento.
+`st.dataframe`, enquanto o `@font-face` auto-hospedado (base64 a partir dos arquivos
+instalados localmente) disponibiliza os pesos Regular e Bold no documento.
+Nenhum arquivo da Oscine é versionado: a licença não permite redistribuí-la,
+então `fonts/` e `assets/fonts/*.ttf` ficam no `.gitignore`.
 
 Para instalá-la:
 ```bash
@@ -241,8 +242,9 @@ python scripts/instalar_fonte_hero.py ~/Downloads/Oscine   # normaliza os nomes
 python scripts/instalar_fonte_hero.py --listar              # confere sem copiar
 ```
 
-Os arquivos podem ficar em `assets/fonts/` ou em `fonts/` na raiz do
-repositório (ambas as pastas são lidas). Sem os arquivos, o app usa a Oscine
+Os arquivos podem ficar em `assets/fonts/` ou em `fonts/` na raiz
+(ambas as pastas são lidas, e ambas são ignoradas pelo Git). Sem os arquivos,
+o app usa a Oscine
 se ela estiver ativa no computador (Adobe Creative Cloud) e cai no
 **Manrope** caso contrário — nada quebra.
 Para servir a todos os usuários (Streamlit Cloud), configure o kit web:

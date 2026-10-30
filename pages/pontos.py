@@ -373,19 +373,6 @@ class Utilitarios:
         return None
 
     @staticmethod
-    def calcular_variacao(vf: float, vg: float) -> tuple[str, str]:
-        if vg == 0 or pd.isna(vg):
-            return "neutra", "S/D"
-        if abs(vf - vg) < 0.0001:
-            return "neutra", "Visão Geral"
-        p = ((vf - vg) / vg) * 100
-        if p > 0:
-            return "positiva", f"+{p:.1f}%"
-        if p < 0:
-            return "negativa", f"{p:.1f}%"
-        return "neutra", "0%"
-
-    @staticmethod
     def calcular_share(vf: float, vg: float) -> tuple[str, str]:
         if vg == 0 or pd.isna(vg):
             return "neutra", "0%"
@@ -698,11 +685,6 @@ df = pd.concat([prod, gpon], ignore_index=True)
 TOTAL_GERAL_PONTOS = df["Pontos"].sum()
 TOTAL_GERAL_OS = len(df)
 TOTAL_GERAL_EQUIPES = df["Nome Equipe"].nunique() if "Nome Equipe" in df.columns else 0
-MEDIA_GERAL_PONTOS = (
-    TOTAL_GERAL_PONTOS / TOTAL_GERAL_EQUIPES if TOTAL_GERAL_EQUIPES > 0 else 0.0
-)
-
-
 # ====================================================
 # BLOCO 6: FILTROS
 # ====================================================
