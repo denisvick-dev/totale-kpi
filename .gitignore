@@ -171,3 +171,7 @@ assets/fonts/*.ttf
 assets/fonts/*.otf
 assets/fonts/*.woff
 assets/fonts/*.woff2
+
+# Cache de processamento da base operacional (gerado localmente, contém
+# dados de produção e caminho do computador de origem).
+dados/cache/
