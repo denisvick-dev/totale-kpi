@@ -49,7 +49,6 @@ class Configuracoes:
     VAZIOS = {"-", "nan", "None", "", "NaN"}
 
 
-
 class ProcessadorDeDados:
     @staticmethod
     def _normalizar_serie(serie: pd.Series) -> pd.Series:
@@ -390,9 +389,7 @@ def _render_secao_nuvem() -> None:
 
     ultima_data = st.session_state.get("ultima_atualizacao")
     data_sync = (
-        ultima_data.strftime("%d/%m/%Y")
-        if isinstance(ultima_data, datetime)
-        else "—"
+        ultima_data.strftime("%d/%m/%Y") if isinstance(ultima_data, datetime) else "—"
     )
     hora_sync = (
         ultima_data.strftime("às %H:%M:%S")

@@ -1,0 +1,20 @@
+{
+  "status": "ok",
+  "atualizado_em": "2026-10-29T18:34:28",
+  "origem": "C:\\Users\\denis.vick\\Downloads\\Atividades-SPO-TOTALLESTE_29_10_26.xlsx",
+  "arquivo": "Atividades-SPO-TOTALLESTE_29_10_26.xlsx",
+  "hash": "ea3f5c8a38223934b348b68cb3e3b0b9d37b8e6a6521f46220d159b2041b2798",
+  "modificado_em": "2026-10-29T16:14:55",
+  "fonte_ativos": "Google Sheets (CSV público)",
+  "erro_ativos": "",
+  "registros_ativos": 325,
+  "arquivos": {
+    "volumetria.pkl": {
+      "registros": 237,
+      "colunas": 128,
+      "registros_brutos": 422,
+      "attrs": {}
+    },
+    "quebra.pkl": {}
+  }
+}

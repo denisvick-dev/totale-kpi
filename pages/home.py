@@ -39,6 +39,7 @@ PAINEIS_PERFORMANCE = [
     ),
 ]
 
+
 def _status_base_producao() -> str:
     """Indica se as planilhas exigidas pelos painéis foram carregadas na sessão."""
     dados = st.session_state.get("dados_prod")

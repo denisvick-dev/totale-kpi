@@ -206,7 +206,11 @@ class ComponenteVisual:
             "Aderência Projetada",
             f"{ader_geral:.1%}",
             sub=f"Meta: {meta} pts/equipe",
-            tema="verde" if ader_geral >= 1 else "laranja" if ader_geral >= 0.9 else "vermelho",
+            tema="verde"
+            if ader_geral >= 1
+            else "laranja"
+            if ader_geral >= 0.9
+            else "vermelho",
         )
         render_kpi(
             k2,
@@ -245,9 +249,7 @@ class ComponenteVisual:
                 x=grafico["Aderência Projetada"] * 100,
                 y=grafico["Grupo"],
                 orientation="h",
-                marker_color=[
-                    cores.get(s, "#94A3B8") for s in grafico["Situação"]
-                ],
+                marker_color=[cores.get(s, "#94A3B8") for s in grafico["Situação"]],
                 text=[f"{v:.0%}" for v in grafico["Aderência Projetada"]],
                 textposition="outside",
                 hovertemplate=(
@@ -314,9 +316,7 @@ class ComponenteVisual:
         # ── Detalhe: equipes do grupo selecionado ──
         st.markdown("<br>", unsafe_allow_html=True)
         render_section_header("search", "Detalhe por Equipe do Grupo")
-        ader_view["_rotulo"] = ader_view[cols_grupo].astype(str).agg(
-            " · ".join, axis=1
-        )
+        ader_view["_rotulo"] = ader_view[cols_grupo].astype(str).agg(" · ".join, axis=1)
         escolha = st.selectbox(
             "Grupo",
             ader_view["_rotulo"].tolist(),
@@ -788,9 +788,7 @@ if "Nome Equipe" in df.columns:
         df, dias_brutos, dias_seguros, dias_passados
     )
 
-aba_ranking, aba_aderencia = st.tabs(
-    ["🏆 Ranking & Metas", "🎯 Aderência à Projeção"]
-)
+aba_ranking, aba_aderencia = st.tabs(["🏆 Ranking & Metas", "🎯 Aderência à Projeção"])
 
 with aba_ranking:
     col_t, col_tg = st.columns([3, 1])
