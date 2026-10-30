@@ -4,9 +4,8 @@ envio_excel.py — Central de Atualização de Dados
 Ponto único de atualização das bases do portal, em duas frentes:
 
 1. **Base operacional (upload manual)** — o envio da exportação de
-   atividades alimenta, de uma só vez, os painéis de **Quebra de
-   Agenda**, **Volumetria de O.S.** e **Rota Inicial**
-   (``components/upload_base.py``). Os painéis também aceitam o envio
+   atividades alimenta o painel de **Rota Inicial**
+   (``components/upload_base.py``). O painel também aceita o envio
    direto, no estado vazio, com o mesmo componente.
 
 2. **Bases compartilhadas (nuvem)** — download e tratamento das
@@ -32,7 +31,11 @@ from components.componentes import (
     render_kpi,
     render_section_header,
 )
-from components.upload_base import render_upload_base_operacional
+from components.upload_base import (
+    metadados_upload,
+    render_upload_base_operacional,
+    reprocessar_vinculo_ativos,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -367,13 +370,34 @@ def _render_previa(
 
 
 def _render_secao_upload() -> None:
-    """Seção 1 — base operacional via upload manual (três painéis)."""
+    """Seção 1 — base operacional via upload manual."""
     render_section_header(
         "upload_file",
         "Base operacional — upload manual",
-        "Quebra · Volumetria · Rota Inicial",
+        "Rota Inicial",
     )
     render_upload_base_operacional("central", titulo=None)
+
+    # Refaz o vínculo com a lista_ativos reaproveitando o arquivo da sessão.
+    if metadados_upload().get("linhas"):
+        col_btn, _ = st.columns([1, 3])
+        with col_btn:
+            if st.button(
+                "🔗 Atualizar Lista de Ativos",
+                use_container_width=True,
+                help=(
+                    "Relê a aba lista_ativos da planilha e refaz o vínculo de "
+                    "monitores e técnicos sem precisar enviar o arquivo de novo."
+                ),
+            ):
+                if reprocessar_vinculo_ativos():
+                    st.success("✅ Vínculo com a lista de ativos atualizado.")
+                    st.rerun()
+                else:
+                    st.warning(
+                        "O arquivo original não está mais nesta sessão. "
+                        "Envie a base novamente."
+                    )
 
 
 def _render_secao_nuvem() -> None:

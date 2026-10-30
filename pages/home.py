@@ -46,16 +46,6 @@ PAINEIS_OPERACAO = [
         "🗺️ Rota Inicial",
         "Visualize rotas, turnos, serviços e distribuição das equipes.",
     ),
-    (
-        "pages/volumetria.py",
-        "📦 Volumetria de O.S.",
-        "Monitore tarefas executadas, pendentes e projeções operacionais.",
-    ),
-    (
-        "pages/quebra.py",
-        "📉 Quebra de Agenda",
-        "Identifique quebras por segmento, monitor e técnico.",
-    ),
 ]
 
 def _status_base_producao() -> str:
@@ -179,15 +169,14 @@ def main() -> None:
     if status_operacional == "Pronta":
         render_insight(
             f"A base operacional **{arquivo_operacional}** foi enviada em "
-            f"{quando_operacional}. Quebra de Agenda, Volumetria e Rota "
-            "Inicial já podem ser consultados.",
+            f"{quando_operacional}. A Rota Inicial já pode ser consultada.",
             tipo="ok",
         )
     else:
         render_insight(
             "A base operacional ainda não foi enviada nesta sessão. Envie a "
             "exportação de atividades na Central de Atualização para liberar "
-            "Quebra de Agenda, Volumetria e Rota Inicial.",
+            "a Rota Inicial.",
             tipo="info",
         )
 
@@ -203,7 +192,7 @@ def main() -> None:
         with col_info:
             st.markdown("#### 🔄 Atualizar as bases compartilhadas")
             st.caption(
-                "Envie a base operacional (Quebra, Volumetria e Rota Inicial) e "
+                "Envie a base operacional (Rota Inicial) e "
                 "sincronize os dados de produção e consultivos antes de iniciar "
                 "a análise. A atualização fica disponível durante esta sessão."
             )

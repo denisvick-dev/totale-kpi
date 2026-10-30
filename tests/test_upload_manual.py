@@ -1,8 +1,8 @@
-"""Testes do upload manual compartilhado (``components/base_operacional``).
+"""Testes do upload manual da base operacional (``components/base_operacional``).
 
-Um único arquivo enviado deve gerar as bases de Quebra de Agenda,
-Volumetria e Rota Inicial, com vínculo à lista de ativos — e a falha
-de um painel não pode bloquear os demais.
+Um único arquivo enviado gera a base da Rota Inicial, com vínculo à lista
+de ativos, e falhas de leitura/contrato devem virar mensagem em ``erros``
+em vez de exceção.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ LINHAS = [
     "08:00 - 10:00;SAO PAULO",
     "456;TEC2;NAO EXECUTADA;ATIVA;1;24 - MUDANCA DE PACOTE;PON(1/100);"
     "SOUNDBOX;12:00 - 14:00;GUARULHOS",
-    # Suspensa: sai de Quebra/Volumetria, mas a Rota Inicial a mantém.
+    # Suspensa: a Rota Inicial mantém o registro.
     "789;TEC1;PENDENTE;SUSPENSO;1;01 - ADESAO;TV VAS(1/100);INTERNET 500;"
     "Imediata;SANTO ANDRE",
 ]
@@ -50,56 +50,43 @@ def _csv(linhas=LINHAS, colunas=COLUNAS) -> bytes:
     return (";".join(colunas) + "\n" + "\n".join(linhas) + "\n").encode("utf-8")
 
 
-def test_upload_gera_as_tres_bases_com_vinculo():
+def test_upload_gera_base_da_rota_inicial_com_vinculo():
     resultado = bo.gerar_bases_upload(_csv(), "Atividades-teste.csv", ATIVOS)
 
     assert resultado["linhas_brutas"] == 3
     assert resultado["erros"] == {}
-
-    quebra = resultado["quebra"]
-    assert len(quebra) == 2  # suspensa removida
-    assert list(quebra["MONITOR"]) == ["MONITOR A", "MONITOR B"]
-    assert list(quebra["Status Contrato"]) == ["Executada", "Não Executada"]
-    assert quebra.attrs["diag_vinculados"] == 2
-
-    volumetria = resultado["volumetria"]
-    assert len(volumetria) == 2
-    assert list(volumetria["MONITOR"]) == ["Monitor A", "Monitor B"]
-    assert list(volumetria["REGIÃO"]) == ["LESTE", "GRU"]
-    assert volumetria.attrs["diagnostico"]["Fonte"] == "Upload manual"
 
     rota = resultado["rota_inicial"]
     assert len(rota) == 3
     assert list(rota["Monitor"]) == ["Monitor A", "Monitor B", "Monitor A"]
     assert list(rota["PERIODO_TRATADO"]) == ["Manhã", "Tarde I", "Imediata"]
     assert list(rota["REGIÃO"]) == ["LESTE", "GRU", "ABCDM"]
+    assert rota.attrs["diag_vinculados"] == 3
+    assert rota.attrs["diag_ativos"] == 2
 
 
 def test_sem_lista_de_ativos_degrada_sem_falhar():
     resultado = bo.gerar_bases_upload(_csv(), "base.csv", pd.DataFrame())
 
     assert resultado["erros"] == {}
-    assert set(resultado["quebra"]["MONITOR"]) == {"SEM MONITOR"}
-    # Sem o Sheets, a Volumetria usa o login do arquivo como técnico.
-    assert set(resultado["volumetria"]["TÉCNICO"]) == {"TEC1", "TEC2"}
-    assert set(resultado["volumetria"]["MONITOR"]) == {"SEM MONITOR"}
-    assert len(resultado["rota_inicial"]) == 3
+    rota = resultado["rota_inicial"]
+    assert len(rota) == 3
+    assert set(rota["Monitor"]) == {"SEM MONITOR"}
+    # Sem a lista, o login do arquivo vira o nome exibido do técnico.
+    assert set(rota["NOME_OFICIAL"]) == {"TEC1", "TEC2"}
+    assert rota.attrs["diag_vinculados"] == 0
 
 
-def test_falha_de_um_painel_nao_bloqueia_os_demais():
-    # Sem a coluna de status da O.S., só a Volumetria é inviável.
-    colunas = [c for c in COLUNAS if c != "STATUS DA O.S 1"]
+def test_base_sem_contrato_vira_erro_sem_excecao():
+    colunas = [c for c in COLUNAS if c != "CONTRATO"]
     linhas = [
-        "123;TEC1;ATIVA;2;01 - ADESAO;PON(1/100);CLARO TV+ 4K;08:00 - 10:00;SAO PAULO"
+        "TEC1;EXECUTADA;ATIVA;2;01 - ADESAO;PON(1/100);CLARO TV+ 4K;"
+        "08:00 - 10:00;SAO PAULO"
     ]
-    resultado = bo.gerar_bases_upload(
-        _csv(linhas, colunas), "base.csv", ATIVOS
-    )
+    resultado = bo.gerar_bases_upload(_csv(linhas, colunas), "base.csv", ATIVOS)
 
-    assert resultado["volumetria"] is None
-    assert "Status da O.S 1" in resultado["erros"]["volumetria"]
-    assert resultado["quebra"] is not None
-    assert resultado["rota_inicial"] is not None
+    assert resultado["rota_inicial"] is None
+    assert "contrato" in resultado["erros"]["rota_inicial"].lower()
 
 
 def test_extensao_invalida_vira_erro_de_leitura():
@@ -107,13 +94,19 @@ def test_extensao_invalida_vira_erro_de_leitura():
 
     assert resultado["linhas_brutas"] == 0
     assert "leitura" in resultado["erros"]
-    assert resultado["quebra"] is None
+    assert resultado["rota_inicial"] is None
+
+
+def test_arquivo_sem_registros_vira_erro_de_leitura():
+    resultado = bo.gerar_bases_upload(_csv(linhas=[]), "base.csv", ATIVOS)
+
+    assert resultado["linhas_brutas"] == 0
+    assert "leitura" in resultado["erros"]
+    assert resultado["rota_inicial"] is None
 
 
 def test_upload_xlsx():
-    bruto = pd.DataFrame(
-        [linha.split(";") for linha in LINHAS], columns=COLUNAS
-    )
+    bruto = pd.DataFrame([linha.split(";") for linha in LINHAS], columns=COLUNAS)
     buffer = BytesIO()
     bruto.to_excel(buffer, index=False, engine="openpyxl")
 
@@ -122,7 +115,6 @@ def test_upload_xlsx():
     )
 
     assert resultado["erros"] == {}
-    assert len(resultado["volumetria"]) == 2
     assert len(resultado["rota_inicial"]) == 3
 
 
@@ -173,3 +165,34 @@ def test_flags_de_habilidade_casam_termos_com_parenteses():
     assert bool(rota.loc["111", "Check_GPON"]) is False
     assert bool(rota.loc["222", "Check_GPON"]) is True
     assert bool(rota.loc["222", "Check_Ponto_Ultra"]) is True
+
+
+def test_reprocessar_vinculo_usa_arquivo_da_sessao(monkeypatch):
+    from components import upload_base as ub
+
+    estado = {ub.CHAVE_ARQUIVO: (b"conteudo", "base.csv")}
+    monkeypatch.setattr(ub.st, "session_state", estado, raising=False)
+
+    chamadas: dict[str, object] = {}
+    monkeypatch.setattr(
+        ub, "limpar_cache_lista_ativos", lambda: chamadas.update(cache=True)
+    )
+    monkeypatch.setattr(
+        ub,
+        "processar_e_publicar",
+        lambda conteudo, nome: (
+            chamadas.update(arquivo=(conteudo, nome)) or {"linhas": {}}
+        ),
+    )
+
+    assert ub.reprocessar_vinculo_ativos() is True
+    assert chamadas["cache"] is True
+    assert chamadas["arquivo"] == (b"conteudo", "base.csv")
+
+
+def test_reprocessar_vinculo_sem_arquivo_nao_falha(monkeypatch):
+    from components import upload_base as ub
+
+    monkeypatch.setattr(ub.st, "session_state", {}, raising=False)
+
+    assert ub.reprocessar_vinculo_ativos() is False

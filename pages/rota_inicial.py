@@ -529,9 +529,7 @@ def main() -> None:
             "📁 Trocar base",
             use_container_width=True,
             help=(
-                "Limpa as bases operacionais da sessão e volta ao envio "
-                "manual. Vale para Quebra, Volumetria e Rota Inicial, "
-                "que compartilham o mesmo arquivo."
+                "Limpa a base operacional da sessão e volta ao envio manual."
             ),
         ):
             limpar_bases_operacionais()

@@ -2,15 +2,15 @@
 components/base_operacional.py
 ==============================
 Fonte única do tratamento da base operacional (exportação "Atividades")
-compartilhada por **quebra.py**, **volumetria.py** e **rota_inicial.py**.
+consumida por **rota_inicial.py**.
 
 Fluxo (upload manual):
     1. o usuário envia o arquivo (.xlsx/.xls/.csv) na Central de
-       Atualização (``envio_excel.py``) ou direto em um dos painéis;
-    2. :func:`gerar_bases_upload` lê o arquivo uma única vez e gera as
-       três bases tratadas, vinculadas à aba ``lista_ativos``;
-    3. ``components/upload_base.py`` publica cada base na sessão, na
-       chave que o respectivo painel já consome.
+       Atualização (``envio_excel.py``) ou direto no painel;
+    2. :func:`gerar_bases_upload` lê o arquivo e gera a base tratada,
+       vinculada à aba ``lista_ativos``;
+    3. ``components/upload_base.py`` publica a base na sessão, na
+       chave que o painel já consome.
 
 O módulo não depende de Streamlit para ler/tratar dados — a interface
 de upload vive em ``components/upload_base.py``. Quando o Streamlit
@@ -34,12 +34,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from components.criterios import (
-    VAZIOS_CONTRATO,
-    classificar_tipo_servico,
-    detectar_col_contrato,
-    detectar_col_status_atividade,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -54,33 +48,7 @@ COL_STATUS = "STATUS CONTRATO"
 COL_CONTRATO = "CONTRATO"
 COL_LOGIN = "LOGIN"
 
-STATUS_ORDEM: list[str] = ["Executada", "Não Executada", "Pendente"]
-
 EXTENSOES_ACEITAS: tuple[str, ...] = (".xlsx", ".xls", ".csv")
-
-CIDADES_POR_REGIAO: dict[str, tuple[str, ...]] = {
-    "LESTE": ("SAO PAULO",),
-    "GRU": (
-        "GUARULHOS",
-        "ARUJA",
-        "MOGI DAS CRUZES",
-        "MOGI",
-        "SUZANO",
-        "ITAQUAQUECETUBA",
-        "FERRAZ DE VASCONCELOS",
-        "POA",
-    ),
-    "ABCDM": (
-        "SANTO ANDRE",
-        "SAO BERNARDO DO CAMPO",
-        "SAO CAETANO DO SUL",
-        "DIADEMA",
-        "MAUA",
-        "RIBEIRAO PIRES",
-        "RIO GRANDE DA SERRA",
-    ),
-}
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # UTILITÁRIOS
@@ -123,64 +91,6 @@ class Utils:
             if chave in cols_map:
                 return cols_map[chave]
         return None
-
-    @staticmethod
-    def buscar_coluna_quebra(df: pd.DataFrame, palavras: Sequence[str]) -> str | None:
-        """Busca por parte do nome (compatível com o padrão antigo de quebra.py)."""
-        if df is None or df.empty:
-            return None
-        cols = {
-            str(c)
-            .strip()
-            .upper()
-            .replace(".", "")
-            .replace("_", "")
-            .replace("  ", " "): c
-            for c in df.columns
-        }
-        for palavra in palavras:
-            alvo = (
-                str(palavra)
-                .strip()
-                .upper()
-                .replace(".", "")
-                .replace("_", "")
-                .replace("  ", " ")
-            )
-            for nome_norm, nome_real in cols.items():
-                if alvo in nome_norm:
-                    return nome_real
-        return None
-
-    @staticmethod
-    def classificar_status(status_os: pd.Series) -> pd.Series:
-        """EXECUTADA / NÃO EXECUTADA / Pendente — aceita variações do status da O.S."""
-        s = Utils.normalizar_chave(status_os)
-        nao_exec = s.str.contains(r"NAO\s*EXECUT", regex=True, na=False)
-        executada = s.str.contains("EXECUT", regex=False, na=False) & ~nao_exec
-        return pd.Series(
-            np.select(
-                [executada, nao_exec],
-                ["Executada", "Não Executada"],
-                default="Pendente",
-            ),
-            index=status_os.index,
-            dtype="object",
-        )
-
-    @staticmethod
-    def regiao_por_cidade(cidade: pd.Series) -> pd.Series:
-        normalizada = Utils.normalizar_chave(cidade).str.strip()
-        condicoes = []
-        rotulos = []
-        for regiao, cidades in CIDADES_POR_REGIAO.items():
-            condicoes.append(normalizada.isin(cidades))
-            rotulos.append(regiao)
-        return pd.Series(
-            np.select(condicoes, rotulos, default="OUTRAS"),
-            index=cidade.index,
-            dtype="object",
-        )
 
 
 # ╀═════════════════════════════════════════════════════════════════════
@@ -509,7 +419,7 @@ def _segredos_padrao() -> dict[str, Any]:
 
 def carregar_hierarquia(**kwargs: Any) -> pd.DataFrame:
     """
-    Lista de ativos no formato usado pela Volumetria
+    Lista de ativos no formato usado pelo upload
     (``__LOGIN_KEY``, ``__TEC_GS``, ``__MON_GS``).
     """
     ativos = carregar_lista_ativos(**kwargs)
@@ -528,7 +438,7 @@ def carregar_hierarquia(**kwargs: Any) -> pd.DataFrame:
 def hierarquia_de(ativos: pd.DataFrame) -> pd.DataFrame:
     """
     Converte uma lista de ativos já carregada no formato usado pela
-    Volumetria (``__LOGIN_KEY``, ``__TEC_GS``, ``__MON_GS``).
+    vínculo (``__LOGIN_KEY``, ``__TEC_GS``, ``__MON_GS``).
 
     Aceita a lista bruta ou normalizada — a normalização é reaplicada
     para o vínculo não depender da fonte (sessão, Sheets ou CSV).
@@ -545,366 +455,6 @@ def hierarquia_de(ativos: pd.DataFrame) -> pd.DataFrame:
             "__MON_GS": norm["Monitor"] if "Monitor" in norm.columns else "",
         }
     ).drop_duplicates("__LOGIN_KEY")
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# PREPARAÇÃO — VOLUMETRIA
-# ═══════════════════════════════════════════════════════════════════════
-def preparar_base_volumetria(
-    raw: pd.DataFrame, hierarquia: pd.DataFrame
-) -> pd.DataFrame:
-    """
-    Trata a base bruta para o painel de Volumetria.
-
-    Retorna o DataFrame com ``attrs["diagnostico"]`` (avisos e erros) para a
-    página decidir como exibir — nada de ``st.stop`` aqui.
-    """
-    df = raw.copy()
-    df.columns = df.columns.astype(str).str.strip()
-    avisos: list[str] = []
-    erros: list[str] = []
-    diag: dict[str, Any] = {"Inicial": len(df)}
-
-    hierarquia = hierarquia if hierarquia is not None else pd.DataFrame()
-
-    # 1. Contratos vazios
-    col_con = Utils.buscar_coluna(
-        df, ["CONTRATO", "Nº CONTRATO", "NUMERO CONTRATO", "NUM CONTRATO"]
-    )
-    if col_con:
-        normalizada = (
-            df[col_con].astype(str).str.strip().str.upper().map(Utils.remover_acentos)
-        )
-        valida = ~normalizada.isin({v for v in VAZIOS_CONTRATO})
-        removidos = int((~valida).sum())
-        df = df[valida].copy()
-        diag["Removidos por contrato vazio"] = removidos
-    else:
-        avisos.append(
-            "Coluna de contrato não encontrada — nada foi filtrado por contrato."
-        )
-
-    # 2. Remove suspensos
-    col_atv = detectar_col_status_atividade(df)
-    if col_atv:
-        susp = Utils.normalizar_chave(df[col_atv]).str.contains(
-            "SUSP", regex=False, na=False
-        )
-        diag["Removidos por suspensão"] = int(susp.sum())
-        df = df[~susp].copy()
-
-    # 3. Status
-    col_os1 = _coluna_status_volumetria(df)
-    if col_os1:
-        df[COL_STATUS] = Utils.classificar_status(df[col_os1])
-    else:
-        erros.append("Coluna 'Status da O.S 1' não encontrada na base.")
-
-    # 4. Total de tarefas
-    col_qtd = Utils.buscar_coluna(df, ["TOTAL DE TAREFAS", "QUANTIDADE", "QTD TAREFAS"])
-    if col_qtd:
-        df[COL_TOTAL] = pd.to_numeric(df[col_qtd], errors="coerce").fillna(1)
-    else:
-        df[COL_TOTAL] = 1.0
-        avisos.append(
-            "Coluna 'TOTAL DE TAREFAS' não encontrada — considerando 1 por registro."
-        )
-    df[COL_TOTAL] = df[COL_TOTAL].clip(lower=0)
-
-    # 5. Vínculo com a lista de ativos
-    col_log = Utils.buscar_coluna(
-        df, ["LOGIN DO TÉCNICO", "LOGIN", "USUÁRIO", "MATRÍCULA"]
-    )
-    if col_log and not hierarquia.empty:
-        df["__LOGIN_KEY"] = Utils.normalizar_login(df[col_log])
-        df = df.merge(hierarquia, on="__LOGIN_KEY", how="left")
-    for col in ("__TEC_GS", "__MON_GS"):
-        if col not in df.columns:
-            df[col] = np.nan
-
-    # 6. Técnico / Monitor (Sheets → arquivo → fallback)
-    col_tec_b = Utils.buscar_coluna(df, ["TÉCNICO", "NOME"]) or col_log
-    col_mon_b = Utils.buscar_coluna(df, ["MONITOR", "GESTOR"])
-
-    base_tec = df[col_tec_b] if col_tec_b else pd.Series(np.nan, index=df.index)
-    base_mon = df[col_mon_b] if col_mon_b else pd.Series(np.nan, index=df.index)
-
-    tec_gs = df["__TEC_GS"].where(df["__TEC_GS"].notna(), "")
-    mon_gs = df["__MON_GS"].where(df["__MON_GS"].notna(), "")
-
-    df[COL_TECNICO] = tec_gs.mask(tec_gs.astype(str).str.strip().eq(""), base_tec)
-    df[COL_MONITOR] = mon_gs.mask(mon_gs.astype(str).str.strip().eq(""), base_mon)
-
-    df[COL_TECNICO] = df[COL_TECNICO].where(
-        df[COL_TECNICO].notna() & df[COL_TECNICO].astype(str).str.strip().ne(""),
-        "NÃO MAPEADO",
-    )
-    df[COL_MONITOR] = df[COL_MONITOR].where(
-        df[COL_MONITOR].notna() & df[COL_MONITOR].astype(str).str.strip().ne(""),
-        "SEM MONITOR",
-    )
-
-    # 7. Região
-    col_cid = Utils.buscar_coluna(df, ["CIDADE", "LOCALIDADE"])
-    cidade = (
-        Utils.normalizar_chave(df[col_cid])
-        if col_cid
-        else pd.Series("", index=df.index)
-    )
-    df[COL_REGIAO] = Utils.regiao_por_cidade(cidade)
-
-    diag["Final"] = len(df)
-    diag["avisos"] = avisos
-    diag["erros"] = erros
-    diag["Fonte"] = "Upload manual"
-
-    df.attrs["diagnostico"] = diag
-    return df
-
-
-def _coluna_status_volumetria(df: pd.DataFrame) -> str | None:
-    return Utils.buscar_coluna(
-        df,
-        ["STATUS DA O.S 1", "STATUS OS 1", "STATUS DA OS 1", COL_STATUS],
-    )
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# PREPARAÇÃO — QUEBRA DE AGENDA
-# ═══════════════════════════════════════════════════════════════════════
-def preparar_base_quebra(
-    raw: pd.DataFrame,
-    lista_ativos: pd.DataFrame,
-    fonte_ativos: str = "",
-    erro_ativos: str = "",
-) -> pd.DataFrame:
-    """
-    Trata a base bruta para a Quebra de Agenda (mesma regra da página).
-
-    Mantém ``attrs`` de diagnóstico (``diag_*``) usados por ``quebra.py``.
-    """
-    if raw is None or raw.empty:
-        return pd.DataFrame()
-
-    df = raw.copy()
-    df.columns = df.columns.astype(str).str.strip().str.upper()
-    total_importado = len(df)
-
-    col_mon_orig = Utils.buscar_coluna_quebra(
-        df, ["MONITOR", "SUPERVISOR", "GESTOR", "COORDENADOR", "NOME MONITOR"]
-    )
-    col_tec_orig = Utils.buscar_coluna_quebra(
-        df, ["TECNICO", "NOME TECNICO", "NOME DO TECNICO", "TÉCNICO"]
-    )
-
-    # 1. Remove suspensos
-    col_atv = detectar_col_status_atividade(df)
-    n_susp = 0
-    if col_atv:
-        serie_atv = df[col_atv].fillna("").astype(str).str.strip().str.upper()
-        mask_susp = serie_atv.str.contains(
-            "SUSP", regex=False, na=False
-        ) | serie_atv.eq("SUSPENSO")
-        n_susp = int(mask_susp.sum())
-        df = df[~mask_susp].copy()
-
-    # 2. Remove contratos vazios
-    col_con = detectar_col_contrato(df)
-    n_inv = 0
-    if col_con:
-        serie_con = (
-            df[col_con]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-            .str.upper()
-            .str.replace(r"\.0$", "", regex=True)
-        )
-        mask_inv = serie_con.isin(VAZIOS_CONTRATO)
-        n_inv = int(mask_inv.sum())
-        df = df[~mask_inv].copy()
-
-    # 3. Total de tarefas
-    col_tot = Utils.buscar_coluna_quebra(
-        df, ["TOTAL DE TAREFAS", "QTD TAREFAS", "TOTAL TAREFAS"]
-    )
-    if col_tot:
-        df[COL_TOTAL] = (
-            pd.to_numeric(
-                df[col_tot].astype(str).str.replace(",", "."), errors="coerce"
-            )
-            .fillna(1)
-            .astype(int)
-        )
-    else:
-        df[COL_TOTAL] = 1
-
-    # 4. Login + merge com a lista de ativos
-    col_login = Utils.buscar_coluna_quebra(
-        df,
-        ["LOGIN DO TÉCNICO", "LOGIN DO TECNICO", "LOGIN", "USUÁRIO", "MATRÍCULA"],
-    )
-    if col_login:
-        df[COL_LOGIN] = (
-            df[col_login]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-            .str.replace(r"\.0$", "", regex=True)
-            .str.upper()
-        )
-    else:
-        df[COL_LOGIN] = "SEM LOGIN"
-
-    lista_ativos = lista_ativos if lista_ativos is not None else pd.DataFrame()
-    if not lista_ativos.empty:
-        # A lista pode chegar bruta (download da nuvem, sessão, cache antigo):
-        # login em caixa baixa, espaços, ".0", duplicados e desligados faziam o
-        # merge não encontrar ninguém (ou explodir no validate="many_to_one").
-        # Normalizar aqui torna o vínculo determinístico para qualquer fonte;
-        # os attrs (fonte/erro) precisam sobreviver à normalização.
-        attrs_ativos = dict(lista_ativos.attrs)
-        lista_ativos = normalizar_lista_ativos(lista_ativos)
-        lista_ativos.attrs.update(attrs_ativos)
-    if col_login and not lista_ativos.empty and "Login" in lista_ativos.columns:
-        df = df.merge(
-            lista_ativos,
-            left_on=COL_LOGIN,
-            right_on="Login",
-            how="left",
-            suffixes=("", "_GS"),
-            validate="many_to_one",
-        )
-    n_vinculados = int(df["Login"].notna().sum()) if "Login" in df.columns else 0
-
-    # 5. Monitor (Sheets → arquivo → SEM MONITOR)
-    mon_gs = (
-        df["Monitor_GS"]
-        if "Monitor_GS" in df.columns
-        else (
-            df["Monitor"]
-            if "Monitor" in df.columns
-            else pd.Series(np.nan, index=df.index)
-        )
-    )
-    mon_file = (
-        df[col_mon_orig]
-        if col_mon_orig and col_mon_orig in df.columns
-        else pd.Series(np.nan, index=df.index)
-    )
-    mon_gs_c = (
-        mon_gs.fillna(pd.NA)
-        .astype("string")
-        .str.strip()
-        .replace(["", "nan", "None", "NAN", "NULL"], None)
-    )
-    mon_file_c = (
-        mon_file.fillna(pd.NA)
-        .astype("string")
-        .str.strip()
-        .replace(["", "nan", "None", "NAN", "NULL"], None)
-    )
-
-    df["ORIGEM_MAPEAMENTO"] = np.where(
-        mon_gs_c.notna(),
-        "Merge (Sheets)",
-        np.where(mon_file_c.notna(), "Arquivo Origem", "Não Mapeado"),
-    )
-    df[COL_MONITOR] = (
-        mon_gs_c.combine_first(mon_file_c)
-        .fillna("SEM MONITOR")
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
-    df.loc[
-        df[COL_MONITOR].isin(["", "NAN", "NONE", "NULL", "0", "N/A"]), COL_MONITOR
-    ] = "SEM MONITOR"
-
-    # 6. Técnico (Sheets → arquivo → NÃO MAPEADO)
-    tec_gs = (
-        df["Técnico_GS"]
-        if "Técnico_GS" in df.columns
-        else (
-            df["Técnico"]
-            if "Técnico" in df.columns
-            else pd.Series(np.nan, index=df.index)
-        )
-    )
-    tec_file = (
-        df[col_tec_orig]
-        if col_tec_orig and col_tec_orig in df.columns
-        else pd.Series(np.nan, index=df.index)
-    )
-    tec_gs_c = (
-        tec_gs.fillna(pd.NA)
-        .astype("string")
-        .str.strip()
-        .replace(["", "nan", "None", "NAN", "NULL"], None)
-    )
-    tec_file_c = (
-        tec_file.fillna(pd.NA)
-        .astype("string")
-        .str.strip()
-        .replace(["", "nan", "None", "NAN", "NULL"], None)
-    )
-
-    df[COL_TECNICO] = (
-        tec_gs_c.combine_first(tec_file_c)
-        .fillna("NÃO MAPEADO")
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
-    df.loc[
-        df[COL_TECNICO].isin(["", "NAN", "NONE", "NULL", "0", "N/A"]), COL_TECNICO
-    ] = "NÃO MAPEADO"
-
-    # 7. Contrato normalizado
-    if col_con and col_con in df.columns:
-        df[COL_CONTRATO] = df[col_con].astype(str).str.strip()
-
-    # 8. Região
-    col_cid = Utils.buscar_coluna_quebra(df, ["CIDADE", "LOCALIDADE"])
-    cidade = (
-        df[col_cid].fillna("").astype(str).str.strip().str.upper()
-        if col_cid
-        else pd.Series("", index=df.index)
-    )
-    df[COL_REGIAO] = Utils.regiao_por_cidade(cidade)
-
-    # 9. Status do contrato
-    col_status_os = Utils.buscar_coluna_quebra(
-        df, ["STATUS DA O.S 1", "STATUS OS 1", "STATUS CONTRATO"]
-    )
-    df["Status Contrato"] = (
-        Utils.classificar_status(df[col_status_os]) if col_status_os else "Pendente"
-    )
-
-    # 10. Classificação oficial de segmentos (criterios.py)
-    df, _ = classificar_tipo_servico(df)
-    df = df.drop(columns=["_TIPOS_OS_SET"], errors="ignore")
-
-    # 11. Motivo de baixa
-    col_baixa = Utils.buscar_coluna_quebra(
-        df,
-        ["CÓD DE BAIXA 1", "MOTIVO DE BAIXA", "COD DE BAIXA 1", "MOTIVO BAIXA"],
-    )
-    df["_COL_BAIXA"] = df[col_baixa].astype(str) if col_baixa else ""
-
-    df.attrs["diag_importado"] = total_importado
-    df.attrs["diag_susp"] = n_susp
-    df.attrs["diag_inv"] = n_inv
-    df.attrs["diag_final"] = len(df)
-    df.attrs["diag_vinculados"] = n_vinculados
-    df.attrs["diag_ativos"] = len(lista_ativos)
-    df.attrs["fonte_ativos"] = fonte_ativos or lista_ativos.attrs.get(
-        "fonte_ativos", ""
-    )
-    df.attrs["erro_ativos"] = erro_ativos or lista_ativos.attrs.get("erro_ativos", "")
-    df.attrs["diag_login"] = col_login or ""
-    return df
-
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1018,7 +568,12 @@ def preparar_base_rota_inicial(
     df["NOME_OFICIAL"] = df.get("NOME_OFICIAL", df["LOGIN_TECNICO"]).fillna(
         df["LOGIN_TECNICO"]
     )
-    df["Monitor"] = df.get("Monitor", pd.Series(dtype=str)).fillna("SEM MONITOR")
+    # Sem a lista de ativos a coluna não existe: um `df.get` com Series vazia
+    # alinharia por índice e deixaria tudo NaN em vez de "SEM MONITOR".
+    if "Monitor" in df.columns:
+        df["Monitor"] = df["Monitor"].fillna("SEM MONITOR")
+    else:
+        df["Monitor"] = "SEM MONITOR"
 
     hab = df["HABILIDADE"].astype(str).str.upper()
     tipo = df["TIPO_OS"].astype(str).str.upper()
@@ -1096,28 +651,34 @@ def preparar_base_rota_inicial(
     )
 
     df.attrs["diagnostico"] = {"contrato_vazio": removidos}
+    # Diagnóstico do vínculo com a lista de ativos (usado pelo upload).
+    if isinstance(df_ativos, pd.DataFrame) and not df_ativos.empty:
+        com_monitor = df["Monitor"].astype(str).str.strip().str.upper() != "SEM MONITOR"
+        df.attrs["diag_vinculados"] = int(com_monitor.sum())
+        df.attrs["diag_ativos"] = len(df_ativos)
+    else:
+        df.attrs["diag_vinculados"] = 0
+        df.attrs["diag_ativos"] = 0
+    fonte = str(getattr(df_ativos, "attrs", {}).get("fonte_ativos", "") or "")
+    erro = str(getattr(df_ativos, "attrs", {}).get("erro_ativos", "") or "")
+    df.attrs["fonte_ativos"] = fonte
+    df.attrs["erro_ativos"] = erro
     return df
 
 
-
 # ═══════════════════════════════════════════════════════════════════════
-# UPLOAD MANUAL — UM ARQUIVO, TRÊS BASES
+# UPLOAD MANUAL — BASE DA ROTA INICIAL
 # ═══════════════════════════════════════════════════════════════════════
 def gerar_bases_upload(
     conteudo: bytes, nome_arquivo: str, lista_ativos: pd.DataFrame
 ) -> dict[str, Any]:
     """
-    Gera as bases de Quebra, Volumetria e Rota Inicial de um único upload.
+    Gera a base da Rota Inicial a partir de um upload.
 
-    Cada painel é processado de forma independente: a falha de um deles
-    (ex.: coluna de status ausente para a Volumetria) não bloqueia os
-    demais. Retorna ``{"quebra", "volumetria", "rota_inicial", "erros",
-    "linhas_brutas"}`` — base ausente (``None``) sempre acompanhada da
-    mensagem em ``erros``.
+    Retorna ``{"rota_inicial", "erros", "linhas_brutas"}`` — base ausente
+    (``None``) sempre acompanhada da mensagem em ``erros``.
     """
     resultado: dict[str, Any] = {
-        "quebra": None,
-        "volumetria": None,
         "rota_inicial": None,
         "erros": {},
         "linhas_brutas": 0,
@@ -1129,8 +690,6 @@ def gerar_bases_upload(
         if isinstance(lista_ativos, pd.DataFrame)
         else pd.DataFrame()
     )
-    fonte_ativos = str(ativos.attrs.get("fonte_ativos", "") or "")
-    erro_ativos = str(ativos.attrs.get("erro_ativos", "") or "")
     ativos_norm = normalizar_lista_ativos(ativos) if not ativos.empty else ativos
 
     try:
@@ -1143,36 +702,12 @@ def gerar_bases_upload(
         erros["leitura"] = "O arquivo enviado não possui registros."
         return resultado
 
-    # Quebra e Rota tratam a base como texto (mesmo comportamento dos
-    # uploads que existiam nas páginas).
+    # A Rota trata a base como texto (mesmo comportamento do upload antigo).
     try:
         bruta_txt = ler_arquivo_bytes(conteudo, nome_arquivo, dtype=str)
     except Exception as exc:
         logger.warning("Falha na leitura como texto do upload: %s", exc)
         bruta_txt = bruta
-
-    try:
-        volumetria_df = preparar_base_volumetria(bruta, hierarquia_de(ativos))
-        erros_vol = volumetria_df.attrs.get("diagnostico", {}).get("erros", [])
-        if erros_vol:
-            erros["volumetria"] = "; ".join(str(e) for e in erros_vol)
-        else:
-            resultado["volumetria"] = volumetria_df
-    except Exception as exc:
-        logger.exception("Falha ao preparar a base de Volumetria do upload.")
-        erros["volumetria"] = str(exc)
-
-    try:
-        quebra_df = preparar_base_quebra(
-            bruta_txt, ativos, fonte_ativos, erro_ativos
-        )
-        if quebra_df is None or quebra_df.empty:
-            erros["quebra"] = "Nenhum registro válido para a Quebra de Agenda."
-        else:
-            resultado["quebra"] = quebra_df
-    except Exception as exc:
-        logger.exception("Falha ao preparar a base de Quebra do upload.")
-        erros["quebra"] = str(exc)
 
     try:
         rota_df = preparar_base_rota_inicial(bruta_txt, ativos_norm)
@@ -1191,7 +726,6 @@ def gerar_bases_upload(
 
 
 __all__ = [
-    "CIDADES_POR_REGIAO",
     "COL_CONTRATO",
     "COL_LOGIN",
     "COL_MONITOR",
@@ -1201,7 +735,6 @@ __all__ = [
     "COL_TOTAL",
     "EXTENSOES_ACEITAS",
     "MAPEAMENTO_PERIODOS",
-    "STATUS_ORDEM",
     "Utils",
     "carregar_hierarquia",
     "carregar_lista_ativos",
@@ -1210,8 +743,6 @@ __all__ = [
     "ler_arquivo_bytes",
     "normalizar_erro_worksheet",
     "normalizar_lista_ativos",
-    "preparar_base_quebra",
     "preparar_base_rota_inicial",
-    "preparar_base_volumetria",
     "resolver_sheet_id",
 ]

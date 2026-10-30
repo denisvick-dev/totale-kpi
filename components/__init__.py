@@ -12,9 +12,7 @@ from components.base_operacional import (
     ler_arquivo_bytes,
     normalizar_erro_worksheet,
     normalizar_lista_ativos,
-    preparar_base_quebra,
     preparar_base_rota_inicial,
-    preparar_base_volumetria,
     resolver_sheet_id,
 )
 from components.calendario import (
@@ -51,15 +49,10 @@ from components.criterios import (
     # Detecção de colunas
     detectar_cols_tipo,
     # Métricas e painéis
-    extrair_metricas_criterios,
     norm_col_nome,
     # Normalização
     normalizar_str,
-    render_card_destaque_migracao,
     # Componentes UI
-    render_debug_criterios,
-    render_lista_colunas,
-    render_painel_criterios,
 )
 from components.upload_base import (
     limpar_bases_operacionais,
@@ -81,9 +74,7 @@ __all__ = [
     "ler_arquivo_bytes",
     "normalizar_erro_worksheet",
     "normalizar_lista_ativos",
-    "preparar_base_quebra",
     "preparar_base_rota_inicial",
-    "preparar_base_volumetria",
     "resolver_sheet_id",
     # Upload manual compartilhado
     "limpar_bases_operacionais",
@@ -125,9 +116,4 @@ __all__ = [
     # Classificação
     "classificar_tipo_servico",
     # Métricas e UI
-    "extrair_metricas_criterios",
-    "render_painel_criterios",
-    "render_debug_criterios",
-    "render_card_destaque_migracao",
-    "render_lista_colunas",
 ]

@@ -4,26 +4,24 @@ components/upload_base.py
 Upload **manual** compartilhado da base operacional (exportação
 "Atividades", .xlsx/.xls/.csv).
 
-Um único envio alimenta os três painéis operacionais — o arquivo é lido
-e tratado uma vez por :func:`components.base_operacional.gerar_bases_upload`
-e cada base pronta é publicada na chave de sessão que o painel consome:
+O arquivo é lido e tratado uma vez por
+:func:`components.base_operacional.gerar_bases_upload` e a base pronta é
+publicada na chave de sessão que o painel consome:
 
 =======================  ==========================
 Painel                   Chave em ``session_state``
 =======================  ==========================
-Quebra de Agenda         ``df_memoria``
-Volumetria de O.S.       ``base_data``
 Rota Inicial             ``df_master``
 =======================  ==========================
 
-Além disso, ficam na sessão os bytes do arquivo (``quebra_arquivo``,
-para refazer o vínculo com a lista de ativos sem novo envio) e os
-metadados do upload (``base_operacional_upload``), usados para exibir
-o status e evitar reprocessar o mesmo arquivo a cada rerun.
+Além disso, ficam na sessão os bytes do arquivo
+(``base_operacional_arquivo``, para refazer o vínculo com a lista de
+ativos sem novo envio) e os metadados do upload
+(``base_operacional_upload``), usados para exibir o status e evitar
+reprocessar o mesmo arquivo a cada rerun.
 
 O componente é exibido na Central de Atualização (``envio_excel.py``)
-e, no estado vazio, em cada um dos três painéis — enviar por qualquer
-um deles atualiza todos.
+e, no estado vazio, também no painel de Rota Inicial.
 """
 
 from __future__ import annotations
@@ -41,12 +39,10 @@ from components.componentes import render_section_header
 
 FUSO = ZoneInfo("America/Sao_Paulo")
 
-#: Chaves de sessão publicadas pelo upload (uma por painel).
-CHAVE_QUEBRA = "df_memoria"
-CHAVE_VOLUMETRIA = "base_data"
+#: Chave de sessão publicada pelo upload.
 CHAVE_ROTA = "df_master"
 #: Bytes do último arquivo enviado — permite refazer o vínculo de ativos.
-CHAVE_ARQUIVO = "quebra_arquivo"
+CHAVE_ARQUIVO = "base_operacional_arquivo"
 #: Metadados do último upload (arquivo, horário, hash, linhas, erros).
 CHAVE_META = "base_operacional_upload"
 
@@ -54,14 +50,10 @@ EXTENSOES_UPLOAD = ["xlsx", "xls", "csv"]
 
 #: (chave do resultado, rótulo, página) — ordem de exibição do status.
 PAINEIS: tuple[tuple[str, str, str], ...] = (
-    ("quebra", "Quebra de Agenda", "pages/quebra.py"),
-    ("volumetria", "Volumetria de O.S.", "pages/volumetria.py"),
     ("rota_inicial", "Rota Inicial", "pages/rota_inicial.py"),
 )
 
 _CHAVES_POR_PAINEL = {
-    "quebra": CHAVE_QUEBRA,
-    "volumetria": CHAVE_VOLUMETRIA,
     "rota_inicial": CHAVE_ROTA,
 }
 
@@ -72,7 +64,7 @@ def _fmt_int(valor: int) -> str:
 
 @st.cache_data(ttl=300, show_spinner="🔗 Vinculando Lista de Ativos...")
 def _carregar_lista_ativos() -> pd.DataFrame:
-    """Aba ``lista_ativos`` usada no vínculo das três bases (cache de 5 min)."""
+    """Aba ``lista_ativos`` usada no vínculo da base (cache de 5 min)."""
     return bo.carregar_lista_ativos(read_csv=pd.read_csv)
 
 
@@ -88,14 +80,12 @@ def metadados_upload() -> dict[str, Any]:
 
 
 def limpar_bases_operacionais() -> None:
-    """Remove as três bases operacionais e os metadados do upload.
+    """Remove a base operacional publicada e os metadados do upload.
 
     Também avança a "geração" do widget de envio: sem isso, o
     ``file_uploader`` manteria o arquivo anterior e a troca de base
     reprocessaria o mesmo arquivo ao voltar ao estado vazio.
     """
-    st.session_state[CHAVE_QUEBRA] = None
-    st.session_state[CHAVE_VOLUMETRIA] = None
     st.session_state[CHAVE_ROTA] = None
     st.session_state.pop(CHAVE_ARQUIVO, None)
     st.session_state.pop(CHAVE_META, None)
@@ -106,10 +96,10 @@ def limpar_bases_operacionais() -> None:
 
 def processar_e_publicar(conteudo: bytes, nome_arquivo: str) -> dict[str, Any]:
     """
-    Processa o arquivo enviado e publica cada base na sessão.
+    Processa o arquivo enviado e publica a base na sessão.
 
     Retorna os metadados do upload (também gravados em ``CHAVE_META``);
-    painéis que falharam aparecem em ``erros`` e não são publicados.
+    falhas de tratamento aparecem em ``erros`` e nada é publicado.
     """
     resultado = bo.gerar_bases_upload(
         conteudo, nome_arquivo, _carregar_lista_ativos()
@@ -121,7 +111,7 @@ def processar_e_publicar(conteudo: bytes, nome_arquivo: str) -> dict[str, Any]:
         if isinstance(base, pd.DataFrame) and not base.empty:
             st.session_state[_CHAVES_POR_PAINEL[painel]] = base
             linhas[painel] = len(base)
-    if "quebra" in linhas:
+    if linhas:
         st.session_state[CHAVE_ARQUIVO] = (conteudo, nome_arquivo)
 
     meta: dict[str, Any] = {
@@ -174,20 +164,36 @@ def render_status_upload(*, mostrar_links: bool = False) -> bool:
 
 def _alertar_vinculo_ativos() -> None:
     """Avisa quando a base publicada não vinculou nenhum login aos ativos."""
-    quebra = st.session_state.get(CHAVE_QUEBRA)
-    if not isinstance(quebra, pd.DataFrame) or quebra.empty:
+    base = st.session_state.get(CHAVE_ROTA)
+    if not isinstance(base, pd.DataFrame) or base.empty:
         return
-    if int(quebra.attrs.get("diag_vinculados", 0) or 0):
+    if int(base.attrs.get("diag_vinculados", 0) or 0):
         return
-    erro = str(quebra.attrs.get("erro_ativos", "") or "").strip()
+    erro = str(base.attrs.get("erro_ativos", "") or "").strip()
     st.warning(
         "⚠️ A base publicada não vinculou nenhum login à `lista_ativos`"
         + (f" — {erro}" if erro else ".")
-        + " Monitores e técnicos aparecem como `SEM MONITOR`/`NÃO MAPEADO` "
-        "até o vínculo ser concluído; confira a coluna de login do arquivo "
-        "e da planilha, ou use **🔗 Atualizar Lista de Ativos** na Quebra "
-        "de Agenda após corrigir a planilha."
+        + " Monitores e técnicos aparecem como `SEM MONITOR` até o vínculo "
+        "ser concluído; confira a coluna de login do arquivo e da planilha, "
+        "ou use **🔗 Atualizar Lista de Ativos** nesta Central após corrigir "
+        "a planilha."
     )
+
+
+def reprocessar_vinculo_ativos() -> bool:
+    """Refaz o vínculo da base publicada sem exigir um novo upload.
+
+    Descarta o cache da ``lista_ativos`` e reprocessa os bytes do último
+    arquivo enviado (guardados em :data:`CHAVE_ARQUIVO`). Retorna ``False``
+    quando não há arquivo na sessão.
+    """
+    arquivo = st.session_state.get(CHAVE_ARQUIVO)
+    if not arquivo:
+        return False
+    limpar_cache_lista_ativos()
+    conteudo, nome = arquivo
+    processar_e_publicar(conteudo, nome)
+    return True
 
 
 def render_upload_base_operacional(
@@ -209,9 +215,8 @@ def render_upload_base_operacional(
     if titulo:
         render_section_header("upload_file", titulo, "Excel / CSV")
     st.caption(
-        "Envie a exportação de atividades (.xlsx, .xls ou .csv). O mesmo "
-        "arquivo atualiza **Quebra de Agenda**, **Volumetria de O.S.** e "
-        "**Rota Inicial** de uma vez, com vínculo à lista de ativos."
+        "Envie a exportação de atividades (.xlsx, .xls ou .csv). O arquivo "
+        "atualiza a base da **Rota Inicial**, com vínculo à lista de ativos."
     )
 
     arquivo = st.file_uploader(
@@ -233,9 +238,7 @@ def render_upload_base_operacional(
             elif meta.get("linhas"):
                 st.success("✅ Este arquivo já foi processado nesta sessão.")
         else:
-            with st.spinner(
-                "🔄 Processando a base para Quebra, Volumetria e Rota Inicial..."
-            ):
+            with st.spinner("🔄 Processando a base da Rota Inicial..."):
                 meta = processar_e_publicar(conteudo, arquivo.name)
 
             erros = meta.get("erros", {}) or {}
@@ -264,9 +267,7 @@ def render_upload_base_operacional(
 __all__ = [
     "CHAVE_ARQUIVO",
     "CHAVE_META",
-    "CHAVE_QUEBRA",
     "CHAVE_ROTA",
-    "CHAVE_VOLUMETRIA",
     "EXTENSOES_UPLOAD",
     "PAINEIS",
     "limpar_bases_operacionais",
@@ -275,4 +276,5 @@ __all__ = [
     "processar_e_publicar",
     "render_status_upload",
     "render_upload_base_operacional",
+    "reprocessar_vinculo_ativos",
 ]

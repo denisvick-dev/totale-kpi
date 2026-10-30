@@ -2,10 +2,10 @@
 
 ## Como os dados entram
 
-- **Base operacional** (Quebra de Agenda, Volumetria e Rota Inicial):
+- **Base operacional** (Rota Inicial):
   upload manual da exportação de atividades (`.xlsx`, `.xls` ou `.csv`)
-  na página **Atualização de Dados** ou direto em qualquer um dos três
-  painéis. Um único envio atualiza os três, com vínculo à aba
+  na página **Atualização de Dados** ou direto no painel de Rota
+  Inicial. O envio gera a base tratada, com vínculo à aba
   `lista_ativos` da planilha de ativos. A leitura e o tratamento ficam
   em `components/base_operacional.py`; a interface de envio, em
   `components/upload_base.py`.

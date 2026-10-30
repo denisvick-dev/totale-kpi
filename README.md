@@ -22,7 +22,7 @@
 
 ## 📖 Sobre o Projeto
 
-O **Totale KPI** é uma plataforma corporativa desenvolvida em **Streamlit** para indicadores operacionais e de técnicos de campo da Totale Tecnologia. Os painéis operacionais são alimentados pelo **upload manual** da base de atividades e as bases de produção/consultivos integram-se ao Google Sheets, com dashboards interativos de performance, volumetria, rotas e quebra de agenda.
+O **Totale KPI** é uma plataforma corporativa desenvolvida em **Streamlit** para indicadores operacionais e de técnicos de campo da Totale Tecnologia. Os painéis operacionais são alimentados pelo **upload manual** da base de atividades e as bases de produção/consultivos integram-se ao Google Sheets, com dashboards interativos de performance, produtividade e rotas.
 
 ### 🎯 Objetivos
 
@@ -67,33 +67,36 @@ python -m pytest -q
 ruff check .
 ```
 
-### 📁 Upload manual da base operacional (Quebra + Volumetria + Rota Inicial)
+### 📁 Upload manual da base operacional (Rota Inicial)
 
 A base operacional entra **somente por upload manual** — sem pasta
 monitorada, sem agente local e sem cache em disco. O envio fica na página
-**Atualização de Dados** e, no estado vazio, também em cada um dos três
-painéis; nos dois casos é o mesmo componente
+**Atualização de Dados** e, no estado vazio, também no painel de Rota
+Inicial; nos dois casos é o mesmo componente
 (`components/upload_base.py`):
 
-- **Um arquivo atualiza os três painéis de uma vez**: a exportação de
-  atividades (`.xlsx`, `.xls` ou `.csv`) é lida uma única vez e gera as
-  bases tratadas de `quebra.py`, `volumetria.py` e `rota_inicial.py`
-  (`components/base_operacional.gerar_bases_upload`), cada uma
-  publicada na sessão na chave que o painel consome.
-- **Falha isolada por painel**: se o arquivo não servir para um dos
-  painéis (ex.: sem a coluna de status exigida pela Volumetria), os
-  demais são publicados normalmente e a tela mostra o motivo.
+- **Um arquivo gera a base da Rota Inicial**: a exportação de
+  atividades (`.xlsx`, `.xls` ou `.csv`) é lida uma única vez e gera a
+  base tratada de `rota_inicial.py`
+  (`components/base_operacional.gerar_bases_upload`), publicada na
+  sessão na chave que o painel consome.
+- **Erro sem travar a tela**: quando o arquivo não serve (extensão
+  inválida, sem registros ou sem a coluna de contrato), a página mostra
+  o motivo em vez de levantar exceção.
 - **Vínculo com a `lista_ativos`**: técnico/monitor vêm da aba
   `lista_ativos` da planilha de ativos (leitura apenas), normalizada
   antes do merge — caixa, espaços, `.0`, duplicados e desligados não
   quebram o vínculo. Se nenhum login coincidir, a tela avisa (o merge
   vazio não passa despercebido como `SEM MONITOR`).
-- **Trocar de base**: o botão **📁 Trocar base**, na barra lateral dos
-  três painéis, limpa as bases da sessão e volta à tela de envio.
+- **Refazer o vínculo**: o botão **🔗 Atualizar Lista de Ativos**, na
+  Central de Atualização, relê a aba e reprocessa o arquivo já enviado,
+  sem novo upload.
+- **Trocar de base**: o botão **📁 Trocar base**, na barra lateral da
+  Rota Inicial, limpa a base da sessão e volta à tela de envio.
   Enviar o mesmo arquivo de novo na mesma sessão não reprocessa
   (comparação por hash SHA-256).
 - **Sem upload, sem dados**: nada é lido do computador do usuário nem
-  do servidor automaticamente; as bases vivem apenas na sessão atual.
+  do servidor automaticamente; a base vive apenas na sessão atual.
 
 Colunas de status aceitas no arquivo: `STATUS DA O.S 1`, `STATUS OS 1`,
 `STATUS DA OS 1` e `STATUS CONTRATO`.
@@ -118,7 +121,7 @@ Colunas de status aceitas no arquivo: `STATUS DA O.S 1`, `STATUS OS 1`,
 Os dashboards seguem um padrão único de leitura — hero, insight de
 status, KPIs e conteúdo em abas (Ranking/Aderência em Pontos;
 Supervisor/Projeto/Técnicos em Qtde. de O.S.; Consolidada/Zeradas em
-Consultivos; visões operacionais em Quebra, Volumetria e Rota). A
+Consultivos; visão operacional em Rota Inicial). A
 página inicial mostra o status das duas frentes de dados
 (produção em nuvem e base operacional enviada).
 
@@ -129,9 +132,10 @@ página inicial mostra o status das duas frentes de dados
 
 ---
 
-## 🎯 Critérios de Classificação (Quebra de Agenda)
+## 🎯 Critérios de classificação e flags da base operacional
 
-Regras oficiais implementadas em `components/criterios.py`:
+Regras implementadas em `components/criterios.py` e usadas nas flags da
+Rota Inicial:
 
 | Segmento | Critério |
 |----------|----------|
@@ -210,9 +214,9 @@ Edite o `.streamlit/secrets.toml` com suas credenciais reais do Google Cloud e u
 6. Compartilhe sua planilha com o e-mail da service account
 7. Preencha os dados no `secrets.toml`
 
-Nos painéis operacionais, o vínculo de monitores usa a aba `lista_ativos` da planilha de ativos. A aba deve conter `Login` e `Monitor` (e, opcionalmente, `Técnico`, `Base` e `Situação`). O login do arquivo operacional deve corresponder ao da lista. A leitura autenticada usa `[gcp_service_account]`; confira se a planilha foi compartilhada com o `client_email` dessa conta. Quando a base já estiver carregada, **🔗 Atualizar Lista de Ativos** (barra lateral da Quebra de Agenda) refaz o vínculo com o arquivo enviado, sem novo upload. As páginas mostram a quantidade de registros vinculados e alertam quando a aba não puder ser lida ou os logins não coincidirem.
+Nos painéis operacionais, o vínculo de monitores usa a aba `lista_ativos` da planilha de ativos. A aba deve conter `Login` e `Monitor` (e, opcionalmente, `Técnico`, `Base` e `Situação`). O login do arquivo operacional deve corresponder ao da lista. A leitura autenticada usa `[gcp_service_account]`; confira se a planilha foi compartilhada com o `client_email` dessa conta. Quando a base já estiver carregada, **🔗 Atualizar Lista de Ativos** (na Central de Atualização) refaz o vínculo com o arquivo enviado, sem novo upload. As páginas mostram a quantidade de registros vinculados e alertam quando a aba não puder ser lida ou os logins não coincidirem.
 
-As páginas **Quebra de Agenda**, **Volumetria de O.S.** e **Rota Inicial** são alimentadas pelo upload manual descrito em [📁 Upload manual da base operacional](#-upload-manual-da-base-operacional-quebra--volumetria--rota-inicial).
+A página **Rota Inicial** é alimentada pelo upload manual descrito em [📁 Upload manual da base operacional](#-upload-manual-da-base-operacional-rota-inicial).
 
 ### 6. Execute o Aplicativo
 ```bash
